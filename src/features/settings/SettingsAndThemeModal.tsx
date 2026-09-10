@@ -71,7 +71,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
     >
       <div className="modal-panel max-w-4xl max-h-[90vh] relative p-6 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-line pb-3 mb-4 shrink-0">
+        <div className="flex items-center justify-between border-b-2 border-line pb-3 mb-4 shrink-0">
           <div>
             <h2 id="settings-modal-title" className="text-xl font-semibold text-ink tracking-tight">
               Settings & Theme Customization
@@ -81,15 +81,15 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
             onClick={onClose}
             className="btn btn-ghost btn-icon"
            aria-label="Close">
-            <X size={18} strokeWidth={1.75} aria-hidden="true" />
+            <X size={18} strokeWidth={2.25} aria-hidden="true" />
           </button>
         </div>
 
         {/* 2-Column Side-by-Side Body */}
         <div className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-6 pr-1">
           {/* COLUMN 1: Match Rules & Settings */}
-          <div className="space-y-4 text-xs border-b md:border-b-0 md:border-r border-line pb-4 md:pb-0 md:pr-6">
-            <div className="flex items-center justify-between border-b border-line pb-2">
+          <div className="space-y-4 text-xs border-b md:border-b-0 md:border-r-2 border-line pb-4 md:pb-0 md:pr-6">
+            <div className="flex items-center justify-between border-b-2 border-line pb-2">
               <h3 className="font-semibold text-ink text-sm">Match Rules</h3>
               {canEditRules ? (
                 <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-sm bg-accent-soft text-accent-text border border-accent">
@@ -189,7 +189,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
             </div>
 
             {/* Allow Move Undo */}
-            <div className="flex items-center justify-between pt-3 border-t border-line">
+            <div className="flex items-center justify-between pt-3 border-t-2 border-line">
               <div>
                 <span className="text-xs font-medium text-ink block">Allow Move Undo</span>
                 <span className="text-[10px] text-muted block">
@@ -208,7 +208,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
 
           {/* COLUMN 2: Appearance & Theme Settings */}
           <div className="space-y-4 text-xs">
-            <div className="border-b border-line pb-2">
+            <div className="border-b-2 border-line pb-2">
               <h3 className="font-semibold text-ink text-sm">Theme & Visuals</h3>
             </div>
 
@@ -232,7 +232,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
                           : 'bg-surface-2 border-line text-ink hover:bg-surface-3'
                       }`}
                     >
-                      <Icon size={14} strokeWidth={1.75} aria-hidden="true" />
+                      <Icon size={14} strokeWidth={2.25} aria-hidden="true" />
                       {opt.label}
                     </button>
                   );
@@ -281,7 +281,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
             </div>
 
             {/* Custom Piece Colors (For ALL Piece Themes) */}
-            <div className="pt-3 border-t border-line space-y-3">
+            <div className="pt-3 border-t-2 border-line space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-medium text-ink text-xs">Piece colours</span>
                 <span className="text-[11px] text-muted">Applies to every piece style</span>
@@ -355,7 +355,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
             </div>
 
             {/* Simulation Scratchpad Move Colors */}
-            <div className="pt-2 border-t border-line space-y-2">
+            <div className="pt-2 border-t-2 border-line space-y-2">
               <span className="font-medium text-ink block text-xs">Right-Click Simulation Colors</span>
               <div className="grid grid-cols-2 gap-3">
                 <div>

@@ -254,6 +254,16 @@ export const Board: React.FC<BoardProps> = ({
 }) => {
   const { theme } = useTheme();
   const prefs = useDisplayPrefs();
+
+  const isWin = gameResult?.winner === 'Victory!';
+  const isLoss = gameResult?.winner === 'Defeat!';
+  const winnerPiece: 'X' | 'O' | null = isWin ? myPiece : isLoss ? (myPiece === 'X' ? 'O' : 'X') : null;
+  const winnerColor = winnerPiece === 'X' ? theme.xColor : theme.oColor;
+  const outcome = isWin
+    ? { headline: 'You win!', tone: 'text-accent-text' }
+    : isLoss
+    ? { headline: 'You lose', tone: 'text-danger' }
+    : { headline: 'Draw', tone: 'text-warning' };
   const containerRef = useRef<HTMLDivElement>(null);
   // Full-width wrapper, used only as the width source for the cell measurement.
   const columnRef = useRef<HTMLDivElement>(null);
@@ -561,7 +571,7 @@ export const Board: React.FC<BoardProps> = ({
             title="Smaller squares"
             aria-label="Zoom out"
           >
-            <Minus size={15} strokeWidth={1.75} aria-hidden="true" />
+            <Minus size={15} strokeWidth={2.25} aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -570,7 +580,7 @@ export const Board: React.FC<BoardProps> = ({
             title="Centre the board"
             aria-label="Centre the board"
           >
-            <Crosshair size={15} strokeWidth={1.75} aria-hidden="true" />
+            <Crosshair size={15} strokeWidth={2.25} aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -580,7 +590,7 @@ export const Board: React.FC<BoardProps> = ({
             title="Bigger squares"
             aria-label="Zoom in"
           >
-            <Plus size={15} strokeWidth={1.75} aria-hidden="true" />
+            <Plus size={15} strokeWidth={2.25} aria-hidden="true" />
           </button>
         </div>
 
@@ -588,7 +598,7 @@ export const Board: React.FC<BoardProps> = ({
           className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-line bg-surface/95 px-2.5 py-1 font-mono text-xs text-muted tabular-nums shadow-sm backdrop-blur-sm"
           title="Match elapsed time"
         >
-          <Timer size={13} strokeWidth={1.75} aria-hidden="true" />
+          <Timer size={13} strokeWidth={2.25} aria-hidden="true" />
           <span>{formatElapsed(elapsedGameTime)}</span>
         </div>
 
@@ -596,30 +606,29 @@ export const Board: React.FC<BoardProps> = ({
           Drag to move the board · Scroll to zoom
         </p>
 
-        {/* RESULT. Outcome, reason and next steps as one block, floating over
-            the board so it lands where the player is already looking. */}
+        {/* RESULT. Centred over the board and led by the winning piece: the
+            first question is always "who won", and a coloured word alone was
+            answering it too quietly. */}
         {gameStatus === 'ended' && gameResult && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="absolute left-1/2 top-3 z-20 w-[min(24rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-lg border border-line-strong bg-surface p-4 text-center shadow-2xl"
-          >
-            <p
-              className={`text-lg font-semibold tracking-tight ${
-                gameResult.winner === 'Victory!'
-                  ? 'text-accent-text'
-                  : gameResult.winner === 'Defeat!'
-                  ? 'text-danger'
-                  : 'text-warning'
-              }`}
-            >
-              {gameResult.winner}
-            </p>
-            {resultReason && <p className="mt-0.5 text-xs text-muted">{resultReason}</p>}
-            {ratingNote && <p className="mt-1 font-mono text-[11px] text-subtle">{ratingNote}</p>}
-            {resultActions && (
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">{resultActions}</div>
-            )}
+          <div className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-[var(--ui-scrim)] p-4 backdrop-blur-[3px]">
+            <div role="status" aria-live="polite" className="modal-panel w-[min(24rem,100%)] p-6 text-center">
+              <span
+                className="mx-auto mb-4 grid h-24 w-24 place-items-center rounded-full border-[7px] font-display text-6xl font-extrabold leading-none"
+                style={
+                  winnerPiece
+                    ? { borderColor: winnerColor, color: winnerColor }
+                    : { borderColor: 'var(--ui-border-strong)', color: 'var(--ui-text-muted)' }
+                }
+              >
+                {winnerPiece ?? '='}
+              </span>
+
+              <p className={`display text-4xl ${outcome.tone}`}>{outcome.headline}</p>
+
+              {resultReason && <p className="mt-2 text-sm text-muted">{resultReason}</p>}
+              {ratingNote && <p className="mt-1 font-mono text-xs text-subtle">{ratingNote}</p>}
+              {resultActions && <div className="mt-5 flex flex-col gap-2">{resultActions}</div>}
+            </div>
           </div>
         )}
 

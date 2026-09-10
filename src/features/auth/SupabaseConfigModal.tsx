@@ -32,10 +32,10 @@ export const SupabaseConfigModal: React.FC = () => {
           onClick={handleClose}
           className="btn btn-ghost btn-icon absolute top-4 right-4"
          aria-label="Close">
-            <X size={18} strokeWidth={1.75} aria-hidden="true" />
+            <X size={18} strokeWidth={2.25} aria-hidden="true" />
           </button>
 
-        <div className="border-b border-line pb-3">
+        <div className="border-b-2 border-line pb-3">
           <h2 id="supabase-config-modal-title" className="text-lg font-semibold text-ink tracking-tight mt-0.5">
             Google Authentication Configuration
           </h2>
@@ -44,7 +44,7 @@ export const SupabaseConfigModal: React.FC = () => {
         {authError && (
           <div className="bg-warning-soft border border-warning p-3 rounded-md text-warning text-xs font-medium space-y-1">
             <div className="font-medium flex items-center gap-1.5 text-warning">
-              <AlertTriangle size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />{authError}
+              <AlertTriangle size={13} strokeWidth={2.25} className="shrink-0" aria-hidden="true" />{authError}
             </div>
             <p className="text-[11px]">
               Google Provider is not toggled ON in your Supabase Dashboard for project <code className="font-mono bg-warning-soft px-1 rounded-sm">deuuuibkqletkkbrsmxd</code>.
@@ -76,7 +76,7 @@ export const SupabaseConfigModal: React.FC = () => {
           </form>
         </div>
 
-        <div className="space-y-3 text-xs text-muted border-t border-line pt-3">
+        <div className="space-y-3 text-xs text-muted border-t-2 border-line pt-3">
           <p className="font-medium text-ink">
             Steps to enable Google 1-Click Authentication:
           </p>

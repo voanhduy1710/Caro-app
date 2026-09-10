@@ -87,7 +87,7 @@ export const ProfileModal: React.FC = () => {
     >
       <div className="modal-panel max-w-xl relative p-4 sm:p-5 space-y-3 overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-line pb-2 shrink-0">
+        <div className="flex items-center justify-between border-b-2 border-line pb-2 shrink-0">
           <div>
             <h2 id="profile-modal-title" className="text-lg font-semibold text-ink tracking-tight">
               Player Profile & Avatar Settings
@@ -98,7 +98,7 @@ export const ProfileModal: React.FC = () => {
             className="btn btn-ghost btn-icon"
             aria-label="Close"
           >
-            <X size={18} strokeWidth={1.75} aria-hidden="true" />
+            <X size={18} strokeWidth={2.25} aria-hidden="true" />
           </button>
         </div>
 
@@ -231,10 +231,10 @@ export const ProfileModal: React.FC = () => {
 
           {/* CHANGE PASSWORD SECTION */}
           {!user.isGuest && (
-            <div className="pt-2.5 border-t border-line space-y-2">
+            <div className="pt-2.5 border-t-2 border-line space-y-2">
               <div className="flex items-center justify-between">
                 <h4 className="flex items-center gap-1.5 text-xs font-semibold text-ink">
-                  <Lock size={13} strokeWidth={1.75} aria-hidden="true" />
+                  <Lock size={13} strokeWidth={2.25} aria-hidden="true" />
                   Change password
                 </h4>
                 <span className="text-[10px] text-subtle font-mono">Min 8 characters</span>
@@ -242,7 +242,7 @@ export const ProfileModal: React.FC = () => {
 
               {passwordError && (
                 <div className="bg-danger-soft border border-danger p-2 rounded-md text-danger text-xs font-medium">
-                  <AlertTriangle size={13} strokeWidth={1.75} className="inline shrink-0 mr-1.5 -mt-0.5" aria-hidden="true" />{passwordError}
+                  <AlertTriangle size={13} strokeWidth={2.25} className="inline shrink-0 mr-1.5 -mt-0.5" aria-hidden="true" />{passwordError}
                 </div>
               )}
 

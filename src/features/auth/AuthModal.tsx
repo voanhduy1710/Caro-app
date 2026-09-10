@@ -8,7 +8,7 @@ const EyeIcon: React.FC<{ visible: boolean }> = ({ visible }) => {
   return (
     <Glyph
       size={16}
-      strokeWidth={1.75}
+      strokeWidth={2.25}
       className="text-muted transition-colors hover:text-ink"
       aria-hidden="true"
     />
@@ -179,10 +179,9 @@ export const AuthModal: React.FC = () => {
       completeClose();
       return;
     }
-    // Account made, but no session: say exactly that instead of closing as if
-    // the player were already playing under their new name.
+    // Only reachable if the sign-in that follows sign-up also failed.
     setVerificationNotice(
-      `Account "${username}" was created. Check your inbox and confirm your email address, then sign in.`
+      `Account "${username}" was created. Sign in with it to start playing.`
     );
   };
 
@@ -382,7 +381,7 @@ export const AuthModal: React.FC = () => {
       {/* Header and submit button stay put while the fields scroll, so the way
           out and the way forward survive an open on-screen keyboard. */}
       <div className="modal-panel max-w-md relative flex max-h-[90dvh] flex-col">
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line p-6 pb-4">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b-2 border-line p-6 pb-4">
           <div>
             <h2 id="auth-modal-title" className="text-xl font-semibold tracking-tight text-ink">
               {isSignIn ? 'Sign in' : 'Create an account'}
@@ -396,7 +395,7 @@ export const AuthModal: React.FC = () => {
             className="btn btn-ghost btn-icon shrink-0"
             aria-label="Close"
           >
-            <X size={18} strokeWidth={1.75} aria-hidden="true" />
+            <X size={18} strokeWidth={2.25} aria-hidden="true" />
           </button>
         </div>
 
@@ -445,7 +444,7 @@ export const AuthModal: React.FC = () => {
           {isSignIn ? signInBody : createBody}
         </div>
 
-        <div className="shrink-0 border-t border-line p-6 pt-4">
+        <div className="shrink-0 border-t-2 border-line p-6 pt-4">
           <button
             type="submit"
             form="auth-form"

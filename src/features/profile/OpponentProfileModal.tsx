@@ -35,7 +35,7 @@ export const OpponentProfileModal: React.FC<OpponentProfileModalProps> = ({
     >
       <div className="modal-panel max-w-md relative p-6 space-y-5">
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-line pb-3">
+        <div className="flex items-center justify-between border-b-2 border-line pb-3">
           <div>
             <h2 id="opponent-profile-modal-title" className="text-xl font-semibold text-ink tracking-tight">
               Opponent Profile
@@ -45,7 +45,7 @@ export const OpponentProfileModal: React.FC<OpponentProfileModalProps> = ({
             onClick={onClose}
             className="btn btn-ghost btn-icon"
            aria-label="Close">
-            <X size={18} strokeWidth={1.75} aria-hidden="true" />
+            <X size={18} strokeWidth={2.25} aria-hidden="true" />
           </button>
         </div>
 
@@ -107,7 +107,7 @@ export const OpponentProfileModal: React.FC<OpponentProfileModalProps> = ({
         {/* Additional Player Meta */}
         <div className="p-3 bg-accent-soft border border-accent rounded-md flex items-center justify-between text-xs font-mono">
           <span className="text-accent-text font-medium">Current Win Streak</span>
-          <span className="font-semibold text-accent-text text-sm"><Flame size={14} strokeWidth={1.75} className="inline shrink-0 mr-1 -mt-0.5" aria-hidden="true" />{opponent.streak || 0} games</span>
+          <span className="font-semibold text-accent-text text-sm"><Flame size={14} strokeWidth={2.25} className="inline shrink-0 mr-1 -mt-0.5" aria-hidden="true" />{opponent.streak || 0} games</span>
         </div>
 
         {/* Close Action */}

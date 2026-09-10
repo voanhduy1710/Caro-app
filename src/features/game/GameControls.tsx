@@ -182,7 +182,7 @@ const RailButton: React.FC<RailButtonProps> = ({
     } ${tone === 'danger' ? 'text-muted hover:text-danger' : ''}`}
   >
     {pending ? (
-      <Loader2 size={17} strokeWidth={1.75} className="animate-spin" aria-hidden="true" />
+      <Loader2 size={17} strokeWidth={2.25} className="animate-spin" aria-hidden="true" />
     ) : (
       icon
     )}
@@ -469,7 +469,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const actionButtons = (
     <div className="flex flex-wrap items-center justify-center gap-0.5">
       <RailButton
-        icon={<LogOut size={17} strokeWidth={1.75} aria-hidden="true" />}
+        icon={<LogOut size={17} strokeWidth={2.25} aria-hidden="true" />}
         label={exitLabel}
         title={isAiMode ? 'go back to the home screen' : 'leave this room'}
         onClick={onExitMatch}
@@ -478,7 +478,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
       <span aria-hidden="true" className="mx-1 h-6 w-px bg-line" />
 
       <RailButton
-        icon={<Undo2 size={17} strokeWidth={1.75} aria-hidden="true" />}
+        icon={<Undo2 size={17} strokeWidth={2.25} aria-hidden="true" />}
         label="Take back"
         title={undoTitle}
         onClick={onProposeUndo}
@@ -489,7 +489,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
       {/* Starting over is only the obvious next step once the game is over.
           Mid-match it is the destructive option, so it does not lead. */}
       <RailButton
-        icon={<RefreshCw size={17} strokeWidth={1.75} aria-hidden="true" />}
+        icon={<RefreshCw size={17} strokeWidth={2.25} aria-hidden="true" />}
         label={isAiMode ? 'New game' : 'Rematch'}
         title={
           isAiMode
@@ -508,7 +508,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
           colour, not by being pushed out of the group. */}
       {!isAiMode && (
         <RailButton
-          icon={<Flag size={17} strokeWidth={1.75} aria-hidden="true" />}
+          icon={<Flag size={17} strokeWidth={2.25} aria-hidden="true" />}
           label="Resign"
           title="give up this match and record it as a loss"
           onClick={onResign}
@@ -530,7 +530,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
           aria-label="Board display and sound"
           className="btn btn-ghost btn-icon h-10 w-10 rounded-full"
         >
-          <Settings size={17} strokeWidth={1.75} aria-hidden="true" />
+          <Settings size={17} strokeWidth={2.25} aria-hidden="true" />
         </button>
 
         {isPrefsOpen && (
@@ -703,7 +703,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
       {reactionRow}
 
-      <form onSubmit={handleChatSubmit} className="flex items-end gap-1.5 border-t border-line pt-2">
+      <form onSubmit={handleChatSubmit} className="flex items-end gap-1.5 border-t-2 border-line pt-2">
         {!isAiMode && (
           <button
             type="button"
@@ -713,7 +713,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
             title="Send a reaction"
             className="btn btn-ghost btn-icon h-9 w-9 shrink-0"
           >
-            <Smile size={16} strokeWidth={1.75} aria-hidden="true" />
+            <Smile size={16} strokeWidth={2.25} aria-hidden="true" />
           </button>
         )}
         <textarea
@@ -744,7 +744,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
           aria-label="Buzz opponent"
           className="btn btn-secondary btn-icon h-9 w-9 shrink-0"
         >
-          <Bell size={16} strokeWidth={1.75} aria-hidden="true" />
+          <Bell size={16} strokeWidth={2.25} aria-hidden="true" />
         </button>
       </form>
     </div>
@@ -768,7 +768,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
         {isChatOpen ? `${chatMessages.length} message${chatMessages.length === 1 ? '' : 's'}` : lastMessagePreview}
       </span>
       <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-subtle" aria-hidden="true">
-        {isChatOpen ? <ChevronUp size={13} strokeWidth={1.75} /> : <ChevronDown size={13} strokeWidth={1.75} />}
+        {isChatOpen ? <ChevronUp size={13} strokeWidth={2.25} /> : <ChevronDown size={13} strokeWidth={2.25} />}
         {isChatOpen ? 'Hide' : 'Show'}
       </span>
     </button>
@@ -787,7 +787,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
           onClick={() => setLightboxImage(null)}
           className="absolute -top-10 right-0 text-inverse-fg hover:text-subtle font-medium text-sm px-3 py-1 bg-inverse/80 rounded-full cursor-pointer"
         >
-          <X size={14} strokeWidth={1.75} aria-hidden="true" />
+          <X size={14} strokeWidth={2.25} aria-hidden="true" />
           Close
         </button>
         <img
@@ -857,7 +857,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
         </div>
 
         <aside className="area-right flex min-h-0 flex-col overflow-hidden">
-          <div className="shrink-0 border-b border-line">
+          <div className="shrink-0 border-b-2 border-line">
             <div className="p-3">
               {roomSummary}
             </div>
@@ -868,7 +868,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
               {chatFeed}
             </div>
           )}
-          <div className="area-compose flex flex-col justify-center px-3 py-2 border-t border-line">
+          <div className="area-compose flex flex-col justify-center px-3 py-2 border-t-2 border-line">
             {reactionRow}
             {composer}
           </div>
@@ -895,7 +895,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
         {actionsCell(true)}
       </div>
 
-      <div className="fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-40 border-t border-line bg-surface p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+      <div className="fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-40 border-t-2 border-line bg-surface p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
         <button
           onClick={() => setIsChatOpen(true)}
           className="flex w-full items-center justify-between rounded-full bg-surface-2 px-4 py-2.5 text-left transition-colors hover:bg-surface-3"
@@ -915,7 +915,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
       </div>
 
       <div
-        className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t border-line bg-surface shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
+        className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t-2 border-line bg-surface shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
           isChatOpen ? 'translate-y-0' : 'translate-y-full'
         }`}
         style={{
@@ -923,7 +923,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-line px-2 py-1">
+        <div className="flex shrink-0 items-center justify-between border-b-2 border-line px-2 py-1">
           {roomSummary}
           <button
             onClick={() => setIsChatOpen(false)}

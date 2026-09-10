@@ -1174,24 +1174,16 @@ export const App: React.FC = () => {
               {/* Play alone. Listed first because it is the only option that
                   works with nobody else around. */}
               <div className="card animate-pop-in flex flex-col gap-4 p-5 md:col-span-2" style={stagger(3)}>
-                <div>
-                  <h2 className="text-xl text-ink">Play the bot</h2>
-                  <p className="mt-1 text-sm leading-relaxed text-muted">
-                    Starts straight away, on your own. Nothing is shared and your rating
-                    does not change.
-                  </p>
-                </div>
-                {/* The card is one column of a 2/3 split, so it is as tall as
-                    the form beside it whether or not it has anything to put
-                    there. Rotar Zairo is the app's own machine sprite, which
-                    is both the honest picture of the opponent and the thing
-                    that stops this column being a white void. */}
+                <h2 className="text-xl text-ink">Play the bot</h2>
+
+                {/* The sprite is the opponent's portrait, and it is what keeps
+                    this column from being a white void beside the taller form. */}
                 <div className="grid flex-1 place-items-center rounded-md bg-accent-soft py-5">
                   <img
                     src="/Avatar/Rotar Zairo.gif"
                     alt=""
                     aria-hidden="true"
-                    className="pixel-art h-24 w-24 object-contain"
+                    className="pixel-art h-32 w-32 object-contain"
                   />
                 </div>
 
@@ -1206,12 +1198,7 @@ export const App: React.FC = () => {
 
               {/* Play someone else. */}
               <div className="card animate-pop-in space-y-4 p-5 md:col-span-3" style={stagger(4)}>
-                <div>
-                  <h2 className="text-xl text-ink">Play a friend</h2>
-                  <p className="mt-1 text-sm leading-relaxed text-muted">
-                    Open a room, then send them the link or the code.
-                  </p>
-                </div>
+                <h2 className="text-xl text-ink">Play a friend</h2>
 
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 rounded-md bg-surface-3 p-1">
@@ -1239,9 +1226,7 @@ export const App: React.FC = () => {
                     </button>
                   </div>
                   <p className="field-hint">
-                    {isRoomPublic
-                      ? 'Public: anyone on this app can see your room and join it.'
-                      : 'Private: only someone with your code or link can join.'}
+                    {isRoomPublic ? 'Anyone can find and join.' : 'Only with your code or link.'}
                   </p>
                 </div>
 
@@ -1256,9 +1241,9 @@ export const App: React.FC = () => {
                 </button>
 
                 <div className="relative flex items-center py-1">
-                  <div className="flex-grow border-t border-line"></div>
+                  <div className="flex-grow border-t-2 border-line"></div>
                   <span className="mx-3 flex-shrink text-xs text-subtle">or</span>
-                  <div className="flex-grow border-t border-line"></div>
+                  <div className="flex-grow border-t-2 border-line"></div>
                 </div>
 
                 {/* A form, so Enter and the button behave identically. */}
@@ -1270,7 +1255,7 @@ export const App: React.FC = () => {
                   }}
                 >
                   <label htmlFor="room-code" className="field-label">
-                    Join with a code or invite link
+                    Join with a code
                   </label>
                   <div className="flex gap-2">
                     <input
@@ -1281,7 +1266,6 @@ export const App: React.FC = () => {
                       placeholder="ABC123"
                       autoComplete="off"
                       spellCheck={false}
-                      aria-describedby="room-code-hint"
                       className={`field-input flex-1 ${
                         inputRoomCode.includes('/')
                           ? 'text-xs'
@@ -1296,9 +1280,6 @@ export const App: React.FC = () => {
                       {webrtc.isConnecting ? 'Joining…' : 'Join'}
                     </button>
                   </div>
-                  <p id="room-code-hint" className="field-hint">
-                    Pasting the whole invite link works too.
-                  </p>
                 </form>
               </div>
             </div>
@@ -1395,7 +1376,7 @@ export const App: React.FC = () => {
         {gameStatus === 'lobby' && webrtc.roomId && (
           <div className="w-full max-w-md space-y-4 text-left">
             <div className="panel space-y-4 p-5">
-              <div className="flex items-start justify-between gap-3 border-b border-line pb-3">
+              <div className="flex items-start justify-between gap-3 border-b-2 border-line pb-3">
                 <div>
                   <span className="block text-xs font-semibold text-muted">Room code</span>
                   <span className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-subtle">
@@ -1608,11 +1589,11 @@ export const App: React.FC = () => {
                     resultActions={
                       isAiMode ? (
                         <>
-                          <button onClick={handleRematchButtonClick} className="btn btn-primary btn-sm">
+                          <button onClick={handleRematchButtonClick} className="btn btn-primary">
                             Play again
                           </button>
-                          <button onClick={goHome} className="btn btn-secondary btn-sm">
-                            Back to home
+                          <button onClick={goHome} className="btn btn-ghost">
+                            Back to menu
                           </button>
                         </>
                       ) : (
@@ -1620,15 +1601,20 @@ export const App: React.FC = () => {
                           <button
                             onClick={handleRematchButtonClick}
                             disabled={rematchOffer !== 'none' || !webrtc.isConnected}
-                            className="btn btn-primary btn-sm"
+                            className="btn btn-primary"
                           >
-                            {rematchOffer === 'sent' ? 'Waiting for their answer…' : 'Offer a rematch'}
+                            {rematchOffer === 'sent' ? 'Waiting for them…' : 'Play again'}
                           </button>
-                          <button onClick={goToWaitingRoom} className="btn btn-secondary btn-sm">
-                            Back to waiting room
+                          {/* These two are opposite halves of one decision, so
+                              they say it with the same noun: one keeps the room
+                              and the opponent, the other gives both up. Labelled
+                              as destinations ("waiting room", "leave room") they
+                              read as the same action twice. */}
+                          <button onClick={goToWaitingRoom} className="btn btn-secondary">
+                            Stay in the room
                           </button>
-                          <button onClick={goHome} className="btn btn-ghost btn-sm">
-                            Leave room
+                          <button onClick={goHome} className="btn btn-ghost">
+                            Leave the room
                           </button>
                         </>
                       )
@@ -1816,7 +1802,7 @@ export const App: React.FC = () => {
 
       {/* Footer */}
       {!inMatch && (
-        <footer className="w-full border-t border-line bg-surface py-4 text-center text-xs text-muted">
+        <footer className="w-full border-t-2 border-line bg-surface py-4 text-center text-xs text-muted">
           Peer-to-peer Caro. No servers between you and your opponent.
         </footer>
       )}
