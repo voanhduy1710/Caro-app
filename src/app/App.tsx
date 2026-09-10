@@ -65,6 +65,13 @@ const describeResultReason = (reason?: string) =>
 /** Seconds both players get to look at a fresh board before the first move. */
 const PRE_MATCH_COUNTDOWN_SEC = 3;
 
+/**
+ * Entrance order for `.animate-pop-in`. The CSS reads `--i` and turns it into
+ * a delay, so a screen's items arrive in reading order without an orchestrator
+ * and without a re-render per frame.
+ */
+const stagger = (i: number) => ({ '--i': i }) as React.CSSProperties;
+
 type ConfirmSpec = {
   title: string;
   body: string;
@@ -1121,14 +1128,22 @@ export const App: React.FC = () => {
         {/* HOME. The three ways to start a game come first; the public room
             list, which is empty most of the time, comes after them. */}
         {gameStatus === 'lobby' && !webrtc.roomId && (
-          <div className="w-full max-w-4xl space-y-4">
-            <div className="panel p-6 text-center space-y-2 sm:p-8">
-              <h2 className="text-2xl font-semibold tracking-tight text-ink">
-                Play Caro (Gomoku)
-              </h2>
-              <p className="mx-auto max-w-md text-sm text-muted">{WIN_RULE_TEXT}</p>
+          <div className="w-full max-w-4xl space-y-5">
+            {/* The title sits on the page rather than inside a panel: on a
+                game's front screen the name is the composition, and boxing it
+                turns the loudest thing on screen into another list item. */}
+            <div className="flex flex-col items-center gap-3 pb-1 text-center">
+              <h1 className="display-brand animate-pop-in text-[56px] sm:text-[76px]" style={stagger(0)}>
+                CARO
+                <span className="sr-only"> - play Gomoku online</span>
+              </h1>
+              <p className="animate-pop-in mx-auto max-w-md text-muted" style={stagger(1)}>
+                {WIN_RULE_TEXT}
+              </p>
               {(!user || user.isGuest) && (
-                <p className="chip chip-accent mx-auto">Play now, no account needed</p>
+                <p className="chip chip-brand animate-pop-in" style={stagger(2)}>
+                  Play now, no account needed
+                </p>
               )}
             </div>
 
@@ -1151,31 +1166,49 @@ export const App: React.FC = () => {
               </div>
             )}
 
-            <div className="grid gap-4 text-left md:grid-cols-2">
+            {/* The two ways in are not the same size of thing: one is a single
+                button, the other carries a mode toggle, a create action and a
+                join form. Splitting 2/3 lets each be its own shape instead of
+                padding the smaller one out to match. */}
+            <div className="grid gap-4 text-left md:grid-cols-5">
               {/* Play alone. Listed first because it is the only option that
                   works with nobody else around. */}
-              <div className="card flex flex-col gap-3 p-5">
+              <div className="card animate-pop-in flex flex-col gap-4 p-5 md:col-span-2" style={stagger(3)}>
                 <div>
-                  <h3 className="text-sm font-semibold text-ink">Play the bot</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-muted">
+                  <h2 className="text-xl text-ink">Play the bot</h2>
+                  <p className="mt-1 text-sm leading-relaxed text-muted">
                     Starts straight away, on your own. Nothing is shared and your rating
                     does not change.
                   </p>
                 </div>
+                {/* The card is one column of a 2/3 split, so it is as tall as
+                    the form beside it whether or not it has anything to put
+                    there. Rotar Zairo is the app's own machine sprite, which
+                    is both the honest picture of the opponent and the thing
+                    that stops this column being a white void. */}
+                <div className="grid flex-1 place-items-center rounded-md bg-accent-soft py-5">
+                  <img
+                    src="/Avatar/Rotar Zairo.gif"
+                    alt=""
+                    aria-hidden="true"
+                    className="pixel-art h-24 w-24 object-contain"
+                  />
+                </div>
+
                 <button
                   onClick={handleStartAiMode}
-                  className="btn btn-primary btn-lg mt-auto w-full"
+                  className="btn btn-primary btn-lg w-full"
                 >
-                  <Bot size={16} strokeWidth={1.75} aria-hidden="true" />
+                  <Bot size={20} strokeWidth={2.25} aria-hidden="true" />
                   <span>Play vs Bot</span>
                 </button>
               </div>
 
               {/* Play someone else. */}
-              <div className="card space-y-4 p-5">
+              <div className="card animate-pop-in space-y-4 p-5 md:col-span-3" style={stagger(4)}>
                 <div>
-                  <h3 className="text-sm font-semibold text-ink">Play a friend</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-muted">
+                  <h2 className="text-xl text-ink">Play a friend</h2>
+                  <p className="mt-1 text-sm leading-relaxed text-muted">
                     Open a room, then send them the link or the code.
                   </p>
                 </div>
@@ -1186,22 +1219,22 @@ export const App: React.FC = () => {
                       type="button"
                       onClick={() => setIsRoomPublic(true)}
                       aria-pressed={isRoomPublic}
-                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition ${
-                        isRoomPublic ? 'bg-surface text-accent-text shadow-xs' : 'text-muted hover:text-ink'
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-2 font-display text-sm font-bold transition ${
+                        isRoomPublic ? 'bg-surface text-accent-text shadow-[0_3px_0_var(--ui-border-strong)]' : 'text-muted hover:text-ink'
                       }`}
                     >
-                      <Globe size={14} strokeWidth={1.75} aria-hidden="true" />
+                      <Globe size={14} strokeWidth={2.25} aria-hidden="true" />
                       <span>Public</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setIsRoomPublic(false)}
                       aria-pressed={!isRoomPublic}
-                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition ${
-                        !isRoomPublic ? 'bg-surface text-accent-text shadow-xs' : 'text-muted hover:text-ink'
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-2 font-display text-sm font-bold transition ${
+                        !isRoomPublic ? 'bg-surface text-accent-text shadow-[0_3px_0_var(--ui-border-strong)]' : 'text-muted hover:text-ink'
                       }`}
                     >
-                      <Lock size={14} strokeWidth={1.75} aria-hidden="true" />
+                      <Lock size={14} strokeWidth={2.25} aria-hidden="true" />
                       <span>Private</span>
                     </button>
                   </div>
@@ -1271,7 +1304,7 @@ export const App: React.FC = () => {
             </div>
 
             {/* The rules both players will be bound by, before anyone commits. */}
-            <div className="card flex flex-wrap items-center justify-between gap-3 p-4 text-left">
+            <div className="card animate-pop-in flex flex-wrap items-center justify-between gap-3 p-4 text-left" style={stagger(5)}>
               <div className="flex flex-wrap items-center gap-2">
                 {summariseRoomSettings(roomSettings).map((fact) => (
                   // The chip is a flex row, so the label and value are separate
@@ -1291,17 +1324,17 @@ export const App: React.FC = () => {
               </button>
             </div>
 
-            <div className="card text-left">
-              <div className="flex items-center justify-between border-b border-line px-5 py-3">
-                <h3 className="text-sm font-medium text-ink">Public rooms</h3>
-                <span className="text-xs tabular-nums text-muted">{availableRooms.length}</span>
+            <div className="card animate-pop-in text-left" style={stagger(6)}>
+              <div className="flex items-center justify-between border-b-2 border-line px-5 py-3.5">
+                <h2 className="text-lg text-ink">Public rooms</h2>
+                <span className="chip font-mono tabular-nums">{availableRooms.length}</span>
               </div>
               <div className="p-5">
                 {availableRooms.length === 0 ? (
-                  <div className="space-y-3 rounded-md border border-dashed border-line bg-surface-2 p-6 text-center">
+                  <div className="space-y-3 rounded-md border-2 border-dashed border-line bg-surface-2 p-6 text-center">
                     {/* "Still looking" and "nobody is hosting" are different
                         situations, and only the second one needs a way out. */}
-                    <p className="text-xs font-medium text-ink">
+                    <p className="text-sm font-medium text-ink">
                       {roomScanDone ? 'Nobody is hosting a public room right now.' : 'Looking for public rooms…'}
                     </p>
                     {roomScanDone && (
@@ -1323,20 +1356,20 @@ export const App: React.FC = () => {
                     {availableRooms.map((room) => (
                       <div
                         key={room.roomId}
-                        className="flex items-center justify-between rounded-md border border-line bg-surface-2 p-3 shadow-xs transition hover:border-accent"
+                        className="card-inset flex items-center justify-between p-3 transition-colors hover:border-accent hover:bg-surface-3"
                       >
                         <div className="flex min-w-0 items-center gap-3">
                           <img
                             src={room.hostAvatar || '/Avatar/Poring.gif'}
                             alt=""
                             aria-hidden="true"
-                            className="h-9 w-9 shrink-0 rounded-full border border-accent bg-surface object-contain shadow-xs"
+                            className="h-11 w-11 shrink-0 rounded-full border-2 border-accent bg-surface object-contain"
                           />
                           <div className="min-w-0">
-                            <div className="truncate text-xs font-semibold text-ink">
+                            <div className="truncate font-display text-[15px] font-bold text-ink">
                               {room.hostName}'s room
                             </div>
-                            <div className="mt-0.5 font-mono text-[10px] text-muted">
+                            <div className="mt-0.5 font-mono text-[11px] text-muted">
                               Code: <span className="font-medium text-accent-text">{room.roomId}</span> · {room.boardSize}x{room.boardSize}
                             </div>
                           </div>
@@ -1368,12 +1401,12 @@ export const App: React.FC = () => {
                   <span className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-subtle">
                     {isRoomPublic ? (
                       <>
-                        <Globe size={13} strokeWidth={1.75} aria-hidden="true" />
+                        <Globe size={13} strokeWidth={2.25} aria-hidden="true" />
                         <span>Public room</span>
                       </>
                     ) : (
                       <>
-                        <Lock size={13} strokeWidth={1.75} aria-hidden="true" />
+                        <Lock size={13} strokeWidth={2.25} aria-hidden="true" />
                         <span>Private room</span>
                       </>
                     )}
@@ -1393,14 +1426,14 @@ export const App: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <Copy size={14} strokeWidth={1.75} aria-hidden="true" />
+                      <Copy size={14} strokeWidth={2.25} aria-hidden="true" />
                       <span>Copy invite link</span>
                     </>
                   )}
                 </button>
                 {typeof navigator !== 'undefined' && 'share' in navigator && (
                   <button onClick={shareRoomLink} className="btn btn-secondary btn-sm shrink-0">
-                    <Share2 size={14} strokeWidth={1.75} aria-hidden="true" />
+                    <Share2 size={14} strokeWidth={2.25} aria-hidden="true" />
                     <span>Share</span>
                   </button>
                 )}
@@ -1553,7 +1586,7 @@ export const App: React.FC = () => {
                     {gameStatus === 'ended' ? (
                        gameResult?.winner === 'Victory!' ? 'Victory!' : gameResult?.winner === 'Defeat!' ? 'Defeat!' : 'Draw!'
                     ) : (
-                       currentTurn === myPiece ? "Lượt của bạn!" : "Đang chờ đối thủ..."
+                      currentTurn === myPiece ? 'Your turn' : 'Waiting for your opponent…'
                     )}
                   </div>
                   <Board
@@ -1653,7 +1686,7 @@ export const App: React.FC = () => {
               />
             </div>
             <div className="p-7 text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-warning-soft text-warning"><WifiOff size={24} strokeWidth={1.75} aria-hidden="true" /></div>
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-warning-soft text-warning"><WifiOff size={24} strokeWidth={2.25} aria-hidden="true" /></div>
               <h3 id="reconnect-title" className="mt-2 text-xl font-semibold tracking-tight text-ink">Reconnecting opponent</h3>
               <p className="mt-2 text-sm leading-6 text-muted">Your opponent disconnected. The board and clocks are paused while we keep their seat open.</p>
               <div className="my-6 rounded-lg bg-inverse px-5 py-4 text-inverse-fg">
