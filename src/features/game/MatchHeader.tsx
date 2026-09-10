@@ -1,6 +1,7 @@
 import React from 'react';
 import type { UserProfile } from '../auth/AuthContext';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
+import { useTheme } from '../theme/ThemeContext';
 
 interface MatchHeaderProps {
   myUser?: UserProfile | null;
@@ -19,6 +20,22 @@ interface MatchHeaderProps {
   onViewMyProfile?: () => void;
   onViewOpponentProfile?: (opponent: UserProfile) => void;
 }
+
+/**
+ * Piece colours are picked by the player in Settings, so no fixed ink is safe
+ * on top of them. This is the WCAG relative-luminance test, which is the same
+ * rule the token file's contrast budget was measured with.
+ */
+const readableInk = (hex: string) => {
+  const c = hex.replace('#', '');
+  if (c.length !== 6) return '#ffffff';
+  const channel = (i: number) => {
+    const v = parseInt(c.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  const L = 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+  return L > 0.42 ? '#0d2b45' : '#ffffff';
+};
 
 const formatClock = (seconds: number) => {
   const m = Math.floor(seconds / 60);
@@ -58,38 +75,51 @@ const Seat: React.FC<SeatProps> = ({
   disabled,
   title,
 }) => {
+  /* The ring is the player's actual piece colour, so a seat and the marks it
+     is putting on the board are visibly the same player. It thickens on turn
+     rather than switching to a shared accent, which would have made both
+     seats look alike at the one moment they must not. */
   const avatar = (
     <span
-      className={`grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-xl bg-surface transition-colors ${
-        isTurn ? 'ring-4 ring-accent shadow-[0_0_15px_rgba(0,185,92,0.5)]' : 'border border-line shadow-sm'
+      className={`relative grid h-24 w-24 shrink-0 place-items-center rounded-full bg-surface transition-all ${
+        isTurn ? 'animate-turn-bob border-[6px]' : 'border-4 border-line'
       }`}
+      style={isTurn ? { borderColor: color, boxShadow: `0 0 0 6px ${color}33` } : undefined}
     >
-      <img src={getAvatarPublicUrl(photoURL)} alt="" aria-hidden="true" className="h-full w-full object-contain p-1" />
+      <img
+        src={getAvatarPublicUrl(photoURL)}
+        alt=""
+        aria-hidden="true"
+        className="h-full w-full rounded-full object-contain p-1.5"
+      />
+      {/* The piece rides on the portrait instead of sitting under the name:
+          one glance answers "which one am I" without reading anything. */}
+      <span
+        className="absolute -bottom-1 -right-1 grid h-9 w-9 place-items-center rounded-full border-4 border-surface font-display text-lg font-extrabold leading-none"
+        style={{ backgroundColor: color, color: readableInk(color) }}
+      >
+        {piece}
+      </span>
     </span>
   );
 
   const details = (
-    <span className="flex min-w-0 flex-col items-center gap-1.5 text-center mt-2">
-      <span className="flex flex-col items-center gap-1">
-        <span className="truncate text-base font-semibold leading-none text-ink">{name}</span>
-        {tag && (
-          <span className="shrink-0 rounded-sm bg-surface-3 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted mt-0.5">
-            {tag}
-          </span>
-        )}
-        <span className="text-xl font-black mt-1" style={{ color }}>
-          {piece}
+    <span className="mt-3 flex min-w-0 flex-col items-center gap-2 text-center">
+      <span className="flex flex-col items-center gap-1.5">
+        <span className="max-w-[11rem] truncate font-display text-lg font-bold leading-tight text-ink">
+          {name}
         </span>
+        {tag && <span className="chip chip-accent shrink-0">{tag}</span>}
       </span>
       {(clock > 0 || isTurn) && (
         <span
-          className={`mt-1 min-w-[4rem] rounded-md px-2 py-1 text-center text-xs leading-tight transition-colors ${
-            clock > 0 ? 'font-mono tabular-nums' : 'font-semibold'
+          className={`min-w-[4.5rem] rounded-sm px-2.5 py-1 text-center font-display text-sm font-bold leading-tight transition-colors ${
+            clock > 0 ? 'font-mono tabular-nums' : ''
           } ${
             isTurn
               ? isUrgent
-                ? 'bg-danger-solid font-bold text-danger-fg'
-                : 'bg-accent font-bold text-accent-fg'
+                ? 'bg-danger-solid text-danger-fg'
+                : 'bg-accent text-accent-fg'
               : 'bg-surface-3 text-muted'
           }`}
         >
@@ -105,9 +135,9 @@ const Seat: React.FC<SeatProps> = ({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`flex flex-col items-center gap-2 rounded-md p-3 transition-colors ${
-        disabled ? 'cursor-default' : 'hover:bg-surface-2'
-      } w-full`}
+      className={`flex w-full flex-col items-center rounded-md p-3 transition-colors ${
+        disabled ? 'cursor-default' : 'hover:bg-surface-3'
+      }`}
     >
       {avatar}
       {details}
@@ -130,6 +160,7 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({
   onViewMyProfile,
   onViewOpponentProfile,
 }) => {
+  const { theme } = useTheme();
   const isPlaying = gameStatus === 'playing';
   const isMyTurn = isPlaying && currentTurn === myPiece;
   const isTheirTurn = isPlaying && currentTurn !== myPiece;
@@ -142,7 +173,7 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({
         name={myUser?.displayName || 'You'}
         photoURL={myUser?.photoURL}
         piece={myPiece}
-        color="var(--ui-accent-text)"
+        color={myPiece === 'X' ? theme.xColor : theme.oColor}
         clock={myTotalTimeLeft}
         isTurn={isMyTurn}
         isUrgent={isUrgent}
@@ -154,8 +185,10 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({
       {/* Rounds won in this sitting. It is the only number both players watch
           between games, so it belongs between them rather than in a panel. */}
       <div className="flex flex-col items-center">
-        <div className="bg-accent px-4 py-1.5 rounded text-white font-bold tracking-wider mb-2 shadow-sm">VS</div>
-        <div className="flex shrink-0 items-center gap-2 font-mono text-lg font-bold tabular-nums text-subtle">
+        <div className="mb-2 rounded-sm bg-accent px-4 py-1 font-display text-base font-extrabold tracking-wider text-accent-fg shadow-[0_3px_0_var(--ui-accent-shadow)]">
+          VS
+        </div>
+        <div className="flex shrink-0 items-center gap-2.5 font-mono text-2xl font-bold tabular-nums text-subtle">
           <span className="text-ink">{myScore}</span>
           <span aria-hidden="true">-</span>
           <span className="text-ink">{opponentScore}</span>
@@ -169,7 +202,7 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({
         name={opponent?.displayName || 'Waiting…'}
         photoURL={opponent?.photoURL}
         piece={opponentPiece}
-        color="var(--ui-danger)"
+        color={opponentPiece === 'X' ? theme.xColor : theme.oColor}
         clock={opponentTotalTimeLeft}
         isTurn={isTheirTurn}
         isUrgent={isUrgent}
