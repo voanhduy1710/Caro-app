@@ -38,7 +38,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-line bg-surface/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-4 sm:px-6">
+      <div
+        className={`mx-auto flex h-16 w-full items-center justify-between gap-2 px-4 sm:px-6 ${
+          inMatch ? 'max-w-[1760px]' : 'max-w-7xl'
+        }`}
+      >
         {/* Brand */}
         <button
           type="button"

@@ -1,11 +1,28 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { X, Bell, ChevronDown, ChevronUp, ArrowDown, Smile } from 'lucide-react';
+import {
+  X,
+  Bell,
+  ChevronDown,
+  ChevronUp,
+  ArrowDown,
+  Smile,
+  Settings,
+  LogOut,
+  Undo2,
+  RefreshCw,
+  Flag,
+  Loader2,
+} from 'lucide-react';
+import { setDisplayPref, useDisplayPrefs } from './displayPrefs';
+import type { DisplayPrefs } from './displayPrefs';
 import type { UserProfile } from '../auth/AuthContext';
 import type { ChatMessage } from '../webrtc/types';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { useIsDesktop } from '../../shared/hooks/useMediaQuery';
 
 interface GameControlsProps {
+  headerNode?: React.ReactNode;
+  boardNode?: React.ReactNode;
   myPiece: 'X' | 'O';
   currentTurn: 'X' | 'O';
   turnTimeLeft: number;
@@ -23,6 +40,8 @@ interface GameControlsProps {
   onResign: () => void;
   /** Leaves the match: back home from practice, out of the room online. */
   onExitMatch: () => void;
+  /** Names where the exit goes, e.g. "Leave room". */
+  exitLabel: string;
   gameStatus: 'lobby' | 'playing' | 'ended';
   allowUndo: boolean;
   boardSize: number;
@@ -45,6 +64,13 @@ const REACTION_ICONS = [
   { id: 'gasp', label: ':O', emoji: '😮' },
   { id: 'lmao', label: 'Lmao', emoji: '🤣' },
   { id: 'gg', label: 'GG', emoji: '🤝' },
+];
+
+/** The three board settings worth reaching for without leaving the match. */
+const PREF_ROWS: Array<{ key: keyof DisplayPrefs; label: string }> = [
+  { key: 'showCoordinates', label: 'Show coordinates' },
+  { key: 'markLastMove', label: 'Mark the last move' },
+  { key: 'soundEnabled', label: 'Sound' },
 ];
 
 const CHAT_OPEN_STORAGE_KEY = 'caro_chat_panel_open';
@@ -116,7 +142,56 @@ const readStoredChatOpen = (defaultOpen: boolean) => {
   }
 };
 
+interface RailButtonProps {
+  icon: React.ReactNode;
+  /** The action's name. Carried by the tooltip and by the accessible label. */
+  label: string;
+  /** The longer sentence, when the action needs one to be understood. */
+  title?: string;
+  onClick: () => void;
+  disabled?: boolean;
+  /** Asked for, and waiting on the opponent's answer. */
+  pending?: boolean;
+  tone?: 'default' | 'primary' | 'danger';
+}
+
+/**
+ * One action in the match rail. The rail is 240px wide at its narrowest, where
+ * five named buttons wrapped onto three lines and read as a pile rather than as
+ * a toolbar, so each action is an icon and keeps its name in the tooltip and in
+ * the accessible label. An action waiting on the opponent spins in place, which
+ * says "sent, still waiting" without the button changing width.
+ */
+const RailButton: React.FC<RailButtonProps> = ({
+  icon,
+  label,
+  title,
+  onClick,
+  disabled = false,
+  pending = false,
+  tone = 'default',
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled || pending}
+    title={title ? `${label} — ${title}` : label}
+    aria-label={label}
+    className={`btn btn-icon h-10 w-10 rounded-full ${
+      tone === 'primary' ? 'btn-primary' : 'btn-ghost'
+    } ${tone === 'danger' ? 'text-muted hover:text-danger' : ''}`}
+  >
+    {pending ? (
+      <Loader2 size={17} strokeWidth={1.75} className="animate-spin" aria-hidden="true" />
+    ) : (
+      icon
+    )}
+  </button>
+);
+
 export const GameControls: React.FC<GameControlsProps> = ({
+  headerNode,
+  boardNode,
   myPiece,
   myUser,
   opponent,
@@ -127,6 +202,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
   onProposeRematch,
   onResign,
   onExitMatch,
+  exitLabel,
   gameStatus,
   allowUndo,
   boardSize,
@@ -136,6 +212,10 @@ export const GameControls: React.FC<GameControlsProps> = ({
   rematchPending,
 }) => {
   const isDesktop = useIsDesktop();
+  const prefs = useDisplayPrefs();
+  const [isPrefsOpen, setIsPrefsOpen] = useState(false);
+  const gearRef = useRef<HTMLButtonElement>(null);
+  const prefsRef = useRef<HTMLDivElement>(null);
 
   const [chatText, setChatText] = useState('');
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
@@ -285,6 +365,26 @@ export const GameControls: React.FC<GameControlsProps> = ({
     return () => observer.disconnect();
   }, [isChatOpen, chatMessages.length]);
 
+  // The preferences popover closes on Escape or on a click anywhere else,
+  // like every other transient menu.
+  useEffect(() => {
+    if (!isPrefsOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (prefsRef.current?.contains(target) || gearRef.current?.contains(target)) return;
+      setIsPrefsOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsPrefsOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [isPrefsOpen]);
+
   // Escape closes the mobile sheet and the lightbox.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -362,57 +462,116 @@ export const GameControls: React.FC<GameControlsProps> = ({
   // Practice keeps a "New game" button, which asks before discarding a live game.
   const rematchDisabled = rematchPending || (!isAiMode && gameStatus !== 'ended');
 
-  // Conceding is a real control and gets a real button, distinguished from the
-  // pair beside it by colour rather than by being pushed out of the group.
-  const destructiveAction = isAiMode ? (
-    <button
-      onClick={onExitMatch}
-      title="Leave practice and go back to the home screen"
-      className="btn btn-ghost btn-sm w-full text-muted"
-    >
-      Leave practice
-    </button>
-  ) : (
-    <button
-      onClick={onResign}
-      disabled={gameStatus !== 'playing'}
-      title="Give up this match and record it as a loss"
-      className="btn btn-ghost btn-sm w-full text-danger"
-    >
-      Resign
-    </button>
-  );
-
+  // One row of icons rather than a wrap of labelled buttons: every action here
+  // is either rare or destructive, and none of them should out-shout the board.
+  // The way out keeps its own side of a divider, being the only one that leaves
+  // the match rather than acting inside it.
   const actionButtons = (
-    <div className="grid grid-cols-2 gap-2">
-      <button
-        onClick={onProposeUndo}
-        disabled={!allowUndo || gameStatus !== 'playing' || !canUndo || undoPending}
+    <div className="flex flex-wrap items-center justify-center gap-0.5">
+      <RailButton
+        icon={<LogOut size={17} strokeWidth={1.75} aria-hidden="true" />}
+        label={exitLabel}
+        title={isAiMode ? 'go back to the home screen' : 'leave this room'}
+        onClick={onExitMatch}
+      />
+
+      <span aria-hidden="true" className="mx-1 h-6 w-px bg-line" />
+
+      <RailButton
+        icon={<Undo2 size={17} strokeWidth={1.75} aria-hidden="true" />}
+        label="Take back"
         title={undoTitle}
-        className="btn btn-secondary btn-sm"
-      >
-        {undoPending ? 'Sent\u2026' : 'Take back'}
-      </button>
+        onClick={onProposeUndo}
+        disabled={!allowUndo || gameStatus !== 'playing' || !canUndo}
+        pending={undoPending}
+      />
+
       {/* Starting over is only the obvious next step once the game is over.
           Mid-match it is the destructive option, so it does not lead. */}
-      <button
-        onClick={onProposeRematch}
-        disabled={rematchDisabled}
+      <RailButton
+        icon={<RefreshCw size={17} strokeWidth={1.75} aria-hidden="true" />}
+        label={isAiMode ? 'New game' : 'Rematch'}
         title={
           isAiMode
-            ? 'Start a fresh game against the bot'
+            ? 'start a fresh game against the bot'
             : gameStatus === 'ended'
-            ? 'Offer your opponent another round'
-            : 'Available once this match has finished'
+            ? 'offer your opponent another round'
+            : 'available once this match has finished'
         }
-        className={`btn btn-sm ${gameStatus === 'ended' ? 'btn-primary' : 'btn-secondary'}`}
-      >
-        {rematchPending ? 'Sent\u2026' : isAiMode ? 'New game' : 'Rematch'}
-      </button>
+        onClick={onProposeRematch}
+        disabled={rematchDisabled}
+        pending={rematchPending}
+        tone={gameStatus === 'ended' ? 'primary' : 'default'}
+      />
+
+      {/* Conceding stays in the rail with everything else and is told apart by
+          colour, not by being pushed out of the group. */}
+      {!isAiMode && (
+        <RailButton
+          icon={<Flag size={17} strokeWidth={1.75} aria-hidden="true" />}
+          label="Resign"
+          title="give up this match and record it as a loss"
+          onClick={onResign}
+          disabled={gameStatus !== 'playing'}
+          tone="danger"
+        />
+      )}
+
+      {/* What this browser draws and plays, kept apart from the Settings
+          dialog, which holds the rules both players are bound by. */}
+      <div className="relative">
+        <button
+          ref={gearRef}
+          type="button"
+          onClick={() => setIsPrefsOpen((open) => !open)}
+          aria-haspopup="true"
+          aria-expanded={isPrefsOpen}
+          title="Board display and sound"
+          aria-label="Board display and sound"
+          className="btn btn-ghost btn-icon h-10 w-10 rounded-full"
+        >
+          <Settings size={17} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+
+        {isPrefsOpen && (
+          <div
+            ref={prefsRef}
+            role="dialog"
+            aria-label="Board display and sound"
+            className="absolute bottom-12 right-0 z-30 w-60 rounded-lg border border-line bg-surface p-2 shadow-2xl"
+          >
+            <p className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.09em] text-muted">
+              This device only
+            </p>
+            {PREF_ROWS.map((row) => (
+              <button
+                key={row.key}
+                type="button"
+                role="switch"
+                aria-checked={prefs[row.key]}
+                onClick={() => setDisplayPref(row.key, !prefs[row.key])}
+                className="flex w-full items-center justify-between gap-3 rounded-md p-2 text-left text-[13px] font-medium transition-colors hover:bg-surface-2"
+              >
+                <span>{row.label}</span>
+                <span
+                  aria-hidden="true"
+                  className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                    prefs[row.key] ? 'bg-accent' : 'bg-surface-3'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-surface shadow transition-transform ${
+                      prefs[row.key] ? 'translate-x-4' : ''
+                    }`}
+                  />
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
-
-
 
   const reactionRow = isAiMode || !isReactionsOpen ? null : (
     <div className="grid grid-cols-8 gap-1 pb-2">
@@ -655,20 +814,29 @@ export const GameControls: React.FC<GameControlsProps> = ({
     </div>
   );
 
+  /* ------------------------------- layout -------------------------------- */
+
+  // The bar under the board. Everything that acts on the match lives here, so
+  // the frame itself keeps the height it needs.
+  const actionsCell = (withSummary: boolean) => (
+    <div className="area-actions panel mx-3 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 p-2">
+      {actionButtons}
+      {withSummary && <div className="ml-auto hidden lg:block">{roomSummary}</div>}
+    </div>
+  );
+
   /* ------------------------------ practice ------------------------------- */
 
-  // Chat, reactions and Buzz all need a second player. Rendering them against
-  // the bot only offered controls that could not do anything.
   if (isAiMode) {
     return (
-      <div className="panel flex w-full flex-col overflow-hidden">
-        <div className="shrink-0 p-3">{actionButtons}</div>
-        <div className="shrink-0 border-t border-line px-3 py-1.5">{destructiveAction}</div>
-        <p className="border-t border-line px-3 py-3 text-xs leading-relaxed text-muted">
-          Practice games stay on this device. They are saved to your history but never
-          change your rating.
-        </p>
-        <div className="border-t border-line bg-surface-2">{roomSummary}</div>
+      <div className="match-stage match-stage--solo">
+        <div className="area-left">
+          {headerNode}
+          <div className="flex-1 min-h-0" />
+          {actionsCell(true)}
+        </div>
+        <div className="area-board pt-4">{boardNode}</div>
+        {lightbox}
       </div>
     );
   }
@@ -677,71 +845,102 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
   if (isDesktop) {
     return (
-      <>
-        {/* One rail divided by hairlines. Nesting a bordered box per section
-            turned the sidebar into four floating islands. */}
-        <div className="panel flex h-full min-h-0 w-full flex-col overflow-hidden">
-          <div className="shrink-0 p-3">{actionButtons}</div>
-          <div className="shrink-0 border-t border-line px-3 py-1.5">{destructiveAction}</div>
+      <div className="match-stage">
+        <div className="area-left">
+          {headerNode}
+          <div className="flex-1 min-h-0" />
+          {actionsCell(false)}
+        </div>
 
-          <div className="shrink-0 border-t border-line">{chatHeader}</div>
+        <div className="area-board pt-4">
+          {boardNode}
+        </div>
 
+        <aside className="area-right flex min-h-0 flex-col overflow-hidden">
+          <div className="shrink-0 border-b border-line">
+            <div className="p-3">
+              {roomSummary}
+            </div>
+            {chatHeader}
+          </div>
           {isChatOpen && (
-            <div
-              id="chat-panel-body"
-              className="flex min-h-0 flex-1 flex-col border-t border-line px-3 pt-2 pb-3"
-            >
+            <div id="chat-panel-body" className="flex min-h-0 flex-1 flex-col px-3 pt-2">
               {chatFeed}
-              {composer}
             </div>
           )}
+          <div className="area-compose flex flex-col justify-center px-3 py-2 border-t border-line">
+            {reactionRow}
+            {composer}
+          </div>
+        </aside>
 
-          <div className="mt-auto shrink-0 border-t border-line bg-surface-2">{roomSummary}</div>
-        </div>
         {lightbox}
-      </>
+      </div>
     );
   }
 
   /* --------------------------------- mobile --------------------------------- */
 
   return (
-    <>
-      {/* In-flow actions stay put; only the chat dock overlays, so the board never shifts. */}
-      <div className="panel w-full overflow-hidden">
-        <div className="p-3">{actionButtons}</div>
-        <div className="border-t border-line px-3 py-1.5">{destructiveAction}</div>
-        <div className="border-t border-line bg-surface-2">{roomSummary}</div>
+    <div className="match-stage">
+      <div className="area-left">
+        {headerNode}
       </div>
 
-      {/* Reserve room for the collapsed dock so it never covers the last row. */}
-      <div aria-hidden="true" className="h-16" />
+      <div className="area-board pt-2">
+        {boardNode}
+      </div>
 
-      {isChatOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-[var(--ui-scrim)] backdrop-blur-[2px]"
-          onClick={() => setIsChatOpen(false)}
-          aria-hidden="true"
-        />
-      )}
+      <div className="area-actions flex flex-col w-full">
+        {actionsCell(true)}
+      </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-50 px-2 pb-2 pointer-events-none">
-        <div className="pointer-events-auto mx-auto max-w-2xl rounded-lg bg-surface border border-line-strong shadow-[0_-8px_30px_-12px_rgba(15,23,42,0.35)] overflow-hidden">
-          {chatHeader}
-          {isChatOpen && (
-            <div
-              id="chat-panel-body"
-              className="flex flex-col border-t border-line px-3 pb-3 pt-2 bg-surface-2"
-              style={{ height: 'min(58dvh, 460px)' }}
-            >
-              {chatFeed}
-              {composer}
-            </div>
-          )}
+      <div className="fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-40 border-t border-line bg-surface p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+        <button
+          onClick={() => setIsChatOpen(true)}
+          className="flex w-full items-center justify-between rounded-full bg-surface-2 px-4 py-2.5 text-left transition-colors hover:bg-surface-3"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-medium text-muted">
+              {lastMessagePreview}
+            </span>
+            {unreadCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-danger-solid text-danger-fg text-[10px] font-semibold leading-none">
+                {unreadCount}
+              </span>
+            )}
+          </div>
+          <ChevronUp size={16} className="text-subtle" />
+        </button>
+      </div>
+
+      <div
+        className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t border-line bg-surface shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
+          isChatOpen ? 'translate-y-0' : 'translate-y-full'
+        }`}
+        style={{
+          height: '80dvh',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-line px-2 py-1">
+          {roomSummary}
+          <button
+            onClick={() => setIsChatOpen(false)}
+            className="btn btn-ghost btn-icon h-10 w-10 shrink-0 text-muted hover:bg-surface-2 hover:text-ink"
+            aria-label="Close chat"
+          >
+            <ChevronDown size={20} strokeWidth={2} />
+          </button>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col p-3 pb-0">{chatFeed}</div>
+        <div className="shrink-0 p-3 shadow-[0_-8px_16px_-8px_rgba(0,0,0,0.05)]">
+          {reactionRow}
+          {composer}
         </div>
       </div>
 
       {lightbox}
-    </>
+    </div>
   );
 };

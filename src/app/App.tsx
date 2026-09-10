@@ -7,6 +7,7 @@ import { useAvailableRooms } from '../features/webrtc/roomDiscoveryService';
 import { useSound } from '../shared/hooks/useSound';
 import { Navbar } from '../shared/components/Navbar';
 import { Board } from '../features/game/Board';
+import { MatchHeader } from '../features/game/MatchHeader';
 import { GameControls } from '../features/game/GameControls';
 import { SettingsAndThemeModal } from '../features/settings/SettingsAndThemeModal';
 import { LeaderboardModal } from '../features/leaderboard/LeaderboardModal';
@@ -22,7 +23,6 @@ import type { BoardMatrix } from '../shared/utils/gomokuLogic';
 import { useAiEngine } from '../features/game/useAiEngine';
 import { calculateElo } from '../shared/utils/eloCalculator';
 import { saveMatchRecord } from '../features/history/historyService';
-import { useIsDesktop } from '../shared/hooks/useMediaQuery';
 import type { PeerMessage } from '../features/webrtc/types';
 
 interface MoveHistoryItem {
@@ -116,8 +116,6 @@ export const App: React.FC = () => {
   const [gameResult, setGameResult] = useState<{ winner: string; reason: string } | null>(() => initialSnapshot?.gameResult || null);
   const [isAiMode, setIsAiMode] = useState<boolean>(false);
   const [matchCount, setMatchCount] = useState<number>(() => initialSnapshot?.matchCount || 0);
-  const boardPanelRef = useRef<HTMLDivElement>(null);
-  const [boardPanelHeight, setBoardPanelHeight] = useState<number | null>(null);
 
   // 5-Second Self Undo Tracking Ref
   const lastMoveTimestampRef = useRef<number>(0);
@@ -152,13 +150,17 @@ export const App: React.FC = () => {
   /** Distinguishes "still looking" from "nobody is hosting". */
   const [roomScanDone, setRoomScanDone] = useState(false);
   /**
+   * Rounds won since this pairing sat down. Kept per seat rather than per
+   * name, because two guests can share a display name.
+   */
+  const [sessionScore, setSessionScore] = useState({ mine: 0, theirs: 0 });
+  /**
    * Seconds left before the first move of an online round, or null when no
    * countdown is running. It gives both players a moment to look at the board
    * instead of one of them discovering the match has already started.
    */
   const [countdown, setCountdown] = useState<number | null>(null);
 
-  const isDesktop = useIsDesktop();
   const { requestMove: requestAiMove, cancelPending: cancelAiMove } = useAiEngine();
   const [isAiThinking, setIsAiThinking] = useState(false);
 
@@ -179,26 +181,9 @@ export const App: React.FC = () => {
   // rating write to exactly one execution per match.
   const matchOverRef = useRef<boolean>(initialSnapshot?.gameStatus === 'ended');
 
-  // The action panel must never be able to make the game row taller than the
-  // board. Measure the rendered board (including its match header) so this
-  // remains correct across screen sizes and header wrapping.
-  useEffect(() => {
-    const panel = boardPanelRef.current;
-    if (!panel || (gameStatus !== 'playing' && gameStatus !== 'ended')) {
-      setBoardPanelHeight(null);
-      return;
-    }
-
-    const updateHeight = () => {
-      const nextHeight = Math.ceil(panel.getBoundingClientRect().height);
-      setBoardPanelHeight((current) => current === nextHeight ? current : nextHeight);
-    };
-
-    const observer = new ResizeObserver(updateHeight);
-    observer.observe(panel);
-    updateHeight();
-    return () => observer.disconnect();
-  }, [gameStatus, roomSettings.boardSize]);
+  // The chat column used to be sized by measuring the board with a
+  // ResizeObserver. Both now sit in one grid row, so the browser matches their
+  // heights and the measurement is gone.
 
   // Auto-reconnect on accidental F5 / page refresh or direct room link access.
   // This must wait for the profile: reconnecting while `user` was still null
@@ -363,6 +348,9 @@ export const App: React.FC = () => {
     if (winner !== 'DRAW') {
       const isWinner = winner === myPiece;
       winnerText = isWinner ? 'Victory!' : 'Defeat!';
+      setSessionScore((prev) =>
+        isWinner ? { ...prev, mine: prev.mine + 1 } : { ...prev, theirs: prev.theirs + 1 }
+      );
       if (isWinner) {
         confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
         playWinSound();
@@ -922,6 +910,8 @@ export const App: React.FC = () => {
     if (webrtc.roomId) webrtc.leaveRoom();
     setIAmReady(false);
     setPeerReady(false);
+    // A new opponent starts level.
+    setSessionScore({ mine: 0, theirs: 0 });
     resetMatchState();
     setGameStatus('lobby');
   }, [cancelAiMove, webrtc, resetMatchState]);
@@ -983,11 +973,13 @@ export const App: React.FC = () => {
     setIsAiMode(false);
     setCopyState('idle');
     setManualLink(null);
+    setSessionScore({ mine: 0, theirs: 0 });
     webrtc.createRoom(roomCode, boardSize, isPublic);
   };
 
   const handleJoinRoom = (roomCode: string) => {
     setIsAiMode(false);
+    setSessionScore({ mine: 0, theirs: 0 });
     // Keep whatever was typed on failure: retyping a code you already have is
     // pure friction, and the message needs something to refer to.
     webrtc.joinRoom(roomCode);
@@ -1102,11 +1094,16 @@ export const App: React.FC = () => {
     webrtc.sendBuzz();
   };
 
+  // The match is a full-height app view rather than a page: it takes the whole
+  // shell width and drops the page chrome, so the board is bounded by the
+  // screen instead of by the reading-width container the lobby wants.
+  const inMatch = gameStatus === 'playing' || gameStatus === 'ended';
+
   return (
     <div className="min-h-[100dvh] flex flex-col justify-between bg-surface-2 text-ink selection:bg-accent selection:text-accent-fg">
       {/* Top Navbar */}
       <Navbar
-        inMatch={gameStatus === 'playing' || gameStatus === 'ended'}
+        inMatch={inMatch}
         onOpenLeaderboard={() => setLeaderboardOpen(true)}
         onOpenHistory={() => setHistoryOpen(true)}
         onOpenSettingsAndTheme={() => setSettingsAndThemeOpen(true)}
@@ -1114,7 +1111,13 @@ export const App: React.FC = () => {
       />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col justify-center items-center">
+      <main
+        className={`flex-1 w-full mx-auto flex flex-col ${
+          inMatch
+            ? 'max-w-[1760px] p-0 lg:px-6 lg:py-4'
+            : 'max-w-7xl p-4 sm:p-6 items-center justify-center'
+        }`}
+      >
         {/* HOME. The three ways to start a game come first; the public room
             list, which is empty most of the time, comes after them. */}
         {gameStatus === 'lobby' && !webrtc.roomId && (
@@ -1525,110 +1528,106 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* 2-SIDED SPLIT SCREEN GAME LAYOUT */}
         {(gameStatus === 'playing' || gameStatus === 'ended') && (
-          <div className="w-full flex flex-col lg:flex-row lg:items-start gap-6">
-            {/* SIDE 1 (LEFT): Light Mode Board Game View */}
-            {/* min-w-0 stops the board column from claiming its content width and
-                pushing the chat rail off the right edge of the viewport. */}
-            <div ref={boardPanelRef} className="flex-1 min-w-0 w-full flex flex-col items-center justify-center">
-              {/* Board Component with Integrated Minimal Match Header */}
-              <Board
-                board={board}
-                size={roomSettings.boardSize}
-                onCellClick={handleCellClick}
-                lastMove={lastMove}
-                winningLine={winningLine}
-                currentTurn={currentTurn}
-                disabled={gameStatus !== 'playing' || webrtc.isReconnecting || isCountingIn || currentTurn !== myPiece}
-                countdown={countdown}
-                myPiece={myPiece}
-                myUser={user}
-                opponent={opponentUser}
-                turnTimeLeft={turnTimeLeft}
-                myTotalTimeLeft={myPiece === 'X' ? p1TotalTime : p2TotalTime}
-                opponentTotalTimeLeft={myPiece === 'X' ? p2TotalTime : p1TotalTime}
-                gameStatus={gameStatus}
-                gameResult={gameResult}
-                elapsedGameTime={elapsedGameTime}
-                opponentThinking={isAiThinking}
-                modeLabel={isAiMode ? 'Practice vs Bot' : 'Online match'}
-                onExitMatch={requestExitMatch}
-                exitLabel={isAiMode ? 'Exit practice' : 'Leave room'}
-                resultReason={describeResultReason(gameResult?.reason)}
-                ratingNote={ratingNote}
-                resultActions={
-                  isAiMode ? (
-                    <>
-                      <button onClick={handleRematchButtonClick} className="btn btn-primary btn-sm">
-                        Play again
-                      </button>
-                      <button onClick={goHome} className="btn btn-secondary btn-sm">
-                        Back to home
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={handleRematchButtonClick}
-                        disabled={rematchOffer !== 'none' || !webrtc.isConnected}
-                        className="btn btn-primary btn-sm"
-                      >
-                        {rematchOffer === 'sent' ? 'Waiting for their answer…' : 'Offer a rematch'}
-                      </button>
-                      {/* Two different destinations, so two different names. */}
-                      <button onClick={goToWaitingRoom} className="btn btn-secondary btn-sm">
-                        Back to waiting room
-                      </button>
-                      <button onClick={goHome} className="btn btn-ghost btn-sm">
-                        Leave room
-                      </button>
-                    </>
-                  )
-                }
-                onViewOpponentProfile={(opp) => setSelectedOpponentProfile(opp)}
-                onViewMyProfile={openProfileModal}
-              />
-            </div>
-
-            {/* SIDE 2 (RIGHT): Controls, Actions & Live Chat Feed Sidebar */}
-            <div
-              className="w-full lg:w-[320px] shrink-0 flex flex-col min-h-0 lg:sticky lg:top-20"
-              style={
-                // Only the chat rail needs to match the board's height. Practice has
-                // no chat, so forcing it left a column of empty panel.
-                isDesktop && boardPanelHeight && !isAiMode
-                  ? { height: `${boardPanelHeight}px`, maxHeight: 'calc(100dvh - 6.5rem)' }
-                  : undefined
+            <GameControls
+              headerNode={
+                <MatchHeader
+                  myUser={user}
+                  opponent={opponentUser}
+                  myPiece={myPiece}
+                  currentTurn={currentTurn}
+                  myTotalTimeLeft={myPiece === 'X' ? p1TotalTime : p2TotalTime}
+                  opponentTotalTimeLeft={myPiece === 'X' ? p2TotalTime : p1TotalTime}
+                  turnTimeLeft={turnTimeLeft}
+                  gameStatus={gameStatus}
+                  myScore={sessionScore.mine}
+                  opponentScore={sessionScore.theirs}
+                  opponentThinking={isAiThinking}
+                  onViewMyProfile={openProfileModal}
+                  onViewOpponentProfile={(opp: UserProfile) => setSelectedOpponentProfile(opp)}
+                />
               }
-            >
-              <GameControls
-                myPiece={myPiece}
-                currentTurn={currentTurn}
-                turnTimeLeft={turnTimeLeft}
-                myTotalTimeLeft={myPiece === 'X' ? p1TotalTime : p2TotalTime}
-                opponentTotalTimeLeft={myPiece === 'X' ? p2TotalTime : p1TotalTime}
-                opponent={opponentUser}
-                myUser={user}
-                chatMessages={webrtc.chatMessages}
-                lastReaction={webrtc.lastReaction}
-                onSendChat={webrtc.sendChat}
-                onSendReaction={webrtc.sendReaction}
-                onSendBuzz={handleSendBuzz}
-                onProposeUndo={handleUndoButtonClick}
-                onProposeRematch={handleRematchButtonClick}
-                onResign={handleResignClick}
-                onExitMatch={requestExitMatch}
-                gameStatus={gameStatus}
-                allowUndo={roomSettings.allowUndo}
-                boardSize={roomSettings.boardSize}
-                isAiMode={isAiMode}
-                canUndo={moveHistory.length > 0}
-                undoPending={undoRequest === 'sent'}
-                rematchPending={rematchOffer === 'sent'}
-              />
-            </div>
-          </div>
+              boardNode={
+                <div className="flex-1 flex flex-col items-center">
+                  <div className={`text-xl font-black mb-4 tracking-wider ${currentTurn === myPiece ? 'text-accent' : 'text-subtle'}`}>
+                    {gameStatus === 'ended' ? (
+                       gameResult?.winner === 'Victory!' ? 'Victory!' : gameResult?.winner === 'Defeat!' ? 'Defeat!' : 'Draw!'
+                    ) : (
+                       currentTurn === myPiece ? "Lượt của bạn!" : "Đang chờ đối thủ..."
+                    )}
+                  </div>
+                  <Board
+                    board={board}
+                    size={roomSettings.boardSize}
+                    onCellClick={handleCellClick}
+                    lastMove={lastMove}
+                    winningLine={winningLine}
+                    currentTurn={currentTurn}
+                    disabled={gameStatus !== 'playing' || webrtc.isReconnecting || isCountingIn || currentTurn !== myPiece}
+                    countdown={countdown}
+                    myPiece={myPiece}
+                    opponent={opponentUser}
+                    gameStatus={gameStatus}
+                    gameResult={gameResult}
+                    elapsedGameTime={elapsedGameTime}
+                    resultReason={describeResultReason(gameResult?.reason)}
+                    ratingNote={ratingNote}
+                    resultActions={
+                      isAiMode ? (
+                        <>
+                          <button onClick={handleRematchButtonClick} className="btn btn-primary btn-sm">
+                            Play again
+                          </button>
+                          <button onClick={goHome} className="btn btn-secondary btn-sm">
+                            Back to home
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={handleRematchButtonClick}
+                            disabled={rematchOffer !== 'none' || !webrtc.isConnected}
+                            className="btn btn-primary btn-sm"
+                          >
+                            {rematchOffer === 'sent' ? 'Waiting for their answer…' : 'Offer a rematch'}
+                          </button>
+                          <button onClick={goToWaitingRoom} className="btn btn-secondary btn-sm">
+                            Back to waiting room
+                          </button>
+                          <button onClick={goHome} className="btn btn-ghost btn-sm">
+                            Leave room
+                          </button>
+                        </>
+                      )
+                    }
+                  />
+                </div>
+              }
+              myPiece={myPiece}
+              currentTurn={currentTurn}
+              turnTimeLeft={turnTimeLeft}
+              myTotalTimeLeft={myPiece === 'X' ? p1TotalTime : p2TotalTime}
+              opponentTotalTimeLeft={myPiece === 'X' ? p2TotalTime : p1TotalTime}
+              opponent={opponentUser}
+              myUser={user}
+              chatMessages={webrtc.chatMessages}
+              lastReaction={webrtc.lastReaction}
+              onSendChat={webrtc.sendChat}
+              onSendReaction={webrtc.sendReaction}
+              onSendBuzz={handleSendBuzz}
+              onProposeUndo={handleUndoButtonClick}
+              onProposeRematch={handleRematchButtonClick}
+              onResign={handleResignClick}
+              onExitMatch={requestExitMatch}
+              exitLabel={isAiMode ? 'Exit practice' : 'Leave room'}
+              gameStatus={gameStatus}
+              allowUndo={roomSettings.allowUndo}
+              boardSize={roomSettings.boardSize}
+              isAiMode={isAiMode}
+              canUndo={moveHistory.length > 0}
+              undoPending={undoRequest === 'sent'}
+              rematchPending={rematchOffer === 'sent'}
+            />
         )}
       </main>
 
@@ -1783,9 +1782,11 @@ export const App: React.FC = () => {
       />
 
       {/* Footer */}
-      <footer className="w-full border-t border-line bg-surface py-4 text-center text-xs text-muted">
-        Peer-to-peer Caro. No servers between you and your opponent.
-      </footer>
+      {!inMatch && (
+        <footer className="w-full border-t border-line bg-surface py-4 text-center text-xs text-muted">
+          Peer-to-peer Caro. No servers between you and your opponent.
+        </footer>
+      )}
     </div>
   );
 };

@@ -290,6 +290,74 @@
     color: var(--ui-danger);
   }
 
+  /* --- Match stage --------------------------------------------------------
+
+     One grid owns the whole match screen, so the chat column is exactly as
+     tall as the board without measuring anything, and the toolbar under the
+     board lines up with the composer under the chat. */
+
+  .match-stage {
+    display: grid;
+    gap: 0;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "left"
+      "board"
+      "right";
+  }
+
+  @media (min-width: 1024px) {
+    .match-stage {
+      grid-template-columns: 240px minmax(0, 1fr) 320px;
+      grid-template-areas:
+        "left board right";
+      /* Navbar (64) plus the shell's own vertical padding (32). */
+      min-height: calc(100dvh - 96px);
+      border: 1px solid var(--ui-border);
+      border-radius: var(--radius-lg);
+      background-color: var(--ui-surface);
+    }
+
+    /* Practice has no chat, but we still keep the left column for actions/players */
+    .match-stage--solo {
+      grid-template-columns: 240px minmax(0, 1fr);
+      grid-template-areas:
+        "left board";
+    }
+  }
+
+  /* Wide screens: the side columns take the extra width rather than leaving it
+     as margin, because the board is square and can only grow with the height. */
+  @media (min-width: 1440px) {
+    .match-stage { grid-template-columns: 280px minmax(0, 1fr) 360px; }
+    .match-stage--solo { grid-template-columns: 280px minmax(0, 1fr); }
+  }
+
+  @media (min-width: 1700px) {
+    .match-stage { grid-template-columns: 320px minmax(0, 1fr) 400px; }
+    .match-stage--solo { grid-template-columns: 320px minmax(0, 1fr); }
+  }
+
+  .area-left { grid-area: left; display: flex; flex-direction: column; background-color: var(--ui-surface-2); border-right: 1px solid var(--ui-border); min-height: 0; }
+  .area-board { grid-area: board; min-width: 0; display: flex; flex-direction: column; }
+  .area-right { grid-area: right; min-height: 0; display: flex; flex-direction: column; background-color: var(--ui-surface-2); border-left: 1px solid var(--ui-border); }
+
+  /* The stage cannot clip its own corners without clipping the reaction picker
+     that opens out of the left column, so the end columns round themselves. */
+  @media (min-width: 1024px) {
+    .area-left {
+      border-top-left-radius: var(--radius-lg);
+      border-bottom-left-radius: var(--radius-lg);
+    }
+
+    .area-right,
+    .match-stage--solo .area-board {
+      border-top-right-radius: var(--radius-lg);
+      border-bottom-right-radius: var(--radius-lg);
+    }
+  }
+
   /* --- Modals ------------------------------------------------------------ */
 
   .modal-scrim {
@@ -592,6 +660,22 @@ html, body {
 .board-scroll-container {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+}
+
+/* The board's height budget, taken from the viewport and never from the frame's
+   own content. The fitted cell size is measured out of this box, so a
+   content-derived height would feed the board's size back into itself and walk
+   every board down to the smallest square it is allowed to draw. */
+.board-frame {
+  height: min(calc(100dvh - 210px), 100vw);
+  min-height: 300px;
+  max-height: 960px;
+}
+
+@media (min-width: 1024px) {
+  .board-frame {
+    height: calc(100dvh - 184px);
+  }
 }
 
 /* Keep the chat's scrollbar inside its fixed-height feed, never the game row. */
