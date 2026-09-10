@@ -480,9 +480,13 @@ export const Board: React.FC<BoardProps> = ({
   };
 
   const formatElapsed = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
+    // Past an hour, "109:00" reads as a broken clock rather than a long game.
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    const mm = m.toString().padStart(2, '0');
+    const ss = s.toString().padStart(2, '0');
+    return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
   };
 
   const isMyTurn = myPiece === currentTurn;
@@ -510,62 +514,65 @@ export const Board: React.FC<BoardProps> = ({
           once it has ended, so nobody has to resign to get back home. */}
       <div className="flex w-full items-center justify-between gap-2">
         <span className="chip">{modeLabel || 'Online match'}</span>
-        {/* Board controls and the way out are both chrome, so they travel
-            together on the right rather than one of them floating mid-row. */}
-        <div className="flex items-center gap-1">
-          {/* Board density is the player's call: fitting a 50x50 grid to the
-              frame is a sane start, not a size anyone can read comfortably. */}
-          <button
-            type="button"
-            onClick={() => setZoomOffset((z) => z - ZOOM_STEP)}
-            disabled={!canZoomOut}
-            className="btn btn-ghost btn-icon"
-            title="Smaller squares"
-            aria-label="Zoom out"
-          >
-            <Minus size={15} strokeWidth={1.75} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={centreOnBoard}
-            className="btn btn-ghost btn-icon"
-            title="Centre the board"
-            aria-label="Centre the board"
-          >
-            <Crosshair size={15} strokeWidth={1.75} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setZoomOffset((z) => z + ZOOM_STEP)}
-            disabled={!canZoomIn}
-            className="btn btn-ghost btn-icon"
-            title="Bigger squares"
-            aria-label="Zoom in"
-          >
-            <Plus size={15} strokeWidth={1.75} aria-hidden="true" />
-          </button>
+        {/* Zoom is one control in three parts, so it gets one container. The
+            way out is a different job and needs real space between them. */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center rounded-md border border-line bg-surface-2">
+            {/* Board density is the player's call: fitting a 50x50 grid to the
+                frame is a sane start, not a size anyone can read comfortably. */}
+            <button
+              type="button"
+              onClick={() => setZoomOffset((z) => z - ZOOM_STEP)}
+              disabled={!canZoomOut}
+              className="btn btn-ghost btn-icon"
+              title="Smaller squares"
+              aria-label="Zoom out"
+            >
+              <Minus size={15} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={centreOnBoard}
+              className="btn btn-ghost btn-icon"
+              title="Centre the board"
+              aria-label="Centre the board"
+            >
+              <Crosshair size={15} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoomOffset((z) => z + ZOOM_STEP)}
+              disabled={!canZoomIn}
+              className="btn btn-ghost btn-icon"
+              title="Bigger squares"
+              aria-label="Zoom in"
+            >
+              <Plus size={15} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+          </div>
 
+          {/* The way out of a match is a real action, not a text link. */}
           {onExitMatch && (
-            <>
-              <span aria-hidden="true" className="mx-1 h-5 w-px bg-line" />
-              <button type="button" onClick={onExitMatch} className="btn btn-ghost btn-sm">
-                {exitLabel}
-              </button>
-            </>
+            <button type="button" onClick={onExitMatch} className="btn btn-secondary btn-sm">
+              {exitLabel}
+            </button>
           )}
         </div>
       </div>
 
-      {/* MATCH STATUS HEADER */}
-      <div
-        className="panel flex w-full flex-wrap items-center justify-between gap-3 p-3"
-      >
+      {/* MATCH STATUS HEADER.
+
+          A wrapping flex row put the two players on different lines as soon as
+          the board column was narrow, which is the normal case for a 15x15
+          board. A grid keeps you on the left and your opponent on the right at
+          every width, and only the status between them moves to its own row. */}
+      <div className="panel grid w-full grid-cols-2 items-center gap-2 p-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-3">
         {/* Player 1 (You) */}
         <button
           type="button"
           onClick={onViewMyProfile}
           title="View and edit your profile"
-          className={`flex items-center gap-2.5 rounded-md p-1.5 text-left transition-opacity hover:bg-surface-2 ${
+          className={`flex min-w-0 items-center gap-2.5 justify-self-start rounded-md p-1.5 text-left transition-opacity hover:bg-surface-2 ${
             gameStatus === 'playing' && !isMyTurn ? 'opacity-45' : ''
           }`}
         >
@@ -587,6 +594,12 @@ export const Board: React.FC<BoardProps> = ({
               >
                 {myPiece}
               </span>
+              {/* Two guests share the same default name, so the piece letter
+                  was the only thing saying which row was yours. On a phone this
+                  belongs beside the name: as part of the clock line it wrapped. */}
+              <span className="shrink-0 rounded-sm bg-surface-3 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                You
+              </span>
             </div>
             <div className="font-mono text-[11px] text-muted tabular-nums">
               {formatClock(myTotalTimeLeft)}
@@ -594,8 +607,9 @@ export const Board: React.FC<BoardProps> = ({
           </div>
         </button>
 
-        {/* Status Center Badge, Outcome & Controls */}
-        <div className="flex items-center gap-2.5">
+        {/* Status. Last in the source so it falls to its own row on a phone,
+            where three columns would squeeze both names to nothing. */}
+        <div className="order-last col-span-2 flex items-center justify-center gap-2 sm:order-none sm:col-span-1">
           {gameStatus === 'playing' ? (
             <>
               {/* The label is prose and the countdown is data, so they get
@@ -605,9 +619,12 @@ export const Board: React.FC<BoardProps> = ({
                   only appears when there is one: pairing the label with an
                   infinity sign next to a running clock read as two competing
                   timers with no stated relationship. */}
+              {/* Whose move it is, said once and quietly. The waiting player is
+                  already dimmed, so a large pill only repeated that louder and
+                  pushed the two player blocks apart. */}
               <div
                 aria-live="polite"
-                className={`flex items-center gap-2 rounded-full border px-4 py-1.5 text-base font-semibold transition-colors ${
+                className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
                   isMyTurn
                     ? isTurnUrgent
                       ? 'border-danger bg-danger-solid text-danger-fg'
@@ -616,14 +633,14 @@ export const Board: React.FC<BoardProps> = ({
                 }`}
               >
                 <span>
-                  {isMyTurn ? 'Your turn' : opponentThinking ? 'Thinking' : "Opponent's turn"}
+                  {isMyTurn ? 'Your turn' : opponentThinking ? 'Thinking' : 'Their turn'}
                 </span>
                 {turnTimeLeft > 0 && (
-                  <span className="font-mono text-sm tabular-nums opacity-80">{turnTimeLeft}s</span>
+                  <span className="font-mono tabular-nums opacity-80">{turnTimeLeft}s</span>
                 )}
               </div>
               <div
-                className="flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 font-mono text-xs text-muted tabular-nums"
+                className="flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 font-mono text-xs text-muted tabular-nums"
                 title="Match elapsed time"
               >
                 <Timer size={13} strokeWidth={1.75} aria-hidden="true" />
@@ -656,12 +673,21 @@ export const Board: React.FC<BoardProps> = ({
           onClick={() => opponent && onViewOpponentProfile?.(opponent)}
           disabled={!opponent}
           title={opponent ? "View opponent's profile and stats" : 'Waiting for opponent...'}
-          className={`flex items-center gap-2.5 rounded-md p-1.5 text-right transition-opacity ${
+          className={`flex min-w-0 items-center gap-2.5 justify-self-end rounded-md p-1.5 text-left transition-opacity ${
             opponent ? 'hover:bg-surface-2' : 'cursor-default'
           } ${gameStatus === 'playing' && isMyTurn ? 'opacity-45' : ''}`}
         >
-          <div className="min-w-0 text-right">
-            <div className="flex items-center justify-end gap-1.5">
+          {/* Same order as your own block: avatar, then name, then clock.
+              Mirroring the halves made one row read right-to-left for no gain. */}
+          <img
+            src={getAvatarPublicUrl(opponent?.photoURL)}
+            alt=""
+            aria-hidden="true"
+            style={{ borderColor: opponentColor }}
+            className="h-8 w-8 shrink-0 rounded-full border-2 bg-surface object-contain p-0.5"
+          />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
               <span className="truncate text-sm font-medium text-ink">
                 {opponent?.displayName || 'Waiting...'}
               </span>
@@ -676,13 +702,6 @@ export const Board: React.FC<BoardProps> = ({
               {formatClock(opponentTotalTimeLeft)}
             </div>
           </div>
-          <img
-            src={getAvatarPublicUrl(opponent?.photoURL)}
-            alt=""
-            aria-hidden="true"
-            style={{ borderColor: opponentColor }}
-            className="h-8 w-8 shrink-0 rounded-full border-2 bg-surface object-contain p-0.5"
-          />
         </button>
       </div>
 

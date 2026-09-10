@@ -362,6 +362,27 @@ export const GameControls: React.FC<GameControlsProps> = ({
   // Practice keeps a "New game" button, which asks before discarding a live game.
   const rematchDisabled = rematchPending || (!isAiMode && gameStatus !== 'ended');
 
+  // Conceding is a real control and gets a real button, distinguished from the
+  // pair beside it by colour rather than by being pushed out of the group.
+  const destructiveAction = isAiMode ? (
+    <button
+      onClick={onExitMatch}
+      title="Leave practice and go back to the home screen"
+      className="btn btn-ghost btn-sm w-full text-muted"
+    >
+      Leave practice
+    </button>
+  ) : (
+    <button
+      onClick={onResign}
+      disabled={gameStatus !== 'playing'}
+      title="Give up this match and record it as a loss"
+      className="btn btn-ghost btn-sm w-full text-danger"
+    >
+      Resign
+    </button>
+  );
+
   const actionButtons = (
     <div className="grid grid-cols-2 gap-2">
       <button
@@ -391,26 +412,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
     </div>
   );
 
-  // Resigning concedes the match. It does not belong on the same rank as a
-  // take-back, so it sits under the pair rather than beside them.
-  const destructiveAction = isAiMode ? (
-    <button
-      onClick={onExitMatch}
-      title="Leave practice and go back to the home screen"
-      className="btn btn-ghost btn-sm text-muted"
-    >
-      Leave practice
-    </button>
-  ) : (
-    <button
-      onClick={onResign}
-      disabled={gameStatus !== 'playing'}
-      title="Give up this match and record it as a loss"
-      className="btn btn-ghost btn-sm text-danger"
-    >
-      Resign
-    </button>
-  );
+
 
   const reactionRow = isAiMode || !isReactionsOpen ? null : (
     <div className="grid grid-cols-8 gap-1 pb-2">
@@ -646,7 +648,9 @@ export const GameControls: React.FC<GameControlsProps> = ({
           {boardSize} × {boardSize}
         </span>
         {' · You play '}
-        <span className="font-mono">{myPiece}</span>
+        {/* Not the mono face: its O is near enough to a zero that "You play O"
+            read as "You play 0". */}
+        <span className="font-semibold text-ink">{myPiece}</span>
       </span>
     </div>
   );
@@ -658,10 +662,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
   if (isAiMode) {
     return (
       <div className="panel flex w-full flex-col overflow-hidden">
-        <div className="shrink-0 space-y-2 p-3">
-          {actionButtons}
-          <div className="flex justify-end">{destructiveAction}</div>
-        </div>
+        <div className="shrink-0 p-3">{actionButtons}</div>
+        <div className="shrink-0 border-t border-line px-3 py-1.5">{destructiveAction}</div>
         <p className="border-t border-line px-3 py-3 text-xs leading-relaxed text-muted">
           Practice games stay on this device. They are saved to your history but never
           change your rating.
@@ -679,10 +681,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
         {/* One rail divided by hairlines. Nesting a bordered box per section
             turned the sidebar into four floating islands. */}
         <div className="panel flex h-full min-h-0 w-full flex-col overflow-hidden">
-          <div className="shrink-0 space-y-2 p-3">
-            {actionButtons}
-            <div className="flex justify-end">{destructiveAction}</div>
-          </div>
+          <div className="shrink-0 p-3">{actionButtons}</div>
+          <div className="shrink-0 border-t border-line px-3 py-1.5">{destructiveAction}</div>
 
           <div className="shrink-0 border-t border-line">{chatHeader}</div>
 
@@ -709,10 +709,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
     <>
       {/* In-flow actions stay put; only the chat dock overlays, so the board never shifts. */}
       <div className="panel w-full overflow-hidden">
-        <div className="space-y-2 p-3">
-          {actionButtons}
-          <div className="flex justify-end">{destructiveAction}</div>
-        </div>
+        <div className="p-3">{actionButtons}</div>
+        <div className="border-t border-line px-3 py-1.5">{destructiveAction}</div>
         <div className="border-t border-line bg-surface-2">{roomSummary}</div>
       </div>
 
