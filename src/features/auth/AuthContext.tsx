@@ -340,14 +340,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             { onConflict: 'uid' }
           );
 
-          // A confirmed-email project has a session immediately. For confirmation
-          // flows, do not pretend the user is signed in before they verify email.
-          if (authData.session) {
+          // Usernames map to <username>@gomoku.app, which receives no mail, so
+          // a confirmation link could never be clicked. The database stamps the
+          // confirmation on insert; if signUp still withheld a session, take one
+          // with the credentials we were just given.
+          let session = authData.session;
+          if (!session) {
+            const { data: signIn } = await supabase.auth.signInWithPassword({ email, password });
+            session = signIn?.session ?? null;
+          }
+
+          if (session) {
             setUser(profile);
             localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(profile));
           }
           setAuthError(null);
-          return { ok: true, signedIn: Boolean(authData.session) };
+          return { ok: true, signedIn: Boolean(session) };
         }
       } catch (err: any) {
         console.warn('Supabase Auth signup error:', err);
