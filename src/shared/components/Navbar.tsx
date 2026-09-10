@@ -23,7 +23,7 @@ interface NavbarProps {
 }
 
 /** One stroke weight across the whole app. */
-const ICON = { size: 16, strokeWidth: 1.75 } as const;
+const ICON = { size: 16, strokeWidth: 2.25 } as const;
 
 export const Navbar: React.FC<NavbarProps> = ({
   inMatch = false,
@@ -37,7 +37,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isSignedIn = Boolean(user && !user.isGuest);
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-line bg-surface/85 backdrop-blur-md">
+    <header className="sticky top-0 z-40 w-full border-b-2 border-line bg-surface/90 backdrop-blur-md">
       <div
         className={`mx-auto flex h-16 w-full items-center justify-between gap-2 px-4 sm:px-6 ${
           inMatch ? 'max-w-[1760px]' : 'max-w-7xl'
@@ -57,7 +57,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             aria-hidden="true"
             className="h-8 w-8 rounded-sm"
           />
-          <span className="hidden text-[15px] font-semibold tracking-[-0.01em] text-ink sm:inline">
+          <span className="hidden font-display text-[19px] font-extrabold leading-none tracking-[0.01em] text-ink sm:inline">
             Not Pickleball
           </span>
         </button>
@@ -69,7 +69,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               type="button"
               onClick={openProfileModal}
-              className="mr-1 flex shrink-0 items-center gap-2 rounded-full border border-line bg-surface-2 py-1 pr-1 pl-1 transition-colors hover:bg-surface-3 md:pr-3"
+              className="mr-1 flex shrink-0 items-center gap-2 rounded-md border-2 border-line bg-surface-2 p-1 transition-colors hover:bg-surface-3 md:pr-3"
               title={user.isGuest ? 'Guest profile: pick a name and avatar' : 'Edit profile and avatar'}
             >
               <img
@@ -79,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="h-7 w-7 shrink-0 rounded-full bg-surface object-cover"
               />
               <span className="hidden text-left leading-tight md:block">
-                <span className="block text-[13px] font-medium text-ink">
+                <span className="block font-display text-[14px] font-bold text-ink">
                   {user.displayName}
                 </span>
                 {/* "Guest Player" already says it; repeating it underneath
@@ -91,7 +91,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </span>
               {user.isGuest && (
-                <span className="hidden rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-semibold text-warning sm:inline md:hidden">
+                <span className="hidden rounded-sm bg-warning-soft px-2 py-0.5 font-display text-[11px] font-bold text-warning sm:inline md:hidden">
                   Guest
                 </span>
               )}
