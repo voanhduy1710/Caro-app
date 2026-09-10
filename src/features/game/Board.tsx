@@ -626,7 +626,7 @@ export const Board: React.FC<BoardProps> = ({
               <p className={`display text-4xl ${outcome.tone}`}>{outcome.headline}</p>
 
               {resultReason && <p className="mt-2 text-sm text-muted">{resultReason}</p>}
-              {ratingNote && <p className="mt-1 font-mono text-xs text-subtle">{ratingNote}</p>}
+              {ratingNote && <p className="mt-1 text-xs text-subtle">{ratingNote}</p>}
               {resultActions && <div className="mt-5 flex flex-col gap-2">{resultActions}</div>}
             </div>
           </div>

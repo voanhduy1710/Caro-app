@@ -23,7 +23,6 @@ import { useIsDesktop } from '../../shared/hooks/useMediaQuery';
 interface GameControlsProps {
   headerNode?: React.ReactNode;
   boardNode?: React.ReactNode;
-  myPiece: 'X' | 'O';
   currentTurn: 'X' | 'O';
   turnTimeLeft: number;
   myTotalTimeLeft: number;
@@ -44,7 +43,6 @@ interface GameControlsProps {
   exitLabel: string;
   gameStatus: 'lobby' | 'playing' | 'ended';
   allowUndo: boolean;
-  boardSize: number;
   /** Practice has no opponent to chat with, react to or buzz. */
   isAiMode: boolean;
   /** False when there is no move to take back yet. */
@@ -192,7 +190,6 @@ const RailButton: React.FC<RailButtonProps> = ({
 export const GameControls: React.FC<GameControlsProps> = ({
   headerNode,
   boardNode,
-  myPiece,
   myUser,
   opponent,
   chatMessages,
@@ -205,7 +202,6 @@ export const GameControls: React.FC<GameControlsProps> = ({
   exitLabel,
   gameStatus,
   allowUndo,
-  boardSize,
   isAiMode,
   canUndo,
   undoPending,
@@ -799,29 +795,13 @@ export const GameControls: React.FC<GameControlsProps> = ({
     </div>
   ) : null;
 
-  const roomSummary = (
-    <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-2 text-[11px] text-muted">
-      <span>{isAiMode ? 'Practice vs Bot' : 'Online match'}</span>
-      <span>
-        <span className="font-mono tabular-nums">
-          {boardSize} × {boardSize}
-        </span>
-        {' · You play '}
-        {/* Not the mono face: its O is near enough to a zero that "You play O"
-            read as "You play 0". */}
-        <span className="font-semibold text-ink">{myPiece}</span>
-      </span>
-    </div>
-  );
-
   /* ------------------------------- layout -------------------------------- */
 
   // The bar under the board. Everything that acts on the match lives here, so
   // the frame itself keeps the height it needs.
-  const actionsCell = (withSummary: boolean) => (
+  const actionsCell = () => (
     <div className="area-actions panel mx-3 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 p-2">
       {actionButtons}
-      {withSummary && <div className="ml-auto hidden lg:block">{roomSummary}</div>}
     </div>
   );
 
@@ -833,7 +813,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
         <div className="area-left">
           {headerNode}
           <div className="flex-1 min-h-0" />
-          {actionsCell(true)}
+          {actionsCell()}
         </div>
         <div className="area-board pt-4">{boardNode}</div>
         {lightbox}
@@ -849,7 +829,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
         <div className="area-left">
           {headerNode}
           <div className="flex-1 min-h-0" />
-          {actionsCell(false)}
+          {actionsCell()}
         </div>
 
         <div className="area-board pt-4">
@@ -858,9 +838,6 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
         <aside className="area-right flex min-h-0 flex-col overflow-hidden">
           <div className="shrink-0 border-b-2 border-line">
-            <div className="p-3">
-              {roomSummary}
-            </div>
             {chatHeader}
           </div>
           {isChatOpen && (
@@ -892,7 +869,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
       </div>
 
       <div className="area-actions flex flex-col w-full">
-        {actionsCell(true)}
+        {actionsCell()}
       </div>
 
       <div className="fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-40 border-t-2 border-line bg-surface p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
@@ -924,7 +901,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
         }}
       >
         <div className="flex shrink-0 items-center justify-between border-b-2 border-line px-2 py-1">
-          {roomSummary}
+          <h2 className="px-2 text-base text-ink">Chat</h2>
           <button
             onClick={() => setIsChatOpen(false)}
             className="btn btn-ghost btn-icon h-10 w-10 shrink-0 text-muted hover:bg-surface-2 hover:text-ink"

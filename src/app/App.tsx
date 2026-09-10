@@ -1318,18 +1318,15 @@ export const App: React.FC = () => {
                     <p className="text-sm font-medium text-ink">
                       {roomScanDone ? 'Nobody is hosting a public room right now.' : 'Looking for public rooms…'}
                     </p>
+                    {/* One way out, under the label the same action already
+                        carries above. Two buttons here repeated both cards. */}
                     {roomScanDone && (
-                      <div className="flex flex-wrap items-center justify-center gap-2">
-                        <button
-                          onClick={() => handleCreateRoom(undefined, roomSettings.boardSize, true)}
-                          className="btn btn-primary btn-sm"
-                        >
-                          Open one yourself
-                        </button>
-                        <button onClick={handleStartAiMode} className="btn btn-secondary btn-sm">
-                          Play the bot instead
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => handleCreateRoom(undefined, roomSettings.boardSize, true)}
+                        className="btn btn-primary btn-sm"
+                      >
+                        Create a public room
+                      </button>
                     )}
                   </div>
                 ) : (
@@ -1563,13 +1560,15 @@ export const App: React.FC = () => {
               }
               boardNode={
                 <div className="flex-1 flex flex-col items-center">
-                  <div className={`text-xl font-black mb-4 tracking-wider ${currentTurn === myPiece ? 'text-accent' : 'text-subtle'}`}>
-                    {gameStatus === 'ended' ? (
-                       gameResult?.winner === 'Victory!' ? 'Victory!' : gameResult?.winner === 'Defeat!' ? 'Defeat!' : 'Draw!'
-                    ) : (
-                      currentTurn === myPiece ? 'Your turn' : 'Waiting for your opponent…'
-                    )}
-                  </div>
+                  {gameStatus !== 'ended' && (
+                    <p
+                      className={`display mb-4 text-2xl ${
+                        currentTurn === myPiece ? 'text-accent-text' : 'text-subtle'
+                      }`}
+                    >
+                      {currentTurn === myPiece ? 'Your turn' : 'Waiting for your opponent…'}
+                    </p>
+                  )}
                   <Board
                     board={board}
                     size={roomSettings.boardSize}
@@ -1622,7 +1621,6 @@ export const App: React.FC = () => {
                   />
                 </div>
               }
-              myPiece={myPiece}
               currentTurn={currentTurn}
               turnTimeLeft={turnTimeLeft}
               myTotalTimeLeft={myPiece === 'X' ? p1TotalTime : p2TotalTime}
@@ -1641,7 +1639,6 @@ export const App: React.FC = () => {
               exitLabel={isAiMode ? 'Exit practice' : 'Leave room'}
               gameStatus={gameStatus}
               allowUndo={roomSettings.allowUndo}
-              boardSize={roomSettings.boardSize}
               isAiMode={isAiMode}
               canUndo={moveHistory.length > 0}
               undoPending={undoRequest === 'sent'}
