@@ -1,10 +1,14 @@
 import { useCallback } from 'react';
+import { getDisplayPrefs } from '../../features/game/displayPrefs';
 
 /**
  * Web Audio API synthesized sound generator for zero-latency, zero-asset audio effects.
  */
 export const useSound = () => {
   const playTone = useCallback((freq: number, type: OscillatorType, duration: number, startVol = 0.1) => {
+    // Read at play time rather than at render time: muting has to take effect
+    // on the very next move, not on the next render of whoever plays it.
+    if (!getDisplayPrefs().soundEnabled) return;
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
@@ -48,6 +52,7 @@ export const useSound = () => {
   }, [playTone]);
 
   const playBuzzSound = useCallback(() => {
+    if (!getDisplayPrefs().soundEnabled) return;
     try {
       const audio = new Audio('/quick-ting.mp3');
       audio.currentTime = 0;
