@@ -4,18 +4,13 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/Logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#eff0f3" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#121317" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#e6f2fb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b1728" media="(prefers-color-scheme: dark)" />
 
-    <!-- The UI font is on the critical path for LCP, so it is fetched alongside
-         the stylesheet rather than after it. -->
-    <link
-      rel="preload"
-      href="/fonts/google-sans-flex-latin.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
+    <!-- Both faces are on the LCP path: the wordmark is the largest thing on
+         the first screen and it is set in the display face. -->
+    <link rel="preload" href="/fonts/baloo2-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/google-sans-flex-latin.woff2" as="font" type="font/woff2" crossorigin />
 
     <!-- Stamp the saved theme before first paint, otherwise an explicit light
          or dark choice flashes the system theme on load. -->
