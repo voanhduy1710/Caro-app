@@ -14,7 +14,6 @@
     background-color: var(--ui-bg);
     color: var(--ui-text);
     font-family: var(--font-sans);
-    /* Antigravity body metrics: 15px / 22px with a touch of positive tracking */
     font-size: 15px;
     line-height: 22px;
     letter-spacing: 0.16px;
@@ -29,17 +28,18 @@
     color: var(--ui-accent-fg);
   }
 
-  /* Display type tightens as it grows, matching the reference's scale where
-     tracking runs from -0.28px at 32px out to -2.14px at 107px. */
-  h1, h2, h3 {
-    font-weight: 500;
-    letter-spacing: -0.02em;
-    line-height: 1.12;
+  /* Baloo ships tall vertical metrics, so leading is set explicitly rather
+     than left to the font's own line gap. */
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1.1;
   }
 
-  h4, h5, h6 {
-    font-weight: 500;
-    letter-spacing: -0.01em;
+  h5, h6 {
+    font-weight: 600;
+    letter-spacing: 0;
   }
 
   code, kbd, pre, samp {
@@ -50,20 +50,22 @@
     border-color: var(--ui-border);
   }
 
+  /* Offset off the shape, so it survives on a chunky coloured control. */
   :focus-visible {
-    outline: 2px solid var(--ui-accent);
-    outline-offset: 2px;
-    border-radius: 4px;
+    outline: 3px solid var(--ui-accent);
+    outline-offset: 3px;
+    border-radius: var(--radius-sm);
   }
 }
 
 /* =============================================================================
    Component primitives
 
-   These exist so the shape lock, colour lock and contrast rules live in one
-   place rather than being re-typed across ten component files.
-   Shape rule: buttons and chips are pills, panels are 24px, nested cards and
-   inputs are 16px, and the board frame is 8px.
+   Shape rule: buttons, chips, inputs and nested cards are 16px rounded
+   squares, panels and modals are 28px, micro tags are 10px, avatars circles.
+
+   Elevation rule: a raised thing is extruded, not blurred. It sits on a hard
+   offset in its own darker hue, and pressing drives the face onto its shadow.
    ========================================================================== */
 
 @layer components {
@@ -71,101 +73,144 @@
   /* --- Buttons ----------------------------------------------------------- */
 
   .btn {
+    --btn-lift: 4px;
+    --btn-shadow: var(--ui-border-strong);
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     /* Labels never wrap: a two-line button is a broken button. */
     white-space: nowrap;
-    border-radius: 9999px;
-    border: 1px solid transparent;
-    padding: 8px 16px;
-    font-size: 14px;
-    font-weight: 500;
-    letter-spacing: 0;
+    border-radius: var(--radius-md);
+    border: none;
+    padding: 9px 18px;
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
     line-height: 20px;
     cursor: pointer;
+    box-shadow: 0 var(--btn-lift) 0 var(--btn-shadow);
+    transform: translateY(0);
     transition:
-      background-color 0.2s var(--ease-out-quart),
-      border-color 0.2s var(--ease-out-quart),
-      color 0.2s var(--ease-out-quart),
-      transform 0.12s var(--ease-out-quart);
+      background-color 0.18s var(--ease-out-quart),
+      color 0.18s var(--ease-out-quart),
+      transform 0.1s var(--ease-out-quart),
+      box-shadow 0.1s var(--ease-out-quart);
+  }
+
+  /* The face travels exactly the height of its own shadow. */
+  .btn:not(:disabled):active {
+    transform: translateY(var(--btn-lift));
+    box-shadow: 0 0 0 var(--btn-shadow);
+  }
+
+  .btn:not(:disabled):hover {
+    --btn-lift: 5px;
+    transform: translateY(-1px);
   }
 
   .btn:disabled {
-    opacity: 0.45;
+    opacity: 0.5;
     cursor: not-allowed;
-  }
-
-  /* Tactile feedback: the control gives under the press. */
-  .btn:not(:disabled):active {
-    transform: scale(0.97);
+    --btn-lift: 2px;
   }
 
   .btn-sm {
-    padding: 6px 12px;
-    font-size: 13px;
+    padding: 6px 14px;
+    font-size: 14px;
     line-height: 18px;
+    --btn-lift: 3px;
+    border-radius: var(--radius-sm);
   }
 
   .btn-lg {
-    padding: 12px 24px;
-    font-size: 15px;
-    line-height: 22px;
+    padding: 14px 28px;
+    font-size: 18px;
+    line-height: 24px;
+    --btn-lift: 6px;
   }
 
-  /* Primary carries dark ink on the green, never white: white on #00b95c is
-     2.6:1 and fails AA, dark ink is 8.0:1. */
+  /* White label at 4.51:1. */
   .btn-primary {
     background-color: var(--ui-accent);
     color: var(--ui-accent-fg);
-    font-weight: 600;
+    --btn-shadow: var(--ui-accent-shadow);
   }
 
   .btn-primary:not(:disabled):hover {
     background-color: var(--ui-accent-hover);
   }
 
+  /* A blue face needs a non-blue focus ring. */
+  .btn-primary:focus-visible,
+  .btn-inverse:focus-visible,
+  .btn-danger-solid:focus-visible {
+    outline-color: var(--ui-text);
+  }
+
   .btn-secondary {
     background-color: var(--ui-surface);
-    border-color: var(--ui-border);
     color: var(--ui-text);
+    box-shadow:
+      0 0 0 2px var(--ui-border) inset,
+      0 var(--btn-lift) 0 var(--btn-shadow);
+    --btn-shadow: var(--ui-border-strong);
+  }
+
+  .btn-secondary:not(:disabled):active {
+    box-shadow: 0 0 0 2px var(--ui-border) inset, 0 0 0 var(--btn-shadow);
   }
 
   .btn-secondary:not(:disabled):hover {
     background-color: var(--ui-surface-2);
-    border-color: var(--ui-border-strong);
   }
 
   /* Tonal: reads as an action without competing with the primary CTA. */
   .btn-tonal {
     background-color: var(--ui-accent-soft);
     color: var(--ui-accent-text);
-    border-color: transparent;
+    --btn-shadow: var(--ui-border-strong);
   }
 
   .btn-tonal:not(:disabled):hover {
-    border-color: var(--ui-accent);
+    background-color: var(--ui-surface-3);
   }
 
+  /* Flat controls squash instead of pressing down. */
   .btn-ghost {
     background-color: transparent;
     color: var(--ui-text-muted);
+    box-shadow: none;
+    --btn-lift: 0px;
   }
 
   .btn-ghost:not(:disabled):hover {
-    background-color: var(--ui-surface-2);
+    background-color: var(--ui-surface-3);
     color: var(--ui-text);
+    transform: none;
+  }
+
+  .btn-ghost:not(:disabled):active {
+    transform: scale(0.94);
+    box-shadow: none;
   }
 
   .btn-danger {
     background-color: var(--ui-danger-soft);
     color: var(--ui-danger);
-    border-color: transparent;
+    --btn-shadow: var(--ui-border-strong);
   }
 
   .btn-danger:not(:disabled):hover {
-    border-color: var(--ui-danger);
+    background-color: var(--ui-surface-3);
+  }
+
+  .btn-danger-solid {
+    background-color: var(--ui-danger-solid);
+    color: var(--ui-danger-fg);
+    --btn-shadow: var(--ui-danger-shadow);
   }
 
   /* High-emphasis alternative to primary, for the one action per surface that
@@ -173,38 +218,110 @@
   .btn-inverse {
     background-color: var(--ui-inverse);
     color: var(--ui-inverse-fg);
-    font-weight: 600;
+    --btn-shadow: var(--ui-border-strong);
   }
 
   .btn-inverse:not(:disabled):hover {
     opacity: 0.9;
   }
 
-
   .btn-icon {
-    padding: 8px;
-    width: 36px;
-    height: 36px;
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    gap: 0;
+  }
+
+  /* --- Display type -------------------------------------------------------
+
+     Orange on white is 2.30:1, which no size rescues, so the navy outline IS
+     the contrast. Fill and outline are welded together here so no caller can
+     take one without the other.                                            */
+
+  .display {
+    font-family: var(--font-display);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: 0.01em;
+  }
+
+  .display-brand {
+    --outline: var(--ui-text);
+    font-family: var(--font-display);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: 0.02em;
+    color: var(--ui-brand);
+    text-shadow:
+      -2px -2px 0 var(--outline), 0 -2px 0 var(--outline), 2px -2px 0 var(--outline),
+      -2px 0 0 var(--outline), 2px 0 0 var(--outline),
+      -2px 2px 0 var(--outline), 0 2px 0 var(--outline), 2px 2px 0 var(--outline),
+      0 6px 0 var(--outline);
+  }
+
+  /* A real stroke joins more cleanly than eight stacked shadows. */
+  @supports (paint-order: stroke) {
+    .display-brand {
+      paint-order: stroke fill;
+      -webkit-text-stroke: 5px var(--outline);
+      text-shadow: 0 6px 0 var(--outline);
+    }
+  }
+
+  /* On navy the outline flips to the page colour. */
+  :root[data-ui-theme='dark'] .display-brand {
+    --outline: #05101f;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-ui-theme='light']) .display-brand {
+      --outline: #05101f;
+    }
   }
 
   /* --- Surfaces ---------------------------------------------------------- */
 
   .panel {
     background-color: var(--ui-surface);
-    border: 1px solid var(--ui-border);
     border-radius: var(--radius-lg);
+    box-shadow: 0 6px 0 var(--ui-lift);
   }
 
   .card {
     background-color: var(--ui-surface);
-    border: 1px solid var(--ui-border);
     border-radius: var(--radius-md);
+    box-shadow: 0 5px 0 var(--ui-lift);
   }
 
+  /* Inset cards press in rather than out. */
   .card-inset {
     background-color: var(--ui-surface-2);
-    border: 1px solid var(--ui-border);
+    border: 2px solid var(--ui-border);
     border-radius: var(--radius-md);
+    box-shadow: none;
+  }
+
+  .card-pick {
+    cursor: pointer;
+    transition:
+      transform 0.14s var(--ease-out-quart),
+      box-shadow 0.14s var(--ease-out-quart),
+      background-color 0.18s var(--ease-out-quart);
+  }
+
+  .card-pick:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 0 var(--ui-lift);
+  }
+
+  .card-pick:active {
+    transform: translateY(5px);
+    box-shadow: 0 0 0 var(--ui-lift);
+  }
+
+  /* The avatar art is pixel art; default smoothing turns it to mush at 96px. */
+  .pixel-art {
+    image-rendering: pixelated;
   }
 
   /* --- Chips and tags ---------------------------------------------------- */
@@ -214,22 +331,26 @@
     align-items: center;
     gap: 6px;
     white-space: nowrap;
-    border-radius: 9999px;
-    border: 1px solid var(--ui-border);
-    background-color: var(--ui-surface-2);
+    border-radius: var(--radius-sm);
+    background-color: var(--ui-surface-3);
     color: var(--ui-text-muted);
     padding: 4px 10px;
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 16px;
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
   }
 
   .chip-accent {
     background-color: var(--ui-accent-soft);
-    border-color: transparent;
     color: var(--ui-accent-text);
   }
 
+  /* Celebration tag: orange face, dark ink at 6.89:1. */
+  .chip-brand {
+    background-color: var(--ui-brand);
+    color: var(--ui-brand-fg);
+  }
 
   /* --- Forms ------------------------------------------------------------- */
 
@@ -241,52 +362,57 @@
 
   /* Label above input, always. Never placeholder-as-label. */
   .field-label {
-    font-size: 13px;
-    font-weight: 500;
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 700;
     line-height: 18px;
     color: var(--ui-text);
   }
 
+  /* Recessed, so an input is visibly not a button. */
   .field-input {
     width: 100%;
     border-radius: var(--radius-md);
-    border: 1px solid var(--ui-border-strong);
-    background-color: var(--ui-surface);
+    border: 2px solid var(--ui-border-strong);
+    background-color: var(--ui-surface-2);
     color: var(--ui-text);
     padding: 10px 14px;
     font-size: 15px;
     line-height: 22px;
     transition:
-      border-color 0.2s var(--ease-out-quart),
-      box-shadow 0.2s var(--ease-out-quart);
+      border-color 0.18s var(--ease-out-quart),
+      background-color 0.18s var(--ease-out-quart),
+      box-shadow 0.18s var(--ease-out-quart);
   }
 
   .field-input::placeholder {
-    /* Subtle, but still AA against the field background. */
+    /* Subtle, but still 4.92:1 against the field background. */
     color: var(--ui-text-subtle);
   }
 
   .field-input:focus {
     outline: none;
     border-color: var(--ui-accent);
-    box-shadow: 0 0 0 3px var(--ui-accent-ring);
+    background-color: var(--ui-surface);
+    box-shadow: 0 0 0 4px var(--ui-accent-ring);
   }
 
   .field-input:disabled {
-    background-color: var(--ui-surface-2);
+    background-color: var(--ui-surface-3);
     color: var(--ui-text-muted);
     cursor: not-allowed;
   }
 
   .field-hint {
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 13px;
+    line-height: 18px;
     color: var(--ui-text-muted);
   }
 
   .field-error {
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
     color: var(--ui-danger);
   }
 
@@ -314,9 +440,11 @@
         "left board right";
       /* Navbar (64) plus the shell's own vertical padding (32). */
       min-height: calc(100dvh - 96px);
-      border: 1px solid var(--ui-border);
       border-radius: var(--radius-lg);
       background-color: var(--ui-surface);
+      /* One edge of its own, or the tinted side column dissolves into the
+         page tint behind it. Ring first, then the extrusion. */
+      box-shadow: 0 0 0 2px var(--ui-border), 0 8px 0 var(--ui-lift);
     }
 
     /* Practice has no chat, but we still keep the left column for actions/players */
@@ -339,9 +467,10 @@
     .match-stage--solo { grid-template-columns: 320px minmax(0, 1fr); }
   }
 
-  .area-left { grid-area: left; display: flex; flex-direction: column; background-color: var(--ui-surface-2); border-right: 1px solid var(--ui-border); min-height: 0; }
+  /* Columns are told apart by surface tint, not by a rule between them. */
+  .area-left { grid-area: left; display: flex; flex-direction: column; background-color: var(--ui-surface-2); min-height: 0; }
   .area-board { grid-area: board; min-width: 0; display: flex; flex-direction: column; }
-  .area-right { grid-area: right; min-height: 0; display: flex; flex-direction: column; background-color: var(--ui-surface-2); border-left: 1px solid var(--ui-border); }
+  .area-right { grid-area: right; min-height: 0; display: flex; flex-direction: column; background-color: var(--ui-surface-2); }
 
   /* The stage cannot clip its own corners without clipping the reaction picker
      that opens out of the left column, so the end columns round themselves. */
@@ -369,18 +498,18 @@
     justify-content: center;
     padding: 16px;
     background-color: var(--ui-scrim);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    animation: scrim-in 0.2s var(--ease-out-quart);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: scrim-in 0.18s var(--ease-out-quart);
   }
 
   .modal-panel {
     width: 100%;
     background-color: var(--ui-surface);
-    border: 1px solid var(--ui-border);
     border-radius: var(--radius-lg);
     box-shadow: var(--ui-shadow-lg);
-    animation: panel-in 0.28s var(--ease-out-expo);
+    /* The bounce is what says a layer opened. */
+    animation: panel-pop 0.34s var(--ease-pop);
   }
 
   /* --- Skeleton ---------------------------------------------------------- */
@@ -400,7 +529,7 @@
     background: linear-gradient(
       90deg,
       transparent,
-      color-mix(in srgb, var(--ui-surface) 60%, transparent),
+      color-mix(in srgb, var(--ui-surface) 70%, transparent),
       transparent
     );
     animation: skeleton-sweep 1.4s infinite;
@@ -408,10 +537,10 @@
 }
 
 /* =============================================================================
-   Motion
-
-   Every animation here has a job: scrim/panel signal a layer opening, the drop
-   confirms a move landed, the winning pulse points at the winning line.
+   Motion. Every animation names a job: panel-pop a layer opened, pop-in the
+   screen arrived, piece-drop your move landed, turn-bob whose turn it is,
+   winning-pulse the line that won, nudge your opponent buzzed you.
+   Nothing loops for decoration.
    ========================================================================== */
 
 @keyframes scrim-in {
@@ -419,8 +548,8 @@
   to { opacity: 1; }
 }
 
-@keyframes panel-in {
-  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+@keyframes panel-pop {
+  from { opacity: 0; transform: translateY(16px) scale(0.94); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
@@ -430,12 +559,33 @@
 
 @keyframes winning-pulse {
   0%, 100% { transform: scale(1); filter: brightness(1.15); }
-  50% { transform: scale(1.12); filter: brightness(1.35); }
+  50% { transform: scale(1.18); filter: brightness(1.4); }
 }
 
+/* The overshoot is the point: a piece that only fades in does not feel placed. */
 @keyframes piece-drop {
-  from { opacity: 0; transform: scale(0.55); }
-  to { opacity: 1; transform: scale(1); }
+  0% { opacity: 0; transform: scale(0.3) rotate(-14deg); }
+  60% { opacity: 1; transform: scale(1.18) rotate(3deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes turn-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes nudge {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-7px) rotate(-2deg); }
+  30% { transform: translateX(7px) rotate(2deg); }
+  45% { transform: translateX(-5px) rotate(-1deg); }
+  60% { transform: translateX(5px) rotate(1deg); }
+  80% { transform: translateX(-2px); }
 }
 
 .animate-winning-cell {
@@ -443,7 +593,21 @@
 }
 
 .animate-piece-drop {
-  animation: piece-drop 0.22s var(--ease-out-back);
+  animation: piece-drop 0.3s var(--ease-pop);
+}
+
+.animate-turn-bob {
+  animation: turn-bob 1.4s infinite ease-in-out;
+}
+
+.animate-nudge {
+  animation: nudge 0.5s ease-in-out;
+}
+
+/* The child sets --i and the delay follows, so no JS orchestrator is needed. */
+.animate-pop-in {
+  animation: pop-in 0.42s var(--ease-pop) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
 }
 
 /* Mandatory for anything above a static motion level. Infinite loops and
@@ -460,24 +624,40 @@
 
   .animate-winning-cell {
     animation: none;
-    filter: brightness(1.3);
+    filter: brightness(1.35);
+  }
+
+  .animate-turn-bob {
+    animation: none;
+  }
+
+  /* Entrances must still END visible, never stuck at their `from` frame. */
+  .animate-pop-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .btn:not(:disabled):hover {
+    transform: none;
   }
 }
 
 /* =============================================================================
    Board
 
-   The four board themes are a user-facing feature, so their material identity
-   is preserved as-is. Only graph-paper, the neutral default, follows the app
-   theme, because a plain white sheet against a near-black page reads as a bug
-   rather than as a chosen material.
+   The four board themes are a user-facing feature, so each keeps its own
+   material identity and none of them follow the app theme. That is deliberate:
+   a board is a physical object on the table, and it also keeps the player's
+   chosen piece colours legible in both light and dark, which a theme-following
+   board could not promise.
    ========================================================================== */
 
 .board-cell {
   aspect-ratio: 1 / 1 !important;
   box-sizing: border-box;
-  transition: background-color 0.15s var(--ease-out-quart),
-              border-color 0.15s var(--ease-out-quart);
+  transition: background-color 0.12s var(--ease-out-quart),
+              border-color 0.12s var(--ease-out-quart);
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
@@ -490,8 +670,8 @@
 }
 
 .board-cell:focus-visible {
-  outline: 2px solid var(--ui-accent);
-  outline-offset: -2px;
+  outline: 3px solid var(--ui-text);
+  outline-offset: -3px;
   z-index: 30;
 }
 
@@ -510,7 +690,9 @@
   border-bottom-width: 2px !important;
 }
 
-/* 1. Graph paper - the neutral default, theme-aware */
+/* 1. Graph paper - the neutral default, theme-aware. Thin rules rather than
+      tiles: on a 50x50 board heavy grout competes with the pieces, and the
+      pieces are the thing that has to be read at a glance. */
 .board-theme-graph-paper {
   background: var(--ui-surface);
   border: 2px solid var(--ui-border-strong);
@@ -537,7 +719,7 @@
   background-color: #f7e6c4;
   background-image: radial-gradient(#d6a265 0.75px, transparent 0.75px);
   background-size: 20px 20px;
-  box-shadow: inset 0 0 25px rgba(184, 134, 11, 0.15), 0 10px 25px -5px rgba(15, 23, 42, 0.1);
+  box-shadow: inset 0 0 25px rgba(184, 134, 11, 0.15), 0 8px 0 #b98a4e, 0 20px 40px -18px rgb(13 43 69 / 0.4);
   border: 3px solid #d6a265;
 }
 
@@ -596,9 +778,8 @@
     repeating-linear-gradient(0deg, rgba(70, 30, 10, 0.08) 0px, rgba(70, 30, 10, 0.08) 1px, transparent 1px, transparent 4px),
     repeating-linear-gradient(90deg, rgba(255, 235, 200, 0.07) 0px, rgba(255, 235, 200, 0.07) 2px, transparent 2px, transparent 18px),
     linear-gradient(135deg, #d4874e 0%, #ab5e2a 100%) !important;
-  box-shadow: inset 0 0 40px rgba(90, 40, 15, 0.5), 0 12px 30px -5px rgba(25, 10, 2, 0.4) !important;
+  box-shadow: inset 0 0 40px rgba(90, 40, 15, 0.5), 0 10px 0 #6d3413, 0 24px 44px -18px rgba(25, 10, 2, 0.55) !important;
   border: 6px solid #8f441b !important;
-  outline: 2px solid #5a260c;
 }
 
 .board-theme-classic-wood .board-grid-inner {
