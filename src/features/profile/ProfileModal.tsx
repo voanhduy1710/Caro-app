@@ -1,11 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { X, Check, AlertTriangle, Lock } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { useModalChrome } from '../../shared/hooks/useModalChrome';
 import { getRankTitle } from '../../shared/utils/eloCalculator';
 import { AVATAR_ITEMS, getAvatarPublicUrl, getAvatarLocalUrl } from '../avatar/avatarService';
 
 export const ProfileModal: React.FC = () => {
   const { user, showProfileModal, setShowProfileModal, updateUserProfile, changePassword } = useAuth();
-  const backdropRef = useRef<HTMLDivElement>(null);
+  const closeProfile = useCallback(() => setShowProfileModal(false), [setShowProfileModal]);
+  const dialogProps = useModalChrome(showProfileModal, closeProfile, 'profile-modal-title');
 
   const [displayName, setDisplayName] = useState('');
   const [selectedPhotoURL, setSelectedPhotoURL] = useState('');
@@ -39,12 +42,6 @@ export const ProfileModal: React.FC = () => {
   const activeAvatarPreviewUrl = hoveredAvatarFilename
     ? getAvatarLocalUrl(hoveredAvatarFilename)
     : getAvatarPublicUrl(selectedPhotoURL);
-
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === backdropRef.current) {
-      setShowProfileModal(false);
-    }
-  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,32 +82,29 @@ export const ProfileModal: React.FC = () => {
 
   return (
     <div
-      ref={backdropRef}
-      onClick={handleBackdropClick}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-md transition-opacity"
+      {...dialogProps}
+      className="modal-scrim"
     >
-      <div className="bg-white text-slate-800 w-full max-w-xl rounded-2xl p-4 sm:p-5 relative border border-slate-200 space-y-3 overflow-hidden max-h-[90vh] flex flex-col shadow-2xl">
+      <div className="modal-panel max-w-xl relative p-4 sm:p-5 space-y-3 overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2 shrink-0">
+        <div className="flex items-center justify-between border-b border-line pb-2 shrink-0">
           <div>
-            <span className="text-[9px] font-mono font-bold tracking-widest text-emerald-700 uppercase">
-              Player Identity
-            </span>
-            <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">
+            <h2 id="profile-modal-title" className="text-lg font-semibold text-ink tracking-tight">
               Player Profile & Avatar Settings
             </h2>
           </div>
           <button
             onClick={() => setShowProfileModal(false)}
-            className="text-slate-400 hover:text-slate-700 text-xl font-bold p-1 leading-none transition"
+            className="btn btn-ghost btn-icon"
+            aria-label="Close"
           >
-            ×
+            <X size={18} strokeWidth={1.75} aria-hidden="true" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-3 pr-1">
           {/* Main User Card Header & Interactive Live Hover Preview */}
-          <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl flex items-center gap-3">
+          <div className="bg-surface-2 border border-line p-2.5 rounded-md flex items-center gap-3">
             <div className="relative shrink-0">
               <img
                 src={activeAvatarPreviewUrl}
@@ -118,26 +112,26 @@ export const ProfileModal: React.FC = () => {
                 onError={(e) => {
                   e.currentTarget.src = '/Avatar/Zerom.gif';
                 }}
-                className="w-12 h-12 rounded-full border-2 border-emerald-500 bg-white p-0.5 shadow-sm object-contain"
+                className="w-12 h-12 rounded-full border-2 border-accent bg-surface p-0.5 shadow-sm object-contain"
               />
               {hoveredAvatarFilename && (
-                <span className="absolute -top-1 -right-1 px-1.5 py-0.5 bg-amber-500 text-white font-mono text-[9px] font-bold rounded-full animate-bounce">
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.5 bg-warning-solid text-warning-fg font-mono text-[9px] font-medium rounded-full animate-bounce">
                   Preview
                 </span>
               )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-black text-slate-900 truncate">{displayName || user.displayName}</h3>
-                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border bg-white ${rank.color}`}>
+                <h3 className="text-base font-semibold text-ink truncate">{displayName || user.displayName}</h3>
+                <span className={`text-[9px] font-mono font-medium px-1.5 py-0.5 rounded-sm border bg-surface ${rank.color}`}>
                   {rank.title}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[11px] font-mono font-semibold text-slate-500">
+                <span className="text-[11px] font-mono font-semibold text-muted">
                   @{user.username || (displayName || user.displayName).toLowerCase().replace(/\s+/g, '')}
                 </span>
-                <span className="text-xs font-mono font-bold text-emerald-700">
+                <span className="text-xs font-mono font-medium text-accent-text">
                   · {user.elo} ELO
                 </span>
               </div>
@@ -145,22 +139,22 @@ export const ProfileModal: React.FC = () => {
           </div>
 
           {/* Stats Bar */}
-          <div className="grid grid-cols-4 gap-1.5 text-center bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs font-bold">
+          <div className="grid grid-cols-4 gap-1.5 text-center bg-surface-2 p-2 rounded-md border border-line text-xs font-medium">
             <div>
-              <div className="text-slate-400 text-[9px] uppercase font-mono">Wins</div>
-              <div className="text-emerald-700 font-black text-sm">{user.wins}</div>
+              <div className="text-subtle text-[11px]">Wins</div>
+              <div className="text-accent-text font-semibold text-sm">{user.wins}</div>
             </div>
             <div>
-              <div className="text-slate-400 text-[9px] uppercase font-mono">Losses</div>
-              <div className="text-rose-600 font-black text-sm">{user.losses}</div>
+              <div className="text-subtle text-[11px]">Losses</div>
+              <div className="text-danger font-semibold text-sm">{user.losses}</div>
             </div>
             <div>
-              <div className="text-slate-400 text-[9px] uppercase font-mono">Draws</div>
-              <div className="text-amber-600 font-black text-sm">{user.draws}</div>
+              <div className="text-subtle text-[11px]">Draws</div>
+              <div className="text-warning font-semibold text-sm">{user.draws}</div>
             </div>
             <div>
-              <div className="text-slate-400 text-[9px] uppercase font-mono">Win Rate</div>
-              <div className="text-slate-900 font-black text-sm">{winRate}%</div>
+              <div className="text-subtle text-[11px]">Win Rate</div>
+              <div className="text-ink font-semibold text-sm">{winRate}%</div>
             </div>
           </div>
 
@@ -168,7 +162,7 @@ export const ProfileModal: React.FC = () => {
           <form onSubmit={handleSave} className="space-y-2.5">
             {/* Display Name */}
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">
+              <label className="block text-[11px] font-medium text-ink mb-1">
                 Display Name (In-Game Name)
               </label>
               <input
@@ -178,16 +172,16 @@ export const ProfileModal: React.FC = () => {
                 placeholder="Enter display name..."
                 required
                 maxLength={24}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-emerald-600"
+                className="w-full bg-surface-2 border border-line-strong rounded-md px-3 py-1.5 text-xs text-ink font-medium focus:outline-none focus:border-accent"
               />
             </div>
 
             {/* Animated Avatars Gallery Picker */}
             <div>
               {/* Scrollable 6-Column Avatar Grid */}
-              <div className="max-h-48 overflow-y-auto grid grid-cols-4 sm:grid-cols-6 gap-1.5 p-1.5 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="max-h-48 overflow-y-auto grid grid-cols-4 sm:grid-cols-6 gap-1.5 p-1.5 bg-surface-2 rounded-md border border-line">
                 {filteredAvatars.length === 0 ? (
-                  <div className="col-span-full py-6 text-center text-xs font-mono text-slate-400">
+                  <div className="col-span-full py-6 text-center text-xs font-mono text-subtle">
                     No avatars available
                   </div>
                 ) : (
@@ -203,10 +197,10 @@ export const ProfileModal: React.FC = () => {
                         onMouseEnter={() => setHoveredAvatarFilename(av.filename)}
                         onMouseLeave={() => setHoveredAvatarFilename(null)}
                         title={av.name}
-                        className={`p-1 rounded-xl transition border flex flex-col items-center justify-center bg-white aspect-square relative group ${
+                        className={`p-1 rounded-md transition border flex flex-col items-center justify-center bg-surface aspect-square relative group ${
                           isSelected
-                            ? 'border-emerald-600 ring-2 ring-emerald-400 bg-emerald-50/50 scale-105 z-10'
-                            : 'border-slate-200 hover:border-slate-400 hover:bg-slate-100'
+                            ? 'border-accent ring-2 ring-accent bg-accent-soft scale-105 z-10'
+                            : 'border-line hover:border-line-strong hover:bg-surface-3'
                         }`}
                       >
                         <img
@@ -214,7 +208,7 @@ export const ProfileModal: React.FC = () => {
                           alt={av.name}
                           className="w-8 h-8 object-contain"
                         />
-                        <span className="text-[9px] font-mono text-slate-600 font-semibold truncate w-full text-center mt-0.5 group-hover:text-emerald-700">
+                        <span className="text-[9px] font-mono text-muted font-semibold truncate w-full text-center mt-0.5 group-hover:text-accent-text">
                           {av.name}
                         </span>
                       </button>
@@ -228,39 +222,40 @@ export const ProfileModal: React.FC = () => {
             <div className="flex items-center gap-2 pt-1">
               <button
                 type="submit"
-                className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-sm"
+                className="btn btn-primary btn-sm flex-1"
               >
-                {isSavedSuccess ? '✓ Profile & Avatar Saved!' : 'Save Profile Changes'}
+                {isSavedSuccess ? (<><Check size={14} strokeWidth={2} aria-hidden="true" />Saved</>) : ('Save profile changes')}
               </button>
             </div>
           </form>
 
           {/* CHANGE PASSWORD SECTION */}
           {!user.isGuest && (
-            <div className="pt-2.5 border-t border-slate-200 space-y-2">
+            <div className="pt-2.5 border-t border-line space-y-2">
               <div className="flex items-center justify-between">
-                <h4 className="text-[11px] font-mono font-extrabold text-slate-800 uppercase tracking-wider">
-                  🔐 Change Password
+                <h4 className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+                  <Lock size={13} strokeWidth={1.75} aria-hidden="true" />
+                  Change password
                 </h4>
-                <span className="text-[10px] text-slate-400 font-mono">Min 6 characters</span>
+                <span className="text-[10px] text-subtle font-mono">Min 8 characters</span>
               </div>
 
               {passwordError && (
-                <div className="bg-rose-50 border border-rose-200 p-2 rounded-xl text-rose-800 text-xs font-bold">
-                  ⚠️ {passwordError}
+                <div className="bg-danger-soft border border-danger p-2 rounded-md text-danger text-xs font-medium">
+                  <AlertTriangle size={13} strokeWidth={1.75} className="inline shrink-0 mr-1.5 -mt-0.5" aria-hidden="true" />{passwordError}
                 </div>
               )}
 
               {passwordSuccess && (
-                <div className="bg-emerald-50 border border-emerald-200 p-2 rounded-xl text-emerald-800 text-xs font-bold">
-                  ✓ {passwordSuccess}
+                <div className="bg-accent-soft border border-accent p-2 rounded-md text-accent-text text-xs font-medium">
+                  <Check size={13} strokeWidth={2} className="inline shrink-0 mr-1.5 -mt-0.5" aria-hidden="true" />{passwordSuccess}
                 </div>
               )}
 
               <form onSubmit={handlePasswordSubmit} className="space-y-2">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
+                    <label className="block text-[10px] font-medium text-ink mb-0.5">
                       New Password
                     </label>
                     <input
@@ -269,13 +264,13 @@ export const ProfileModal: React.FC = () => {
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="New password..."
                       required
-                      minLength={6}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
+                      minLength={8}
+                      className="w-full bg-surface-2 border border-line-strong rounded-md px-2.5 py-1.5 text-xs font-medium text-ink focus:outline-none focus:border-accent"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
+                    <label className="block text-[10px] font-medium text-ink mb-0.5">
                       Confirm New Password
                     </label>
                     <input
@@ -284,19 +279,19 @@ export const ProfileModal: React.FC = () => {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Confirm password..."
                       required
-                      minLength={6}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
+                      minLength={8}
+                      className="w-full bg-surface-2 border border-line-strong rounded-md px-2.5 py-1.5 text-xs font-medium text-ink focus:outline-none focus:border-accent"
                     />
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between gap-2 pt-0.5">
-                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-slate-600 select-none">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-medium text-muted select-none">
                     <input
                       type="checkbox"
                       checked={showPassword}
                       onChange={(e) => setShowPassword(e.target.checked)}
-                      className="rounded text-emerald-600 focus:ring-emerald-500"
+                      className="rounded-sm text-accent-text focus:ring-accent"
                     />
                     <span>Show Password</span>
                   </label>
@@ -304,7 +299,7 @@ export const ProfileModal: React.FC = () => {
                   <button
                     type="submit"
                     disabled={isChangingPassword || !newPassword || !confirmPassword}
-                    className="py-1.5 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-bold text-xs transition"
+                    className="btn btn-inverse btn-sm"
                   >
                     {isChangingPassword ? 'Updating...' : 'Update Password'}
                   </button>

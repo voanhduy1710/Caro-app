@@ -5,8 +5,28 @@ import type { UserProfile } from '../auth/AuthContext';
 import type { PeerMessage, WebRTCState, ChatMessage } from './types';
 
 import { roomDiscoveryManager } from './roomDiscoveryService';
+import { DEFAULT_ROOM_SETTINGS } from '../settings/types';
 
 const RECONNECT_GRACE_PERIOD_SEC = 30;
+const REACTION_VISIBLE_MS = 3000;
+/** Data-channel payloads above this are refused so one screenshot cannot stall the match. */
+const MAX_IMAGE_PAYLOAD_BYTES = 900_000;
+
+const newMessageId = () => Math.random().toString(36).substring(2, 9);
+
+const ROOM_CODE_PATTERN = /^[A-Z0-9]{4,12}$/;
+
+/**
+ * Turns whatever the player pasted into a room code, or null when it cannot be
+ * one. Invite links are the common case: people share the URL, not the code.
+ */
+export const parseRoomCode = (input: string): string | null => {
+  const raw = (input || '').trim();
+  if (!raw) return null;
+  const fromLink = raw.match(/[?&]room=([^&\s]+)/i);
+  const candidate = (fromLink ? fromLink[1] : raw).replace(/\s+/g, '').toUpperCase();
+  return ROOM_CODE_PATTERN.test(candidate) ? candidate : null;
+};
 
 const hasSavedActiveMatch = (roomId: string) => {
   try {
@@ -24,6 +44,8 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
     roomId: null,
     isHost: false,
     isConnected: false,
+    isConnecting: false,
+    peerLeft: false,
     isReconnecting: false,
     reconnectTimeLeft: RECONNECT_GRACE_PERIOD_SEC,
     connectionTimedOut: false,
@@ -41,6 +63,9 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
   const isReconnectingRef = useRef(false);
   const isHostRef = useRef(false);
   const connectToHostRef = useRef<(() => void) | null>(null);
+  /** Set when the peer announced its exit, so the dropout timer stays off. */
+  const peerLeftRef = useRef(false);
+  const reactionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messageListenersRef = useRef<Array<(msg: PeerMessage) => void>>([]);
 
   const registerMessageListener = useCallback((listener: (msg: PeerMessage) => void) => {
@@ -58,7 +83,14 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
     }
   }, []);
 
+  const clearError = useCallback(() => {
+    setState((prev) => (prev.error ? { ...prev, error: null } : prev));
+  }, []);
+
   const handleDisconnection = useCallback(() => {
+    // Someone who pressed "Leave room" is not coming back; holding their seat
+    // open for 30 seconds would only stall the player who stayed.
+    if (peerLeftRef.current) return;
     if (isReconnectingRef.current) return;
     isReconnectingRef.current = true;
     setState((prev) => {
@@ -115,9 +147,12 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
         guestReconnectTimerRef.current = null;
       }
       isReconnectingRef.current = false;
+      peerLeftRef.current = false;
       setState((prev) => ({
         ...prev,
         isConnected: true,
+        isConnecting: false,
+        peerLeft: false,
         isReconnecting: false,
         reconnectTimeLeft: RECONNECT_GRACE_PERIOD_SEC,
         connectionTimedOut: false,
@@ -146,13 +181,38 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
         setChatMessages((prev) => [...prev, msg.payload]);
       } else if (msg.type === 'REACTION') {
         setLastReaction(msg.payload);
-        setTimeout(() => setLastReaction(null), 3000);
+        if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+        reactionTimeoutRef.current = setTimeout(() => setLastReaction(null), REACTION_VISIBLE_MS);
+      } else if (msg.type === 'LEAVE_ROOM') {
+        // A deliberate exit. Report it as such instead of running the dropout
+        // countdown, which would end in a forfeit nobody asked for.
+        peerLeftRef.current = true;
+        if (reconnectTimerRef.current) {
+          clearInterval(reconnectTimerRef.current);
+          reconnectTimerRef.current = null;
+        }
+        if (guestReconnectTimerRef.current) {
+          clearTimeout(guestReconnectTimerRef.current);
+          guestReconnectTimerRef.current = null;
+        }
+        isReconnectingRef.current = false;
+        setState((prev) => ({
+          ...prev,
+          isConnected: false,
+          isConnecting: false,
+          isReconnecting: false,
+          connectionTimedOut: false,
+          peerLeft: true,
+          peerUser: null,
+        }));
       } else if (msg.type === 'BUZZ') {
         const buzzMsg: ChatMessage = {
-          id: Math.random().toString(36).substring(2, 9),
-          sender: msg.payload.sender || 'Opponent',
+          id: newMessageId(),
+          senderId: msg.payload?.senderId,
+          sender: msg.payload?.sender || 'Opponent',
           text: '🔔 BUZZ!',
           timestamp: Date.now(),
+          system: true,
         };
         setChatMessages((prev) => [...prev, buzzMsg]);
       }
@@ -179,8 +239,10 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
   }, []);
 
   // Create Room (Host)
-  const createRoom = useCallback((roomCode?: string, boardSize = 50, isPublic: boolean = true) => {
+  const createRoom = useCallback((roomCode?: string, boardSize = DEFAULT_ROOM_SETTINGS.boardSize, isPublic: boolean = true) => {
     setChatMessages([]);
+    peerLeftRef.current = false;
+    setState((prev) => ({ ...prev, isConnecting: true, peerLeft: false, error: null }));
     const code = roomCode || Math.random().toString(36).substring(2, 8).toUpperCase();
     const peerId = `caro_room_${code}`;
     isHostRef.current = true;
@@ -208,6 +270,8 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
         roomId: code,
         isHost: true,
         isConnected: false,
+        isConnecting: true,
+        peerLeft: false,
         isReconnecting: false,
         reconnectTimeLeft: RECONNECT_GRACE_PERIOD_SEC,
         connectionTimedOut: false,
@@ -222,6 +286,13 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
     });
 
     peer.on('connection', (conn) => {
+      // A room seats exactly two players. Without this guard a third browser could
+      // connect mid-match, replace the active data channel and hijack the game.
+      if (connRef.current && connRef.current.open && connRef.current.peer !== conn.peer) {
+        console.warn('Rejecting extra peer connection; room already has two players.');
+        conn.on('open', () => conn.close());
+        return;
+      }
       console.info('Incoming peer connection request from guest');
       setupConnection(conn);
       roomDiscoveryManager.stopHostingRoom(code);
@@ -229,18 +300,32 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
 
     peer.on('error', (err) => {
       console.error('Host PeerJS Error:', err);
-      setState((prev) => ({ ...prev, error: `Failed to create room: ${err.message}` }));
+      setState((prev) => ({
+        ...prev,
+        isConnecting: false,
+        error: `Could not open the room. ${err.message}`,
+      }));
       roomDiscoveryManager.stopHostingRoom(code);
     });
   }, [currentUser, setupConnection]);
 
   // Join Room (Guest)
-  const joinRoom = useCallback((roomCode: string) => {
+  const joinRoom = useCallback((roomCode: string): string | null => {
+    const code = parseRoomCode(roomCode);
+    if (!code) {
+      setState((prev) => ({
+        ...prev,
+        isConnecting: false,
+        error: 'That does not look like a room code. Enter the code your friend sent, or paste their invite link.',
+      }));
+      return null;
+    }
     setChatMessages([]);
-    const code = roomCode.trim().toUpperCase();
     const hostPeerId = `caro_room_${code}`;
     isHostRef.current = false;
     isReconnectingRef.current = false;
+    peerLeftRef.current = false;
+    setState((prev) => ({ ...prev, isConnecting: true, peerLeft: false, error: null }));
 
     // Update URL & SessionStorage for smooth F5 reconnection
     try {
@@ -259,6 +344,16 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
       console.info('Guest PeerJS initialized with ID:', id);
       const connectToHost = () => {
         if (peer.destroyed) return;
+        // The retry loop runs once a second for the whole grace window. Drop the
+        // previous half-open attempt so 30 dead connections do not pile up.
+        const previous = connRef.current;
+        if (previous && !previous.open) {
+          try {
+            previous.close();
+          } catch {
+            // Already torn down.
+          }
+        }
         const conn = peer.connect(hostPeerId, { reliable: true });
         setupConnection(conn);
       };
@@ -269,6 +364,8 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
         roomId: code,
         isHost: false,
         isConnected: false,
+        isConnecting: true,
+        peerLeft: false,
         isReconnecting: false,
         reconnectTimeLeft: RECONNECT_GRACE_PERIOD_SEC,
         connectionTimedOut: false,
@@ -281,13 +378,25 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
 
     peer.on('error', (err) => {
       console.error('Guest PeerJS Join Error:', err);
-      setState((prev) => ({ ...prev, error: `Failed to join room ${code}: ${err.message}` }));
+      // `peer-unavailable` is by far the most common failure and means the code
+      // is wrong or the host closed the room. Say that, not the raw error.
+      const isMissingRoom = (err as { type?: string }).type === 'peer-unavailable';
+      setState((prev) => ({
+        ...prev,
+        isConnecting: false,
+        error: isMissingRoom
+          ? `Room ${code} is not open. Check the code with your friend, or ask them to create the room again.`
+          : `Could not join room ${code}. ${err.message}`,
+      }));
     });
+
+    return code;
   }, [setupConnection]);
 
   useEffect(() => () => {
     if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
     if (guestReconnectTimerRef.current) clearTimeout(guestReconnectTimerRef.current);
+    if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
   }, []);
 
   const sendChat = useCallback((text: string, image?: string) => {
@@ -295,8 +404,20 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
     const trimmedText = text.trim();
     if (!trimmedText && !image) return;
 
+    if (image && image.length > MAX_IMAGE_PAYLOAD_BYTES) {
+      setChatMessages((prev) => [...prev, {
+        id: newMessageId(),
+        sender: 'System',
+        text: 'That image is too large to send. Try a smaller screenshot.',
+        timestamp: Date.now(),
+        system: true,
+      }]);
+      return;
+    }
+
     const msg: ChatMessage = {
-      id: Math.random().toString(36).substring(2, 9),
+      id: newMessageId(),
+      senderId: currentUser.uid,
       sender: currentUser.displayName,
       text: trimmedText,
       ...(image ? { image } : {}),
@@ -311,17 +432,20 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
     const payload = { emoji, sender: currentUser.displayName };
     sendMessage({ type: 'REACTION', payload });
     setLastReaction(payload);
-    setTimeout(() => setLastReaction(null), 3000);
+    if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
+    reactionTimeoutRef.current = setTimeout(() => setLastReaction(null), REACTION_VISIBLE_MS);
   }, [currentUser, sendMessage]);
 
   const sendBuzz = useCallback(() => {
     if (!currentUser) return;
-    sendMessage({ type: 'BUZZ', payload: { sender: currentUser.displayName } });
+    sendMessage({ type: 'BUZZ', payload: { sender: currentUser.displayName, senderId: currentUser.uid } });
     const msg: ChatMessage = {
-      id: Math.random().toString(36).substring(2, 9),
+      id: newMessageId(),
+      senderId: currentUser.uid,
       sender: currentUser.displayName,
       text: '🔔 BUZZ!',
       timestamp: Date.now(),
+      system: true,
     };
     setChatMessages((prev) => [...prev, msg]);
   }, [currentUser, sendMessage]);
@@ -330,6 +454,16 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
     if (state.roomId) {
       roomDiscoveryManager.stopHostingRoom(state.roomId);
     }
+    // Announce the exit before tearing the channel down, so the other player
+    // sees "opponent left" rather than a 30-second reconnect countdown.
+    if (connRef.current && connRef.current.open) {
+      try {
+        connRef.current.send({ type: 'LEAVE_ROOM', payload: {} });
+      } catch {
+        // The channel is already gone; nothing to announce.
+      }
+    }
+    peerLeftRef.current = false;
     if (connRef.current) connRef.current.close();
     if (peerRef.current) peerRef.current.destroy();
     if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
@@ -350,6 +484,8 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
       roomId: null,
       isHost: false,
       isConnected: false,
+      isConnecting: false,
+      peerLeft: false,
       isReconnecting: false,
       reconnectTimeLeft: RECONNECT_GRACE_PERIOD_SEC,
       connectionTimedOut: false,
@@ -367,6 +503,7 @@ export const useWebRTC = (currentUser: UserProfile | null) => {
     joinRoom,
     leaveRoom,
     clearChat,
+    clearError,
     sendMessage,
     sendChat,
     sendReaction,

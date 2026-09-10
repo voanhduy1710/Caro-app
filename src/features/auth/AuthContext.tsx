@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../../config/supabase';
+import { hashPassword, verifyPassword, isLegacyPlaintext } from './passwordHash';
 
 export interface UserProfile {
   uid: string;
@@ -22,9 +23,8 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   loginAsGuest: (customName?: string) => void;
-  loginWithProfile: (name: string, avatarSeed?: string) => Promise<void>;
   signInWithCredentials: (username: string, password: string) => Promise<boolean>;
-  createLocalAccount: (username: string, password: string, displayName?: string) => Promise<boolean>;
+  createLocalAccount: (username: string, password: string, displayName?: string) => Promise<CreateAccountResult>;
   updateLocalGuestName: (newName: string) => void;
   showConfigGuide: boolean;
   setShowConfigGuide: (show: boolean) => void;
@@ -37,10 +37,21 @@ interface AuthContextType {
   setShowProfileModal: (show: boolean) => void;
   openProfileModal: () => void;
   updateUserProfile: (updates: { displayName?: string; photoURL?: string }) => Promise<void>;
+  /** Re-reads ratings from the server after a match, so the ELO shown is current. */
+  refreshUserProfile: () => Promise<void>;
   changePassword: (newPassword: string) => Promise<{ success: boolean; message?: string }>;
   authError: string | null;
   setAuthError: (err: string | null) => void;
 }
+
+/**
+ * A project that confirms email addresses creates the account but no session.
+ * The caller has to know the difference: telling someone they are signed in
+ * when they still have to click a link in their inbox is simply untrue.
+ */
+export type CreateAccountResult =
+  | { ok: false }
+  | { ok: true; signedIn: boolean };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -50,6 +61,7 @@ const ACCOUNTS_STORAGE_KEY = 'caro_app_accounts';
 
 interface LocalAccount {
   username: string;
+  /** PBKDF2 record. Older installs may still hold clear text; see signIn. */
   password: string;
   profile: UserProfile;
 }
@@ -155,17 +167,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isGuest: false,
       };
 
+      // Ratings are owned by the server; the client never sends them. A missing
+      // row is normally created by the on_auth_user_created trigger, so this is
+      // only a fallback for accounts that predate it.
       await supabase.from('gomoku_users').upsert({
         uid: newProfile.uid,
         username: newProfile.username,
         display_name: newProfile.displayName,
         photo_url: newProfile.photoURL,
         email: newProfile.email,
-        elo: newProfile.elo,
-        wins: newProfile.wins,
-        losses: newProfile.losses,
-        draws: newProfile.draws,
-        streak: newProfile.streak,
         updated_at: new Date().toISOString(),
       });
 
@@ -245,49 +255,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loginWithProfile = async (name: string, avatarSeed?: string) => {
-    const seed = avatarSeed || 'Zerom.gif';
-    const uid = 'user_' + Math.random().toString(36).substring(2, 9);
-    const newProfile: UserProfile = {
-      uid,
-      displayName: name,
-      photoURL: seed.startsWith('/Avatar/') ? seed : `/Avatar/${seed}`,
-      email: `${name.toLowerCase().replace(/\s+/g, '')}@gomoku.app`,
-      elo: 1200,
-      wins: 0,
-      losses: 0,
-      draws: 0,
-      streak: 0,
-      isGuest: false,
-    };
-
-    setUser(newProfile);
-    try {
-      localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(newProfile));
-    } catch (e) {
-      console.warn('Failed to save profile to localStorage:', e);
-    }
-
-    if (supabase && isSupabaseConfigured) {
-      try {
-        await supabase.from('gomoku_users').upsert({
-          uid: newProfile.uid,
-          display_name: newProfile.displayName,
-          photo_url: newProfile.photoURL,
-          email: newProfile.email,
-          elo: newProfile.elo,
-          wins: 0,
-          losses: 0,
-          draws: 0,
-          streak: 0,
-          updated_at: new Date().toISOString(),
-        });
-      } catch (err) {
-        console.warn('Failed to sync custom profile to Supabase:', err);
-      }
-    }
-  };
-
   const getLocalAccounts = (): LocalAccount[] => {
     try {
       const stored = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
@@ -307,21 +274,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const createLocalAccount = async (usernameInput: string, password: string, customDisplayName?: string): Promise<boolean> => {
+  const createLocalAccount = async (usernameInput: string, password: string, customDisplayName?: string): Promise<CreateAccountResult> => {
     const username = normalizeUsername(usernameInput);
     const displayName = customDisplayName?.trim() || username;
 
     if (!USERNAME_PATTERN.test(username)) {
-      setAuthError('Username must be 3–24 characters: lowercase letters, numbers, or underscores.');
-      return false;
+      setAuthError('Username must be 3-24 characters: lowercase letters, numbers, or underscores.');
+      return { ok: false };
     }
     if (password.length < 8) {
       setAuthError('Password must be at least 8 characters long.');
-      return false;
+      return { ok: false };
     }
     if (displayName.length > 40) {
       setAuthError('Display name must be 40 characters or fewer.');
-      return false;
+      return { ok: false };
     }
 
     const email = usernameToEmail(username);
@@ -343,7 +310,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setAuthError(authError.message.toLowerCase().includes('already registered')
             ? 'That username is already registered. Please sign in instead.'
             : authError.message);
-          return false;
+          return { ok: false };
         }
 
         if (authData?.user) {
@@ -368,11 +335,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               display_name: profile.displayName,
               photo_url: profile.photoURL,
               email: profile.email,
-              elo: profile.elo,
-              wins: 0,
-              losses: 0,
-              draws: 0,
-              streak: 0,
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'uid' }
@@ -385,21 +347,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(profile));
           }
           setAuthError(null);
-          return true;
+          return { ok: true, signedIn: Boolean(authData.session) };
         }
       } catch (err: any) {
         console.warn('Supabase Auth signup error:', err);
         setAuthError(err?.message || 'Account creation failed. Please try again.');
       }
 
-      return false;
+      return { ok: false };
     }
 
     // Offline/local-only mode: accounts stay entirely in this browser.
     const accounts = getLocalAccounts();
     if (accounts.some((account) => normalizeUsername(account.username) === username)) {
       setAuthError('That username is already registered. Please sign in instead.');
-      return false;
+      return { ok: false };
     }
 
     const uid = `user_${username}`;
@@ -417,11 +379,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isGuest: false,
     };
 
-    saveLocalAccounts([...accounts, { username, password, profile }]);
+    saveLocalAccounts([...accounts, { username, password: await hashPassword(password), profile }]);
     localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(profile));
     setAuthError(null);
     setUser(profile);
-    return true;
+    return { ok: true, signedIn: true };
   };
 
   const signInWithCredentials = async (username: string, password: string): Promise<boolean> => {
@@ -459,9 +421,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Local-only sign-in is intentionally used only when Supabase is not configured.
     const accounts = getLocalAccounts();
-    const account = accounts.find((item) => normalizeUsername(item.username) === normalizedUsername && item.password === password);
+    const account = accounts.find((item) => normalizeUsername(item.username) === normalizedUsername);
 
-    if (!account) {
+    let passwordMatches = false;
+    if (account) {
+      if (isLegacyPlaintext(account.password)) {
+        // Upgrade records written before hashing existed, on a correct login.
+        passwordMatches = account.password === password;
+        if (passwordMatches) {
+          account.password = await hashPassword(password);
+          saveLocalAccounts(accounts);
+        }
+      } else {
+        passwordMatches = await verifyPassword(password, account.password);
+      }
+    }
+
+    if (!account || !passwordMatches) {
       setAuthError('Incorrect username or password.');
       return false;
     }
@@ -535,37 +511,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const refreshUserProfile = async () => {
+    if (!supabase || !isSupabaseConfigured || !user || user.isGuest) return;
+    try {
+      const { data } = await supabase
+        .from('gomoku_users')
+        .select('elo, wins, losses, draws, streak')
+        .eq('uid', user.uid)
+        .maybeSingle();
+      if (!data) return;
+      setUser((current) => (current ? {
+        ...current,
+        elo: data.elo ?? current.elo,
+        wins: data.wins ?? current.wins,
+        losses: data.losses ?? current.losses,
+        draws: data.draws ?? current.draws,
+        streak: data.streak ?? current.streak,
+      } : current));
+    } catch (err) {
+      console.warn('Failed to refresh profile ratings:', err);
+    }
+  };
+
   const updateLocalGuestName = (newName: string) => {
     updateUserProfile({ displayName: newName });
   };
 
   const changePassword = async (newPassword: string): Promise<{ success: boolean; message?: string }> => {
-    if (!newPassword || newPassword.length < 6) {
-      return { success: false, message: 'Password must be at least 6 characters long.' };
+    if (!newPassword || newPassword.length < 8) {
+      return { success: false, message: 'Password must be at least 8 characters long.' };
     }
 
-    if (supabase && isSupabaseConfigured && user && !user.isGuest) {
+    if (!user || user.isGuest) {
+      return { success: false, message: 'Guest players have no password. Create an account first.' };
+    }
+
+    // Track whether the change actually landed somewhere. This used to report
+    // success even when every branch below was skipped.
+    let changed = false;
+
+    if (supabase && isSupabaseConfigured) {
       try {
         const { error } = await supabase.auth.updateUser({ password: newPassword });
         if (error) {
           console.warn('Supabase change password error:', error.message);
           return { success: false, message: error.message };
         }
+        changed = true;
       } catch (err: any) {
         console.warn('Supabase change password exception:', err);
         return { success: false, message: err?.message || 'Failed to update password.' };
       }
     }
 
-    if (user && user.username) {
+    if (user.username) {
       const accounts = getLocalAccounts();
       const accIdx = accounts.findIndex(
         (a) => a.username.toLowerCase() === user.username?.toLowerCase() || a.profile.uid === user.uid
       );
       if (accIdx >= 0) {
-        accounts[accIdx].password = newPassword;
+        accounts[accIdx].password = await hashPassword(newPassword);
         saveLocalAccounts(accounts);
+        changed = true;
       }
+    }
+
+    if (!changed) {
+      return { success: false, message: 'No account was found to update. Try signing in again.' };
     }
 
     return { success: true, message: 'Password updated successfully!' };
@@ -579,11 +591,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signInWithGoogle,
         signOut,
         loginAsGuest,
-        loginWithProfile,
         signInWithCredentials,
         createLocalAccount,
         updateLocalGuestName,
         updateUserProfile,
+        refreshUserProfile,
         changePassword,
         showConfigGuide,
         setShowConfigGuide,

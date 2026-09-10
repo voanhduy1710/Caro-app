@@ -4,6 +4,34 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/Logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#eff0f3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#121317" media="(prefers-color-scheme: dark)" />
+
+    <!-- The UI font is on the critical path for LCP, so it is fetched alongside
+         the stylesheet rather than after it. -->
+    <link
+      rel="preload"
+      href="/fonts/google-sans-flex-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+
+    <!-- Stamp the saved theme before first paint, otherwise an explicit light
+         or dark choice flashes the system theme on load. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('caro:ui-theme');
+          if (t === 'light' || t === 'dark') {
+            document.documentElement.setAttribute('data-ui-theme', t);
+          }
+        } catch (e) {
+          /* Private windows and blocked site data both throw on access. */
+        }
+      })();
+    </script>
+
     <title>Not Pickleball</title>
   </head>
   <body>

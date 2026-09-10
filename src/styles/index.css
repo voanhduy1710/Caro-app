@@ -1,16 +1,430 @@
 @import "tailwindcss";
+@import "./tokens.css";
+
+/* =============================================================================
+   Base
+   ========================================================================== */
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
-    @apply bg-slate-50 text-slate-800 min-h-screen font-sans selection:bg-emerald-600 selection:text-white antialiased overflow-x-hidden;
+    background-color: var(--ui-bg);
+    color: var(--ui-text);
+    font-family: var(--font-sans);
+    /* Antigravity body metrics: 15px / 22px with a touch of positive tracking */
+    font-size: 15px;
+    line-height: 22px;
+    letter-spacing: 0.16px;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body::selection,
+  body *::selection {
+    background: var(--ui-accent);
+    color: var(--ui-accent-fg);
+  }
+
+  /* Display type tightens as it grows, matching the reference's scale where
+     tracking runs from -0.28px at 32px out to -2.14px at 107px. */
+  h1, h2, h3 {
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.12;
+  }
+
+  h4, h5, h6 {
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+
+  code, kbd, pre, samp {
+    font-family: var(--font-mono);
+  }
+
+  hr {
+    border-color: var(--ui-border);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 }
 
-/* Board Cell Base */
+/* =============================================================================
+   Component primitives
+
+   These exist so the shape lock, colour lock and contrast rules live in one
+   place rather than being re-typed across ten component files.
+   Shape rule: buttons and chips are pills, panels are 24px, nested cards and
+   inputs are 16px, and the board frame is 8px.
+   ========================================================================== */
+
+@layer components {
+
+  /* --- Buttons ----------------------------------------------------------- */
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    /* Labels never wrap: a two-line button is a broken button. */
+    white-space: nowrap;
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 20px;
+    cursor: pointer;
+    transition:
+      background-color 0.2s var(--ease-out-quart),
+      border-color 0.2s var(--ease-out-quart),
+      color 0.2s var(--ease-out-quart),
+      transform 0.12s var(--ease-out-quart);
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* Tactile feedback: the control gives under the press. */
+  .btn:not(:disabled):active {
+    transform: scale(0.97);
+  }
+
+  .btn-sm {
+    padding: 6px 12px;
+    font-size: 13px;
+    line-height: 18px;
+  }
+
+  .btn-lg {
+    padding: 12px 24px;
+    font-size: 15px;
+    line-height: 22px;
+  }
+
+  /* Primary carries dark ink on the green, never white: white on #00b95c is
+     2.6:1 and fails AA, dark ink is 8.0:1. */
+  .btn-primary {
+    background-color: var(--ui-accent);
+    color: var(--ui-accent-fg);
+    font-weight: 600;
+  }
+
+  .btn-primary:not(:disabled):hover {
+    background-color: var(--ui-accent-hover);
+  }
+
+  .btn-secondary {
+    background-color: var(--ui-surface);
+    border-color: var(--ui-border);
+    color: var(--ui-text);
+  }
+
+  .btn-secondary:not(:disabled):hover {
+    background-color: var(--ui-surface-2);
+    border-color: var(--ui-border-strong);
+  }
+
+  /* Tonal: reads as an action without competing with the primary CTA. */
+  .btn-tonal {
+    background-color: var(--ui-accent-soft);
+    color: var(--ui-accent-text);
+    border-color: transparent;
+  }
+
+  .btn-tonal:not(:disabled):hover {
+    border-color: var(--ui-accent);
+  }
+
+  .btn-ghost {
+    background-color: transparent;
+    color: var(--ui-text-muted);
+  }
+
+  .btn-ghost:not(:disabled):hover {
+    background-color: var(--ui-surface-2);
+    color: var(--ui-text);
+  }
+
+  .btn-danger {
+    background-color: var(--ui-danger-soft);
+    color: var(--ui-danger);
+    border-color: transparent;
+  }
+
+  .btn-danger:not(:disabled):hover {
+    border-color: var(--ui-danger);
+  }
+
+  /* High-emphasis alternative to primary, for the one action per surface that
+     competes with it (sign out, close a match) without borrowing the accent. */
+  .btn-inverse {
+    background-color: var(--ui-inverse);
+    color: var(--ui-inverse-fg);
+    font-weight: 600;
+  }
+
+  .btn-inverse:not(:disabled):hover {
+    opacity: 0.9;
+  }
+
+
+  .btn-icon {
+    padding: 8px;
+    width: 36px;
+    height: 36px;
+  }
+
+  /* --- Surfaces ---------------------------------------------------------- */
+
+  .panel {
+    background-color: var(--ui-surface);
+    border: 1px solid var(--ui-border);
+    border-radius: var(--radius-lg);
+  }
+
+  .card {
+    background-color: var(--ui-surface);
+    border: 1px solid var(--ui-border);
+    border-radius: var(--radius-md);
+  }
+
+  .card-inset {
+    background-color: var(--ui-surface-2);
+    border: 1px solid var(--ui-border);
+    border-radius: var(--radius-md);
+  }
+
+  /* --- Chips and tags ---------------------------------------------------- */
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    border-radius: 9999px;
+    border: 1px solid var(--ui-border);
+    background-color: var(--ui-surface-2);
+    color: var(--ui-text-muted);
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+  }
+
+  .chip-accent {
+    background-color: var(--ui-accent-soft);
+    border-color: transparent;
+    color: var(--ui-accent-text);
+  }
+
+
+  /* --- Forms ------------------------------------------------------------- */
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Label above input, always. Never placeholder-as-label. */
+  .field-label {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+    color: var(--ui-text);
+  }
+
+  .field-input {
+    width: 100%;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--ui-border-strong);
+    background-color: var(--ui-surface);
+    color: var(--ui-text);
+    padding: 10px 14px;
+    font-size: 15px;
+    line-height: 22px;
+    transition:
+      border-color 0.2s var(--ease-out-quart),
+      box-shadow 0.2s var(--ease-out-quart);
+  }
+
+  .field-input::placeholder {
+    /* Subtle, but still AA against the field background. */
+    color: var(--ui-text-subtle);
+  }
+
+  .field-input:focus {
+    outline: none;
+    border-color: var(--ui-accent);
+    box-shadow: 0 0 0 3px var(--ui-accent-ring);
+  }
+
+  .field-input:disabled {
+    background-color: var(--ui-surface-2);
+    color: var(--ui-text-muted);
+    cursor: not-allowed;
+  }
+
+  .field-hint {
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--ui-text-muted);
+  }
+
+  .field-error {
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--ui-danger);
+  }
+
+  /* --- Modals ------------------------------------------------------------ */
+
+  .modal-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background-color: var(--ui-scrim);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    animation: scrim-in 0.2s var(--ease-out-quart);
+  }
+
+  .modal-panel {
+    width: 100%;
+    background-color: var(--ui-surface);
+    border: 1px solid var(--ui-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--ui-shadow-lg);
+    animation: panel-in 0.28s var(--ease-out-expo);
+  }
+
+  /* --- Skeleton ---------------------------------------------------------- */
+
+  .skeleton {
+    background-color: var(--ui-surface-3);
+    border-radius: var(--radius-sm);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--ui-surface) 60%, transparent),
+      transparent
+    );
+    animation: skeleton-sweep 1.4s infinite;
+  }
+}
+
+/* =============================================================================
+   Motion
+
+   Every animation here has a job: scrim/panel signal a layer opening, the drop
+   confirms a move landed, the winning pulse points at the winning line.
+   ========================================================================== */
+
+@keyframes scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes skeleton-sweep {
+  to { transform: translateX(100%); }
+}
+
+@keyframes winning-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1.15); }
+  50% { transform: scale(1.12); filter: brightness(1.35); }
+}
+
+@keyframes piece-drop {
+  from { opacity: 0; transform: scale(0.55); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-winning-cell {
+  animation: winning-pulse 0.8s infinite ease-in-out;
+}
+
+.animate-piece-drop {
+  animation: piece-drop 0.22s var(--ease-out-back);
+}
+
+/* Mandatory for anything above a static motion level. Infinite loops and
+   transforms collapse; the winning line stays marked by brightness alone. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-winning-cell {
+    animation: none;
+    filter: brightness(1.3);
+  }
+}
+
+/* =============================================================================
+   Board
+
+   The four board themes are a user-facing feature, so their material identity
+   is preserved as-is. Only graph-paper, the neutral default, follows the app
+   theme, because a plain white sheet against a near-black page reads as a bug
+   rather than as a chosen material.
+   ========================================================================== */
+
 .board-cell {
   aspect-ratio: 1 / 1 !important;
   box-sizing: border-box;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s var(--ease-out-quart),
+              border-color 0.15s var(--ease-out-quart);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Cells holding a real piece keep their resting look on hover. */
+.board-cell.board-cell--filled:hover {
+  background: inherit;
+  cursor: default;
+}
+
+.board-cell:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
+  z-index: 30;
 }
 
 .board-grid-inner {
@@ -18,29 +432,39 @@
   gap: 0 !important;
 }
 
-/* 1. Light Notebook Graph Grid */
+/* Every fifth line is promoted so the eye can count position on a large
+   board. Thickness, not colour, so each board theme keeps its own palette. */
+.board-cell--gx {
+  border-right-width: 2px !important;
+}
+
+.board-cell--gy {
+  border-bottom-width: 2px !important;
+}
+
+/* 1. Graph paper - the neutral default, theme-aware */
 .board-theme-graph-paper {
-  background: #ffffff;
-  border: 2px solid #cbd5e1;
+  background: var(--ui-surface);
+  border: 2px solid var(--ui-border-strong);
 }
 
 .board-theme-graph-paper .board-grid-inner {
-  border-top: 1px solid #cbd5e1;
-  border-left: 1px solid #cbd5e1;
+  border-top: 1px solid var(--ui-border-strong);
+  border-left: 1px solid var(--ui-border-strong);
 }
 
 .board-theme-graph-paper .board-cell {
-  background: #ffffff;
-  border-right: 1px solid #cbd5e1;
-  border-bottom: 1px solid #cbd5e1;
+  background: var(--ui-surface);
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .board-theme-graph-paper .board-cell:hover:not(:disabled) {
-  background: #eff6ff;
-  border-color: #94a3b8;
+  background: var(--ui-accent-soft);
+  border-color: var(--ui-accent);
 }
 
-/* 2. Light Bamboo Wood */
+/* 2. Light bamboo wood */
 .board-theme-light-wood {
   background-color: #f7e6c4;
   background-image: radial-gradient(#d6a265 0.75px, transparent 0.75px);
@@ -65,7 +489,7 @@
   border-color: #b8860b;
 }
 
-/* 3. Futuristic Laser Grid */
+/* 3. Futuristic laser grid */
 .board-theme-laser-futuristic {
   background-color: #05020e !important;
   box-shadow: inset 0 0 70px rgba(192, 132, 252, 0.45), 0 15px 35px -5px rgba(0, 0, 0, 0.9) !important;
@@ -97,7 +521,7 @@
   box-shadow: inset 0 0 15px #e879f9, 0 0 20px #FAE0F7 !important;
 }
 
-/* 4. Warm Mahogany Wood */
+/* 4. Warm mahogany wood */
 .board-theme-classic-wood {
   background-color: #c47842 !important;
   background-image:
@@ -129,7 +553,7 @@
   box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
-/* 3D Go Stones */
+/* 3D go stones */
 .stone-black {
   background: radial-gradient(circle at 35% 35%, #64748b, #0f172a);
   border: 1px solid #1e293b;
@@ -156,26 +580,10 @@
   margin: auto;
 }
 
-/* Animations */
-@keyframes winning-pulse {
+/* =============================================================================
+   Scrolling
+   ========================================================================== */
 
-  0%,
-  100% {
-    transform: scale(1);
-    filter: brightness(1.2);
-  }
-
-  50% {
-    transform: scale(1.15);
-    filter: brightness(1.4);
-  }
-}
-
-.animate-winning-cell {
-  animation: winning-pulse 0.8s infinite ease-in-out;
-}
-
-/* Mobile Touch & Gesture UX Optimizations */
 html, body {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -186,47 +594,35 @@ html, body {
   overscroll-behavior: contain;
 }
 
-.board-cell {
-  touch-action: manipulation;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-/* Scrollbar for Board */
-.board-scroll-container::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.board-scroll-container::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
-}
-
-.board-scroll-container::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-
-.board-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
 /* Keep the chat's scrollbar inside its fixed-height feed, never the game row. */
 .chat-message-list {
   scrollbar-gutter: stable;
 }
 
+.board-scroll-container,
+.chat-message-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-border-strong) transparent;
+}
+
+.board-scroll-container::-webkit-scrollbar,
 .chat-message-list::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
+.board-scroll-container::-webkit-scrollbar-track,
 .chat-message-list::-webkit-scrollbar-track {
-  background: #e2e8f0;
-  border-radius: 999px;
+  background: transparent;
 }
 
+.board-scroll-container::-webkit-scrollbar-thumb,
 .chat-message-list::-webkit-scrollbar-thumb {
-  background: #94a3b8;
-  border-radius: 999px;
+  background: var(--ui-border-strong);
+  border-radius: 9999px;
+}
+
+.board-scroll-container::-webkit-scrollbar-thumb:hover,
+.chat-message-list::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-text-subtle);
 }

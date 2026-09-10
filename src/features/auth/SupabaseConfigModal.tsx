@@ -1,23 +1,18 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
+import { X, AlertTriangle } from 'lucide-react';
 import { useAuth } from './AuthContext';
+import { useModalChrome } from '../../shared/hooks/useModalChrome';
 
 export const SupabaseConfigModal: React.FC = () => {
   const { showConfigGuide, setShowConfigGuide, authError, setAuthError, loginAsGuest } = useAuth();
   const [customName, setCustomName] = useState('');
-  const backdropRef = useRef<HTMLDivElement>(null);
-
-  if (!showConfigGuide) return null;
-
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === backdropRef.current) {
-      handleClose();
-    }
-  };
-
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setShowConfigGuide(false);
     setAuthError(null);
-  };
+  }, [setShowConfigGuide, setAuthError]);
+  const dialogProps = useModalChrome(showConfigGuide, handleClose, 'supabase-config-modal-title');
+
+  if (!showConfigGuide) return null;
 
   const handleCustomLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,42 +24,38 @@ export const SupabaseConfigModal: React.FC = () => {
 
   return (
     <div
-      ref={backdropRef}
-      onClick={handleBackdropClick}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-md transition-opacity"
+      {...dialogProps}
+      className="modal-scrim"
     >
-      <div className="bg-white text-slate-800 w-full max-w-lg rounded-2xl p-6 relative border border-slate-200 space-y-4">
+      <div className="modal-panel max-w-lg relative p-6 space-y-4">
         <button
           onClick={handleClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-2xl font-bold p-1 leading-none"
-        >
-          ×
-        </button>
+          className="btn btn-ghost btn-icon absolute top-4 right-4"
+         aria-label="Close">
+            <X size={18} strokeWidth={1.75} aria-hidden="true" />
+          </button>
 
-        <div className="border-b border-slate-100 pb-3">
-          <span className="text-[10px] font-mono font-bold tracking-widest text-emerald-600 uppercase">
-            Google OAuth Setup & Fallback
-          </span>
-          <h2 className="text-lg font-extrabold text-slate-900 tracking-tight mt-0.5">
+        <div className="border-b border-line pb-3">
+          <h2 id="supabase-config-modal-title" className="text-lg font-semibold text-ink tracking-tight mt-0.5">
             Google Authentication Configuration
           </h2>
         </div>
 
         {authError && (
-          <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-800 text-xs font-medium space-y-1">
-            <div className="font-bold flex items-center gap-1.5 text-amber-900">
-              ⚠️ {authError}
+          <div className="bg-warning-soft border border-warning p-3 rounded-md text-warning text-xs font-medium space-y-1">
+            <div className="font-medium flex items-center gap-1.5 text-warning">
+              <AlertTriangle size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />{authError}
             </div>
             <p className="text-[11px]">
-              Google Provider is not toggled ON in your Supabase Dashboard for project <code className="font-mono bg-amber-100 px-1 rounded">deuuuibkqletkkbrsmxd</code>.
+              Google Provider is not toggled ON in your Supabase Dashboard for project <code className="font-mono bg-warning-soft px-1 rounded-sm">deuuuibkqletkkbrsmxd</code>.
             </p>
           </div>
         )}
 
         {/* Quick Custom Name Login Fallback */}
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
-          <div className="text-xs font-bold text-emerald-900">Quick Login with Custom Name</div>
-          <p className="text-[11px] text-emerald-700">
+        <div className="p-3 bg-accent-soft border border-accent rounded-md space-y-2">
+          <div className="text-xs font-medium text-accent-text">Quick Login with Custom Name</div>
+          <p className="text-[11px] text-accent-text">
             Set your display name to play immediately while Google OAuth is being configured:
           </p>
           <form onSubmit={handleCustomLogin} className="flex gap-2">
@@ -73,31 +64,31 @@ export const SupabaseConfigModal: React.FC = () => {
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
               placeholder="Your Player Name..."
-              className="flex-1 bg-white border border-emerald-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-600 font-bold"
+              className="flex-1 bg-surface border border-accent rounded-sm px-3 py-1.5 text-xs text-ink focus:outline-none focus:border-accent font-medium"
             />
             <button
               type="submit"
               disabled={!customName.trim()}
-              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold transition"
+              className="btn btn-primary btn-sm"
             >
               Play Now
             </button>
           </form>
         </div>
 
-        <div className="space-y-3 text-xs text-slate-600 border-t border-slate-100 pt-3">
-          <p className="font-bold text-slate-800">
+        <div className="space-y-3 text-xs text-muted border-t border-line pt-3">
+          <p className="font-medium text-ink">
             Steps to enable Google 1-Click Authentication:
           </p>
 
-          <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-slate-600 font-sans leading-relaxed">
+          <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-muted font-sans leading-relaxed">
             <li>
               Open{' '}
               <a
                 href="https://supabase.com/dashboard/project/deuuuibkqletkkbrsmxd/auth/providers"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-emerald-600 underline font-bold hover:text-emerald-700"
+                className="text-accent-text underline font-medium hover:text-accent-text"
               >
                 Supabase Auth Providers Dashboard (deuuuibkqletkkbrsmxd)
               </a>.
@@ -116,7 +107,7 @@ export const SupabaseConfigModal: React.FC = () => {
 
         <button
           onClick={handleClose}
-          className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-300 transition"
+          className="btn btn-secondary btn-lg w-full"
         >
           Close
         </button>

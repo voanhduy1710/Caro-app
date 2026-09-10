@@ -1,124 +1,169 @@
 import React from 'react';
+import { Trophy, History, Settings, LogIn, LogOut, UserPlus } from 'lucide-react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { getRankTitle } from '../utils/eloCalculator';
+import { getAvatarPublicUrl } from '../../features/avatar/avatarService';
 
 interface NavbarProps {
   onOpenLeaderboard: () => void;
   onOpenHistory: () => void;
   onOpenSettingsAndTheme: () => void;
+  /**
+   * Goes to the home screen through the app's own exit flow. The brand used to
+   * be an `<a href="/">`, which reloaded the page and dropped a live match
+   * without asking.
+   */
+  onNavigateHome: () => void;
+  /**
+   * True while a match is on screen. Site navigation is not the task then, so
+   * the secondary destinations drop their labels and stop competing with the
+   * board for attention.
+   */
+  inMatch?: boolean;
 }
 
+/** One stroke weight across the whole app. */
+const ICON = { size: 16, strokeWidth: 1.75 } as const;
+
 export const Navbar: React.FC<NavbarProps> = ({
+  inMatch = false,
   onOpenLeaderboard,
   onOpenHistory,
   onOpenSettingsAndTheme,
+  onNavigateHome,
 }) => {
   const { user, openAuthModal, openProfileModal, signOut } = useAuth();
   const rank = user ? getRankTitle(user.elo) : getRankTitle(1200);
+  const isSignedIn = Boolean(user && !user.isGuest);
 
   return (
-    <header className="w-full bg-white border-b border-slate-200 sticky top-0 z-40 px-3 sm:px-6 py-2.5">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
-        {/* Branding Logo & Title */}
-        <div className="flex items-center gap-2 select-none shrink-0">
-          <img src="/Logo.svg" alt="Caro Gomoku Logo" className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-slate-200" />
-          <div className="flex items-center gap-1.5">
-            <span className="text-base sm:text-xl font-black tracking-tight text-slate-900">
-              Not Pickleball<span className="hidden xs:inline"> App</span><span className="text-emerald-600">.</span>
-            </span>
-          </div>
-        </div>
+    <header className="sticky top-0 z-40 w-full border-b border-line bg-surface/85 backdrop-blur-md">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-4 sm:px-6">
+        {/* Brand */}
+        <button
+          type="button"
+          onClick={onNavigateHome}
+          title="Back to the home screen"
+          aria-label="Home"
+          className="flex shrink-0 items-center gap-2.5 select-none rounded-md px-1 py-1 transition-colors hover:bg-surface-2"
+        >
+          <img
+            src="/Logo.svg"
+            alt=""
+            aria-hidden="true"
+            className="h-8 w-8 rounded-sm"
+          />
+          <span className="hidden text-[15px] font-semibold tracking-[-0.01em] text-ink sm:inline">
+            Not Pickleball
+          </span>
+        </button>
 
-        {/* Navigation Actions */}
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          {/* User Profile Badge (Compact Avatar on Mobile) */}
+        {/* Actions. Secondary items collapse to icons early so the account
+            actions can keep their words, which is what a new player looks for. */}
+        <nav className="flex min-w-0 shrink items-center gap-1.5">
           {user && (
-            <div
+            <button
+              type="button"
               onClick={openProfileModal}
-              className="flex items-center gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 cursor-pointer transition"
-              title="Click to edit profile & change avatar"
+              className="mr-1 flex shrink-0 items-center gap-2 rounded-full border border-line bg-surface-2 py-1 pr-1 pl-1 transition-colors hover:bg-surface-3 md:pr-3"
+              title={user.isGuest ? 'Guest profile: pick a name and avatar' : 'Edit profile and avatar'}
             >
               <img
-                src={user.photoURL}
-                alt={user.displayName}
-                className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-emerald-500/40 bg-white shrink-0"
+                src={getAvatarPublicUrl(user.photoURL)}
+                alt=""
+                aria-hidden="true"
+                className="h-7 w-7 shrink-0 rounded-full bg-surface object-cover"
               />
-              <div className="hidden md:block text-left leading-none">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-slate-800">{user.displayName}</span>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded border ${rank.color} font-bold font-mono bg-white`}>
-                    {rank.title}
+              <span className="hidden text-left leading-tight md:block">
+                <span className="block text-[13px] font-medium text-ink">
+                  {user.displayName}
+                </span>
+                {/* "Guest Player" already says it; repeating it underneath
+                    said the same thing twice. */}
+                {!user.isGuest && (
+                  <span className="block font-mono text-[11px] text-muted">
+                    {user.elo} ELO · {rank.title}
                   </span>
-                </div>
-                <div className="text-[10px] text-emerald-700 font-mono mt-1 font-bold">
-                  {user.elo} ELO {user.isGuest && '(Guest)'}
-                </div>
-              </div>
-            </div>
+                )}
+              </span>
+              {user.isGuest && (
+                <span className="hidden rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-semibold text-warning sm:inline md:hidden">
+                  Guest
+                </span>
+              )}
+            </button>
           )}
 
-          {/* Leaderboard */}
           <button
+            type="button"
             onClick={onOpenLeaderboard}
-            className="p-2 sm:px-3 sm:py-1.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-white hover:bg-emerald-50 text-xs font-bold text-slate-700 hover:text-emerald-700 transition flex items-center gap-1.5"
+            className="btn btn-ghost btn-sm max-lg:h-9 max-lg:w-9 max-lg:p-0"
             title="Leaderboard"
+            aria-label="Leaderboard"
           >
-            <svg className="w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15l-4 3 1-4.5L5.5 10l4.6-.4L12 5.5l1.9 4.1 4.6.4-3.5 3.5 1 4.5z" />
-            </svg>
-            <span className="hidden sm:inline">Leaderboard</span>
+            <Trophy {...ICON} aria-hidden="true" />
+            <span className={inMatch ? 'hidden' : 'hidden lg:inline'}>Leaderboard</span>
           </button>
 
-          {/* Match History */}
           <button
+            type="button"
             onClick={onOpenHistory}
-            className="p-2 sm:px-3 sm:py-1.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-white hover:bg-emerald-50 text-xs font-bold text-slate-700 hover:text-emerald-700 transition flex items-center gap-1.5"
-            title="History"
+            className="btn btn-ghost btn-sm max-lg:h-9 max-lg:w-9 max-lg:p-0"
+            title="Match history"
+            aria-label="Match history"
           >
-            <svg className="w-4 h-4 shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="hidden sm:inline">History</span>
+            <History {...ICON} aria-hidden="true" />
+            <span className={inMatch ? 'hidden' : 'hidden lg:inline'}>History</span>
           </button>
 
-          {/* Settings & Themes */}
           <button
+            type="button"
             onClick={onOpenSettingsAndTheme}
-            className="p-2 sm:px-3.5 sm:py-1.5 rounded-xl border border-slate-300 hover:border-emerald-600 bg-slate-50 hover:bg-emerald-50 text-xs font-bold text-slate-800 hover:text-emerald-700 transition flex items-center gap-1.5"
-            title="Settings & Themes"
+            className="btn btn-ghost btn-sm max-lg:h-9 max-lg:w-9 max-lg:p-0"
+            title="Match rules, appearance and themes"
+            aria-label="Match rules, appearance and themes"
           >
-            <svg className="w-4 h-4 shrink-0 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <span className="hidden sm:inline">Settings & Themes</span>
+            <Settings {...ICON} aria-hidden="true" />
+            <span className={inMatch ? 'hidden' : 'hidden lg:inline'}>Settings</span>
           </button>
 
-          {/* Auth Button */}
-          {user && !user.isGuest ? (
+          {isSignedIn ? (
             <button
+              type="button"
               onClick={signOut}
-              className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold transition flex items-center gap-1.5"
-              title="Logout"
+              className="btn btn-secondary btn-sm max-sm:h-9 max-sm:w-9 max-sm:p-0"
+              title="Sign out"
+              aria-label="Sign out"
             >
-              <svg className="w-4 h-4 shrink-0 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              <span className="hidden sm:inline">Logout</span>
+              <LogOut {...ICON} aria-hidden="true" />
+              <span className="hidden sm:inline">Sign out</span>
             </button>
           ) : (
-            <button
-              onClick={() => openAuthModal('signin')}
-              className="p-2 sm:px-3.5 sm:py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5"
-              title="Sign In"
-            >
-              <svg className="w-4 h-4 shrink-0 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h6a3 3 0 013 3v1" />
-              </svg>
-              <span className="hidden sm:inline">Sign In</span>
-            </button>
+            <>
+              {/* Creating an account used to live behind a tab inside Sign in,
+                  so there was no way to find it from the home screen. */}
+              <button
+                type="button"
+                onClick={() => openAuthModal('signin')}
+                className="btn btn-ghost btn-sm max-sm:h-9 max-sm:w-9 max-sm:p-0"
+                title="Sign in"
+                aria-label="Sign in"
+              >
+                <LogIn {...ICON} aria-hidden="true" />
+                <span className="hidden sm:inline">Sign in</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openAuthModal('create')}
+                className="btn btn-primary btn-sm shrink-0"
+                title="Create an account"
+              >
+                <UserPlus {...ICON} aria-hidden="true" />
+                <span>Sign up</span>
+              </button>
+            </>
           )}
-        </div>
+        </nav>
       </div>
     </header>
   );

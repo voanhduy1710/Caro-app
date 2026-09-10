@@ -7,6 +7,8 @@ export interface MatchRecord {
   winnerUid: string | 'DRAW' | null;
   winnerName: string;
   boardSize: number;
+  /** Match type persisted to gomoku_matches.mode (NOT NULL in the schema). */
+  mode?: string;
   timerConfig: string;
   eloDeltaPlayer1: number;
   eloDeltaPlayer2: number;

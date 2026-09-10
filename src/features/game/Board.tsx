@@ -1,6 +1,8 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
+import { Timer, Minus, Plus, Crosshair } from 'lucide-react';
 import type { BoardMatrix, CellValue } from '../../shared/utils/gomokuLogic';
 import { useTheme } from '../theme/ThemeContext';
+import type { PieceTheme } from '../theme/types';
 import type { UserProfile } from '../auth/AuthContext';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 
@@ -27,10 +29,215 @@ interface BoardProps {
   gameStatus?: 'lobby' | 'playing' | 'ended';
   gameResult?: { winner: string; reason: string } | null;
   elapsedGameTime?: number;
-  onReturnToLobby?: () => void;
+  /** True while the bot is searching, so the wait reads as deliberate. */
+  opponentThinking?: boolean;
+  /** Names the mode being played, e.g. "Practice vs Bot". */
+  modeLabel?: string;
+  /** Always-available way out of the match. Named for where it actually goes. */
+  onExitMatch?: () => void;
+  exitLabel?: string;
+  /** Plain-language explanation of how the match ended. */
+  resultReason?: string;
+  /** Only shown once a rating change is known, never as a guess. */
+  ratingNote?: string | null;
+  /** The next steps, rendered beside the result rather than in another panel. */
+  resultActions?: React.ReactNode;
+  /** Seconds left before the first move, or null when play is already open. */
+  countdown?: number | null;
   onViewOpponentProfile?: (opponent: UserProfile) => void;
   onViewMyProfile?: () => void;
 }
+
+interface PieceGlyphProps {
+  piece: 'X' | 'O';
+  pieceTheme: PieceTheme;
+  xColor: string;
+  oColor: string;
+  isSimulated?: boolean;
+  isWinning?: boolean;
+  customColor?: string;
+}
+
+/**
+ * Renders a single piece for the active theme. Split out of Board so that a
+ * board cell can be memoised on primitive props only.
+ */
+const PieceGlyph: React.FC<PieceGlyphProps> = ({
+  piece,
+  pieceTheme,
+  xColor,
+  oColor,
+  isSimulated = false,
+  isWinning = false,
+  customColor,
+}) => {
+  const isX = piece === 'X';
+  const simClass = isSimulated ? 'opacity-60 scale-95' : '';
+  const winClass = !isSimulated && isWinning ? 'animate-winning-cell' : '';
+
+  if (pieceTheme === 'calligraphic') {
+    const strokeColor = customColor || (isX ? xColor || '#006699' : oColor || '#e11d24');
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={`w-[78%] h-[78%] transition-transform shrink-0 ${simClass} ${winClass}`}
+        fill="none"
+        stroke={strokeColor}
+        strokeWidth="4.2"
+        strokeLinecap="round"
+      >
+        {isX ? (
+          <>
+            <line x1="5" y1="5" x2="19" y2="19" />
+            <line x1="19" y1="5" x2="5" y2="19" />
+          </>
+        ) : (
+          <circle cx="12" cy="12" r="7.5" />
+        )}
+      </svg>
+    );
+  }
+
+  if (pieceTheme === 'laser') {
+    const laserColor = customColor || (isX ? xColor || '#00f0ff' : oColor || '#ff007f');
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={`w-[82%] h-[82%] transition-transform shrink-0 ${simClass} ${winClass}`}
+        style={{ filter: `drop-shadow(0 0 4px ${laserColor}) drop-shadow(0 0 10px ${laserColor})` }}
+        fill="none"
+        stroke={laserColor}
+        strokeWidth="3.8"
+        strokeLinecap="round"
+      >
+        {isX ? (
+          <>
+            <line x1="5" y1="5" x2="19" y2="19" />
+            <line x1="19" y1="5" x2="5" y2="19" />
+          </>
+        ) : (
+          <circle cx="12" cy="12" r="7.5" />
+        )}
+      </svg>
+    );
+  }
+
+  if (pieceTheme === 'gomoku_3d') {
+    const activeColor = customColor || (isX ? xColor : oColor);
+    const stoneBg = activeColor ? `radial-gradient(circle at 35% 35%, ${activeColor}, #0f172a)` : undefined;
+    return (
+      <div
+        className={`${isX ? 'stone-black' : 'stone-white'} ${simClass} ${
+          !isSimulated && isWinning ? 'animate-winning-cell ring-4 ring-warning' : ''
+        }`}
+        style={stoneBg ? { background: stoneBg } : undefined}
+      />
+    );
+  }
+
+  const color = customColor || (isX ? xColor || '#2563eb' : oColor || '#dc2626');
+  return (
+    <span
+      className={`select-none font-black text-xl sm:text-2xl transition-transform ${simClass} ${
+        isX ? 'piece-blue-x' : 'piece-red-o'
+      } ${winClass}`}
+      style={{ color }}
+    >
+      {piece}
+    </span>
+  );
+};
+
+interface BoardCellProps {
+  row: number;
+  col: number;
+  cell: CellValue;
+  cellSize: number;
+  isLast: boolean;
+  isWinning: boolean;
+  isHovered: boolean;
+  /** Sits on a promoted grid line, every fifth column or row. */
+  isMajorRight: boolean;
+  isMajorBottom: boolean;
+  simulatedPiece: 'X' | 'O' | null;
+  simulatedColor?: string;
+  currentTurn: 'X' | 'O';
+  boardDisabled: boolean;
+  pieceTheme: PieceTheme;
+  xColor: string;
+  oColor: string;
+  onSelect: (row: number, col: number) => void;
+  onContextMenu: (event: React.MouseEvent, row: number, col: number) => void;
+  onHover: (row: number, col: number) => void;
+}
+
+/**
+ * Memoised so that moving the pointer across a 50x50 grid re-renders the two
+ * cells whose hover state changed instead of all 2,500 of them.
+ */
+const BoardCell = memo<BoardCellProps>(({
+  row,
+  col,
+  cell,
+  cellSize,
+  isLast,
+  isWinning,
+  isHovered,
+  isMajorRight,
+  isMajorBottom,
+  simulatedPiece,
+  simulatedColor,
+  currentTurn,
+  boardDisabled,
+  pieceTheme,
+  xColor,
+  oColor,
+  onSelect,
+  onContextMenu,
+  onHover,
+}) => (
+  <button
+    type="button"
+    onClick={() => onSelect(row, col)}
+    onContextMenu={(event) => onContextMenu(event, row, col)}
+    onMouseEnter={() => onHover(row, col)}
+    aria-label={`Row ${row + 1}, column ${col + 1}${cell ? `, ${cell}` : ', empty'}`}
+    style={{ width: `${cellSize}px`, height: `${cellSize}px` }}
+    className={`board-cell relative flex shrink-0 aspect-square items-center justify-center transition-all duration-100 ${
+      cell ? 'board-cell--filled' : ''
+    } ${isMajorRight ? 'board-cell--gx' : ''} ${isMajorBottom ? 'board-cell--gy' : ''} ${
+      isLast ? 'z-10 bg-accent/20 ring-2 ring-accent' : ''
+    } ${isWinning ? 'z-20 bg-warning-soft ring-2 ring-warning' : ''}`}
+  >
+    {cell ? (
+      // The move that just landed gets a short drop, so a placement is
+      // confirmed by the board itself. Only the last cell is wrapped, so a
+      // 50x50 grid does not carry 2,500 extra nodes for one animation.
+      isLast ? (
+        <span className="animate-piece-drop flex h-full w-full items-center justify-center">
+          <PieceGlyph piece={cell} pieceTheme={pieceTheme} xColor={xColor} oColor={oColor} isWinning={isWinning} />
+        </span>
+      ) : (
+        <PieceGlyph piece={cell} pieceTheme={pieceTheme} xColor={xColor} oColor={oColor} isWinning={isWinning} />
+      )
+    ) : simulatedPiece ? (
+      <PieceGlyph
+        piece={simulatedPiece}
+        pieceTheme={pieceTheme}
+        xColor={xColor}
+        oColor={oColor}
+        isSimulated
+        customColor={simulatedColor}
+      />
+    ) : isHovered && !boardDisabled ? (
+      <div className="opacity-35 w-full h-full flex items-center justify-center">
+        <PieceGlyph piece={currentTurn} pieceTheme={pieceTheme} xColor={xColor} oColor={oColor} isSimulated />
+      </div>
+    ) : null}
+  </button>
+));
+
+BoardCell.displayName = 'BoardCell';
 
 export const Board: React.FC<BoardProps> = ({
   board,
@@ -49,16 +256,27 @@ export const Board: React.FC<BoardProps> = ({
   gameStatus = 'playing',
   gameResult,
   elapsedGameTime = 0,
-  onReturnToLobby,
+  opponentThinking = false,
+  modeLabel,
+  onExitMatch,
+  exitLabel = 'Exit match',
+  resultReason,
+  ratingNote,
+  resultActions,
+  countdown = null,
   onViewOpponentProfile,
   onViewMyProfile,
 }) => {
   const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
+  // Full-width wrapper, used only as the width source for the cell measurement.
+  const columnRef = useRef<HTMLDivElement>(null);
+  // Mirror of the board so the memoised cell callbacks stay identity-stable.
+  const boardRef = useRef(board);
+  boardRef.current = board;
 
   // Private local right-click simulated moves state
   const [simulatedMoves, setSimulatedMoves] = useState<SimulatedMove[]>([]);
-  // Hover cell state
   const [hoveredCell, setHoveredCell] = useState<[number, number] | null>(null);
 
   // Middle mouse click & drag pan state
@@ -70,28 +288,87 @@ export const Board: React.FC<BoardProps> = ({
     scrollTop: 0,
   });
 
-  // Calculate cell size dynamically for board size
-  const getCellPixelSize = (boardSize: number) => {
-    if (boardSize <= 15) return 42;
-    if (boardSize <= 19) return 38;
-    if (boardSize <= 30) return 36;
-    return 32; // 50x50 board: 32px x 32px per cell
-  };
+  // A fixed step per board size left a 15x15 grid floating inside a viewport
+  // sized frame. The cell is measured from the frame instead, so a small board
+  // fills it and a large one still hits a playable floor and scrolls.
+  const MIN_CELL = 26;
+  const MAX_CELL = 56;
+  const FRAME_PADDING = 48;
+  const ZOOM_STEP = 6;
+  /** Fitted size for this frame, and the player's offset from it. */
+  const [fittedCell, setFittedCell] = useState(() =>
+    Math.min(MAX_CELL, Math.max(MIN_CELL, Math.round(560 / size)))
+  );
+  const [zoomOffset, setZoomOffset] = useState(0);
+  const cellSize = Math.min(MAX_CELL, Math.max(MIN_CELL, fittedCell + zoomOffset));
+  const canZoomIn = cellSize < MAX_CELL;
+  const canZoomOut = cellSize > MIN_CELL;
 
-  const cellSize = getCellPixelSize(size);
-
-  // Always center board on mount or size change
   useEffect(() => {
-    if (containerRef.current) {
-      const el = containerRef.current;
-      el.scrollLeft = Math.max(0, (el.scrollWidth - el.clientWidth) / 2);
-      el.scrollTop = Math.max(0, (el.scrollHeight - el.clientHeight) / 2);
-    }
+    const frame = containerRef.current;
+    const column = columnRef.current;
+    if (!frame || !column) return;
+
+    const measure = () => {
+      // Width comes from the column, never from the frame: the frame's own
+      // width is capped by this cell size, so measuring it would feed the
+      // result back in and shrink the board a pixel on every pass.
+      const box = Math.min(column.clientWidth, frame.clientHeight) - FRAME_PADDING;
+      if (box <= 0) return;
+      const next = Math.min(MAX_CELL, Math.max(MIN_CELL, Math.floor(box / size)));
+      setFittedCell((current) => (current === next ? current : next));
+    };
+
+    // Both are watched: the column drives the width, the frame's viewport-unit
+    // height changes on its own when the window is resized. Re-measuring from
+    // the frame is safe because the frame's width is not an input.
+    const observer = new ResizeObserver(measure);
+    observer.observe(column);
+    observer.observe(frame);
+    measure();
+    return () => observer.disconnect();
   }, [size]);
+
+  const centreOnBoard = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.scrollLeft = Math.max(0, (el.scrollWidth - el.clientWidth) / 2);
+    el.scrollTop = Math.max(0, (el.scrollHeight - el.clientHeight) / 2);
+  }, []);
+
+  useEffect(() => {
+    centreOnBoard();
+  }, [size, centreOnBoard]);
+
+  // A board wider than its frame can put the move that just landed off screen,
+  // which is how a player loses their place on a 50x50 grid. Scroll it back
+  // into view, but only when it is actually outside.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !lastMove) return;
+
+    const [row, col] = lastMove;
+    const x = col * cellSize;
+    const y = row * cellSize;
+    const margin = cellSize * 2;
+
+    let left = el.scrollLeft;
+    let top = el.scrollTop;
+    if (x - margin < left) left = Math.max(0, x - margin);
+    else if (x + cellSize + margin > left + el.clientWidth) left = x + cellSize + margin - el.clientWidth;
+    if (y - margin < top) top = Math.max(0, y - margin);
+    else if (y + cellSize + margin > top + el.clientHeight) top = y + cellSize + margin - el.clientHeight;
+
+    if (left === el.scrollLeft && top === el.scrollTop) return;
+    el.scrollTo({ left, top, behavior: 'smooth' });
+  }, [lastMove, cellSize]);
 
   // Only clear simulated moves at coordinates where a real piece has been placed
   useEffect(() => {
-    setSimulatedMoves((prev) => prev.filter((m) => board[m.row][m.col] === null));
+    setSimulatedMoves((prev) => {
+      const next = prev.filter((m) => board[m.row]?.[m.col] === null);
+      return next.length === prev.length ? prev : next;
+    });
   }, [board]);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -162,30 +439,28 @@ export const Board: React.FC<BoardProps> = ({
     }
   };
 
-  const handleCellClickWithTouchCheck = (r: number, c: number) => {
+  // Stable identities keep BoardCell's memoisation effective.
+  const handleSelectCell = useCallback((r: number, c: number) => {
     if (touchStartRef.current.isMoved) return;
-    if (!disabled && !board[r][c]) {
-      onCellClick(r, c);
-    }
-  };
+    onCellClick(r, c);
+  }, [onCellClick]);
 
-  // Right-click to toggle private local simulated move
-  const handleCellContextMenu = (e: React.MouseEvent, r: number, c: number) => {
+  const handleHoverCell = useCallback((r: number, c: number) => {
+    setHoveredCell((prev) => (prev && prev[0] === r && prev[1] === c ? prev : [r, c]));
+  }, []);
+
+  // Right-click to toggle a private local simulated move
+  const handleCellContextMenu = useCallback((e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
-    if (board[r][c] !== null) return;
-
-    const existingIdx = simulatedMoves.findIndex((m) => m.row === r && m.col === c);
-    if (existingIdx >= 0) {
-      setSimulatedMoves((prev) => prev.filter((_, idx) => idx !== existingIdx));
-    } else {
-      let nextPiece: 'X' | 'O' = currentTurn;
-      if (simulatedMoves.length > 0) {
-        const lastSim = simulatedMoves[simulatedMoves.length - 1];
-        nextPiece = lastSim.piece === 'X' ? 'O' : 'X';
-      }
-      setSimulatedMoves((prev) => [...prev, { row: r, col: c, piece: nextPiece }]);
-    }
-  };
+    if (boardRef.current?.[r]?.[c] != null) return; // never sketch over a real piece
+    setSimulatedMoves((prev) => {
+      const existingIdx = prev.findIndex((m) => m.row === r && m.col === c);
+      if (existingIdx >= 0) return prev.filter((_, idx) => idx !== existingIdx);
+      const lastSim = prev[prev.length - 1];
+      const nextPiece: 'X' | 'O' = lastSim ? (lastSim.piece === 'X' ? 'O' : 'X') : currentTurn;
+      return [...prev, { row: r, col: c, piece: nextPiece }];
+    });
+  }, [currentTurn]);
 
   const getBoardThemeClass = () => {
     if (theme.boardTheme === 'light_wood') return 'board-theme-light-wood';
@@ -194,15 +469,8 @@ export const Board: React.FC<BoardProps> = ({
     return 'board-theme-graph-paper';
   };
 
-  const isWinningCell = (r: number, c: number) => {
-    if (!winningLine) return false;
-    return winningLine.some(([wr, wc]) => wr === r && wc === c);
-  };
-
-  const isLastMoveCell = (r: number, c: number) => {
-    if (!lastMove) return false;
-    return lastMove[0] === r && lastMove[1] === c;
-  };
+  const isWinningCell = (r: number, c: number) =>
+    Boolean(winningLine?.some(([wr, wc]) => wr === r && wc === c));
 
   const formatClock = (seconds: number) => {
     if (seconds <= 0) return 'Unlimited';
@@ -218,201 +486,164 @@ export const Board: React.FC<BoardProps> = ({
   };
 
   const isMyTurn = myPiece === currentTurn;
+  const opponentPiece: 'X' | 'O' = myPiece === 'X' ? 'O' : 'X';
 
-  const renderPiece = (cell: CellValue, r: number, c: number, isSimulated = false, customColor?: string) => {
-    if (!cell) return null;
-
-    const winning = !isSimulated && isWinningCell(r, c);
-    const simClass = isSimulated ? 'opacity-60 scale-95' : '';
-
-    if (theme.pieceTheme === 'calligraphic') {
-      const isX = cell === 'X';
-      const strokeColor = customColor || (isX ? theme.xColor || '#006699' : theme.oColor || '#e11d24');
-      if (isX) {
-        return (
-          <svg
-            viewBox="0 0 24 24"
-            className={`w-[78%] h-[78%] transition-transform shrink-0 ${simClass} ${winning ? 'animate-winning-cell' : ''}`}
-            fill="none"
-            stroke={strokeColor}
-            strokeWidth="4.2"
-            strokeLinecap="round"
-          >
-            <line x1="5" y1="5" x2="19" y2="19" />
-            <line x1="19" y1="5" x2="5" y2="19" />
-          </svg>
-        );
-      }
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          className={`w-[78%] h-[78%] transition-transform shrink-0 ${simClass} ${winning ? 'animate-winning-cell' : ''}`}
-          fill="none"
-          stroke={strokeColor}
-          strokeWidth="4.2"
-        >
-          <circle cx="12" cy="12" r="7.5" />
-        </svg>
-      );
-    }
-
-    if (theme.pieceTheme === 'laser') {
-      const isX = cell === 'X';
-      const laserColor = customColor || (isX ? theme.xColor || '#00f0ff' : theme.oColor || '#ff007f');
-
-      if (isX) {
-        return (
-          <svg
-            viewBox="0 0 24 24"
-            className={`w-[82%] h-[82%] transition-transform shrink-0 ${simClass} ${
-              winning ? 'animate-winning-cell' : ''
-            }`}
-            style={{
-              filter: `drop-shadow(0 0 4px ${laserColor}) drop-shadow(0 0 10px ${laserColor})`,
-            }}
-            fill="none"
-            stroke={laserColor}
-            strokeWidth="3.8"
-            strokeLinecap="round"
-          >
-            <line x1="5" y1="5" x2="19" y2="19" />
-            <line x1="19" y1="5" x2="5" y2="19" />
-          </svg>
-        );
-      }
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          className={`w-[82%] h-[82%] transition-transform shrink-0 ${simClass} ${
-            winning ? 'animate-winning-cell' : ''
-          }`}
-          style={{
-            filter: `drop-shadow(0 0 4px ${laserColor}) drop-shadow(0 0 10px ${laserColor})`,
-          }}
-          fill="none"
-          stroke={laserColor}
-          strokeWidth="3.8"
-        >
-          <circle cx="12" cy="12" r="7.5" />
-        </svg>
-      );
-    }
-
-    if (theme.pieceTheme === 'gomoku_3d') {
-      const isX = cell === 'X';
-      const activeColor = customColor || (isX ? theme.xColor : theme.oColor);
-      const stoneBg = activeColor
-        ? `radial-gradient(circle at 35% 35%, ${activeColor}, #0f172a)`
-        : undefined;
-
-      return (
-        <div
-          className={`${isX ? 'stone-black' : 'stone-white'} ${simClass} ${
-            winning ? 'animate-winning-cell ring-4 ring-amber-400' : ''
-          }`}
-          style={stoneBg ? { background: stoneBg } : undefined}
-        />
-      );
-    }
-
-    // Default Classic Style
-    const isX = cell === 'X';
-    const color = customColor || (isX ? theme.xColor || '#2563eb' : theme.oColor || '#dc2626');
-
-    return (
-      <span
-        className={`select-none font-black text-xl sm:text-2xl transition-transform ${simClass} ${
-          isX ? 'piece-blue-x' : 'piece-red-o'
-        } ${winning ? 'animate-winning-cell' : ''}`}
-        style={{ color }}
-      >
-        {cell}
-      </span>
-    );
-  };
+  // Each player is identified by the colour of their own piece. Using the UI
+  // accent for one seat and the danger colour for the other read as "opponent
+  // equals error", and ignored the colours the player actually picked.
+  const pieceColor = (piece: 'X' | 'O') =>
+    piece === 'X' ? theme.xColor || '#006699' : theme.oColor || '#e11d24';
+  const myColor = pieceColor(myPiece);
+  const opponentColor = pieceColor(opponentPiece);
+  const isTurnUrgent = gameStatus === 'playing' && turnTimeLeft > 0 && turnTimeLeft <= 5;
 
   return (
-    <div className="flex flex-col items-center justify-center w-full max-w-5xl mx-auto select-none space-y-2">
-      {/* ATTACHED MATCH STATUS HEADER BAR */}
-      <div className="w-full bg-white border border-slate-300 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3">
+    // The outer element stays full width so the cell measurement has a source
+    // the board's own size cannot feed back into. The inner stack is capped to
+    // the board, so the toolbar, the match header and the frame share one edge.
+    <div ref={columnRef} className="flex w-full justify-center select-none">
+      <div
+        style={{ maxWidth: cellSize * size + 40 }}
+        className="flex w-full max-w-5xl flex-col items-center justify-center space-y-3"
+      >
+      {/* MODE + EXIT ROW. The way out is present for the whole match, not only
+          once it has ended, so nobody has to resign to get back home. */}
+      <div className="flex w-full items-center justify-between gap-2">
+        <span className="chip">{modeLabel || 'Online match'}</span>
+        {/* Board controls and the way out are both chrome, so they travel
+            together on the right rather than one of them floating mid-row. */}
+        <div className="flex items-center gap-1">
+          {/* Board density is the player's call: fitting a 50x50 grid to the
+              frame is a sane start, not a size anyone can read comfortably. */}
+          <button
+            type="button"
+            onClick={() => setZoomOffset((z) => z - ZOOM_STEP)}
+            disabled={!canZoomOut}
+            className="btn btn-ghost btn-icon"
+            title="Smaller squares"
+            aria-label="Zoom out"
+          >
+            <Minus size={15} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={centreOnBoard}
+            className="btn btn-ghost btn-icon"
+            title="Centre the board"
+            aria-label="Centre the board"
+          >
+            <Crosshair size={15} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoomOffset((z) => z + ZOOM_STEP)}
+            disabled={!canZoomIn}
+            className="btn btn-ghost btn-icon"
+            title="Bigger squares"
+            aria-label="Zoom in"
+          >
+            <Plus size={15} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+
+          {onExitMatch && (
+            <>
+              <span aria-hidden="true" className="mx-1 h-5 w-px bg-line" />
+              <button type="button" onClick={onExitMatch} className="btn btn-ghost btn-sm">
+                {exitLabel}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* MATCH STATUS HEADER */}
+      <div
+        className="panel flex w-full flex-wrap items-center justify-between gap-3 p-3"
+      >
         {/* Player 1 (You) */}
-        <div
+        <button
+          type="button"
           onClick={onViewMyProfile}
-          title="Click to view/edit your profile"
-          className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition group p-1 rounded-xl hover:bg-slate-50"
+          title="View and edit your profile"
+          className={`flex items-center gap-2.5 rounded-md p-1.5 text-left transition-opacity hover:bg-surface-2 ${
+            gameStatus === 'playing' && !isMyTurn ? 'opacity-45' : ''
+          }`}
         >
           <img
             src={getAvatarPublicUrl(myUser?.photoURL)}
-            alt="You"
-            className="w-8 h-8 rounded-full border border-emerald-400 bg-white object-contain p-0.5 group-hover:border-emerald-600 shadow-xs"
+            alt=""
+            aria-hidden="true"
+            style={{ borderColor: myColor }}
+            className="h-8 w-8 shrink-0 rounded-full border-2 bg-surface object-contain p-0.5"
           />
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-slate-800 group-hover:text-emerald-700">{myUser?.displayName || 'You'}</span>
-              <span className="text-[10px] font-mono font-bold text-emerald-700">({myPiece})</span>
+              <span className="truncate text-sm font-medium text-ink">
+                {myUser?.displayName || 'You'}
+              </span>
+              <span
+                className="text-sm font-semibold leading-none"
+                style={{ color: myColor }}
+              >
+                {myPiece}
+              </span>
             </div>
-            <div className="text-[10px] font-mono text-slate-500">
-              Clock: <span className="font-bold text-slate-700">{formatClock(myTotalTimeLeft)}</span>
+            <div className="font-mono text-[11px] text-muted tabular-nums">
+              {formatClock(myTotalTimeLeft)}
             </div>
           </div>
-        </div>
+        </button>
 
         {/* Status Center Badge, Outcome & Controls */}
         <div className="flex items-center gap-2.5">
           {gameStatus === 'playing' ? (
             <>
+              {/* The label is prose and the countdown is data, so they get
+                  their own typefaces instead of one shouted mono string. */}
+              {/* Whose move it is outranks everything else on this screen, so
+                  it is the one element allowed to shout. The per-move countdown
+                  only appears when there is one: pairing the label with an
+                  infinity sign next to a running clock read as two competing
+                  timers with no stated relationship. */}
               <div
-                className={`text-xs font-mono font-bold px-3 py-1 rounded-xl border ${
+                aria-live="polite"
+                className={`flex items-center gap-2 rounded-full border px-4 py-1.5 text-base font-semibold transition-colors ${
                   isMyTurn
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300 animate-pulse'
-                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                    ? isTurnUrgent
+                      ? 'border-danger bg-danger-solid text-danger-fg'
+                      : 'border-accent bg-accent-soft text-accent-text'
+                    : 'border-line bg-surface-2 text-muted'
                 }`}
               >
-                {isMyTurn
-                  ? `YOUR TURN (${turnTimeLeft > 0 ? `${turnTimeLeft}s` : '∞'})`
-                  : `OPPONENT'S TURN (${turnTimeLeft > 0 ? `${turnTimeLeft}s` : '∞'})`}
+                <span>
+                  {isMyTurn ? 'Your turn' : opponentThinking ? 'Thinking' : "Opponent's turn"}
+                </span>
+                {turnTimeLeft > 0 && (
+                  <span className="font-mono text-sm tabular-nums opacity-80">{turnTimeLeft}s</span>
+                )}
               </div>
               <div
-                className="text-xs font-mono font-bold px-2.5 py-1 rounded-xl bg-slate-100 text-slate-700 border border-slate-300 flex items-center gap-1.5 shadow-xs"
+                className="flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 font-mono text-xs text-muted tabular-nums"
                 title="Match elapsed time"
               >
-                <span>⏱️</span>
+                <Timer size={13} strokeWidth={1.75} aria-hidden="true" />
                 <span>{formatElapsed(elapsedGameTime)}</span>
               </div>
             </>
-          ) : gameResult ? (
-            <div className="flex items-center gap-2">
-              <span
-                className={`text-xs font-mono font-bold px-3 py-1 rounded-xl border ${
-                  gameResult.winner === 'Victory!'
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                    : gameResult.winner === 'Defeat!'
-                    ? 'bg-rose-50 text-rose-700 border-rose-200'
-                    : 'bg-amber-50 text-amber-800 border-amber-300'
-                }`}
-              >
-                {gameResult.winner}
-              </span>
-              {onReturnToLobby && (
-                <button
-                  onClick={onReturnToLobby}
-                  className="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-[11px] font-bold text-slate-700 transition"
-                >
-                  Lobby
-                </button>
-              )}
-            </div>
           ) : (
-            <div className="text-xs font-mono font-bold px-3 py-1 rounded-xl border bg-slate-100 text-slate-600 border-slate-200">
-              MATCH ENDED
+            // The outcome itself lives in the result card below, next to the
+            // actions that follow from it. Two copies of it competed for
+            // attention and neither carried the reason.
+            <div className="rounded-full border border-line bg-surface-2 px-3 py-1 text-sm font-medium text-muted">
+              Match ended
             </div>
           )}
 
-          {/* Clear Simulation Button */}
           {simulatedMoves.length > 0 && (
             <button
               onClick={() => setSimulatedMoves([])}
-              className="px-2.5 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-[11px] font-bold text-amber-800 transition"
+              title="Clear your private right-click move sketches"
+              className="px-2.5 py-1 rounded-md bg-warning-soft hover:bg-warning/20 border border-warning text-[11px] font-medium text-warning transition cursor-pointer"
             >
               Clear Sim ({simulatedMoves.length})
             </button>
@@ -420,107 +651,164 @@ export const Board: React.FC<BoardProps> = ({
         </div>
 
         {/* Player 2 (Opponent) */}
-        <div
-          onClick={() => opponent && onViewOpponentProfile && onViewOpponentProfile(opponent)}
-          title={opponent ? "Click to view opponent's full profile & stats" : "Waiting for opponent..."}
-          className={`flex items-center gap-2.5 p-1 rounded-xl transition group ${
-            opponent ? 'cursor-pointer hover:opacity-85 hover:bg-slate-50' : 'opacity-70'
-          }`}
+        <button
+          type="button"
+          onClick={() => opponent && onViewOpponentProfile?.(opponent)}
+          disabled={!opponent}
+          title={opponent ? "View opponent's profile and stats" : 'Waiting for opponent...'}
+          className={`flex items-center gap-2.5 rounded-md p-1.5 text-right transition-opacity ${
+            opponent ? 'hover:bg-surface-2' : 'cursor-default'
+          } ${gameStatus === 'playing' && isMyTurn ? 'opacity-45' : ''}`}
         >
-          <div className="text-right">
-            <div className="flex items-center gap-1.5 justify-end">
-              <span className="text-xs font-bold text-slate-800 group-hover:text-rose-600">{opponent?.displayName || 'Waiting...'}</span>
-              <span className="text-[10px] font-mono font-bold text-rose-600">
-                ({myPiece === 'X' ? 'O' : 'X'})
+          <div className="min-w-0 text-right">
+            <div className="flex items-center justify-end gap-1.5">
+              <span className="truncate text-sm font-medium text-ink">
+                {opponent?.displayName || 'Waiting...'}
+              </span>
+              <span
+                className="text-sm font-semibold leading-none"
+                style={{ color: opponentColor }}
+              >
+                {opponentPiece}
               </span>
             </div>
-            <div className="text-[10px] font-mono text-slate-500">
-              Clock: <span className="font-bold text-slate-700">{formatClock(opponentTotalTimeLeft)}</span>
+            <div className="font-mono text-[11px] text-muted tabular-nums">
+              {formatClock(opponentTotalTimeLeft)}
             </div>
           </div>
           <img
             src={getAvatarPublicUrl(opponent?.photoURL)}
-            alt="Opponent"
-            className="w-8 h-8 rounded-full border border-rose-400 bg-white object-contain p-0.5 group-hover:border-rose-600 shadow-xs"
+            alt=""
+            aria-hidden="true"
+            style={{ borderColor: opponentColor }}
+            className="h-8 w-8 shrink-0 rounded-full border-2 bg-surface object-contain p-0.5"
           />
-        </div>
+        </button>
       </div>
 
-      {/* BOARD CONTAINER */}
-      <div
-        ref={containerRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onContextMenu={(e) => e.preventDefault()}
-        onMouseLeave={() => {
-          setIsPanning(false);
-          setHoveredCell(null);
-        }}
-        className={`board-scroll-container w-full h-[60vh] sm:h-[75vh] max-h-[850px] overflow-auto rounded-2xl p-2 sm:p-4 border-2 border-slate-300 ${
-          isPanning ? 'cursor-grabbing select-none' : 'cursor-grab'
-        } ${getBoardThemeClass()}`}
-      >
+      {/* RESULT. Outcome, why it happened and what to do next, as one block. */}
+      {gameStatus === 'ended' && gameResult && (
         <div
-          className="flex items-center justify-center p-3 sm:p-6 min-w-max min-h-max m-auto"
-          onContextMenu={(e) => e.preventDefault()}
+          role="status"
+          aria-live="polite"
+          className={`w-full card p-4 sm:p-5 text-center space-y-3 ${
+            gameResult.winner === 'Victory!'
+              ? 'border-accent'
+              : gameResult.winner === 'Defeat!'
+              ? 'border-danger'
+              : 'border-warning'
+          }`}
         >
-          <div
-            className="grid m-auto shrink-0 board-grid-inner"
-            onContextMenu={(e) => e.preventDefault()}
-            style={{
-              gridTemplateColumns: `repeat(${size}, ${cellSize}px)`,
-              gridTemplateRows: `repeat(${size}, ${cellSize}px)`,
-              width: 'max-content',
-              height: 'max-content',
-            }}
-          >
-            {board.map((row, rIdx) =>
-              row.map((cell, cIdx) => {
-                const last = isLastMoveCell(rIdx, cIdx);
-                const winning = isWinningCell(rIdx, cIdx);
-                const simItem = simulatedMoves.find((m) => m.row === rIdx && m.col === cIdx);
-                const isHovered = hoveredCell && hoveredCell[0] === rIdx && hoveredCell[1] === cIdx;
-
-                return (
-                  <button
-                    key={`${rIdx}-${cIdx}`}
-                    onClick={() => handleCellClickWithTouchCheck(rIdx, cIdx)}
-                    onContextMenu={(e) => handleCellContextMenu(e, rIdx, cIdx)}
-                    onMouseEnter={() => setHoveredCell([rIdx, cIdx])}
-                    disabled={cell !== null}
-                    style={{ width: `${cellSize}px`, height: `${cellSize}px` }}
-                    className={`board-cell relative flex items-center justify-center shrink-0 aspect-square transition-all duration-100 ${
-                      last ? 'ring-2 ring-blue-600 bg-blue-500/20 z-10' : ''
-                    } ${winning ? 'bg-amber-300/60 z-20 ring-2 ring-amber-500' : ''}`}
-                  >
-                    {/* 1. Real Piece */}
-                    {cell ? (
-                      renderPiece(cell, rIdx, cIdx)
-                    ) : simItem ? (
-                      /* 2. Simulated Move (Matches Active Piece Style) */
-                      renderPiece(
-                        simItem.piece,
-                        rIdx,
-                        cIdx,
-                        true,
-                        simItem.piece === myPiece
-                          ? theme.selfSimulatedColor || '#64748b'
-                          : theme.opponentSimulatedColor || '#64748b'
-                      )
-                    ) : isHovered && !disabled ? (
-                      /* 3. On-Hover Preview (Matches Active Piece Style) */
-                      <div className="opacity-35 w-full h-full flex items-center justify-center">
-                        {renderPiece(currentTurn, rIdx, cIdx, true)}
-                      </div>
-                    ) : null}
-                  </button>
-                );
-              })
-            )}
+          <div className="space-y-1">
+            <p
+              className={`text-xl font-semibold tracking-tight ${
+                gameResult.winner === 'Victory!'
+                  ? 'text-accent-text'
+                  : gameResult.winner === 'Defeat!'
+                  ? 'text-danger'
+                  : 'text-warning'
+              }`}
+            >
+              {gameResult.winner}
+            </p>
+            {resultReason && <p className="text-sm text-muted">{resultReason}</p>}
+            {ratingNote && <p className="text-xs font-mono text-subtle">{ratingNote}</p>}
           </div>
+          {resultActions && (
+            <div className="flex flex-wrap items-center justify-center gap-2">{resultActions}</div>
+          )}
+        </div>
+      )}
+
+      {/* BOARD CONTAINER. Wrapped so the count-in can cover exactly the board
+          and nothing else. */}
+      <div className="relative w-full">
+        <div
+          ref={containerRef}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onContextMenu={(e) => e.preventDefault()}
+          onMouseLeave={() => {
+            setIsPanning(false);
+            setHoveredCell(null);
+          }}
+          className={`board-scroll-container mx-auto h-[58dvh] w-full max-h-[850px] overflow-auto rounded-lg border border-line-strong p-2 sm:h-[72dvh] sm:p-3 ${
+            isPanning ? 'cursor-grabbing select-none' : 'cursor-grab'
+          } ${getBoardThemeClass()}`}
+        >
+          <div className="m-auto flex min-h-max min-w-max items-center justify-center">
+            <div
+              className="grid m-auto shrink-0 board-grid-inner"
+              style={{
+                gridTemplateColumns: `repeat(${size}, ${cellSize}px)`,
+                gridTemplateRows: `repeat(${size}, ${cellSize}px)`,
+                width: 'max-content',
+                height: 'max-content',
+              }}
+            >
+              {board.map((row, rIdx) =>
+                row.map((cell, cIdx) => {
+                  const simItem = simulatedMoves.find((m) => m.row === rIdx && m.col === cIdx);
+                  return (
+                    <BoardCell
+                      key={`${rIdx}-${cIdx}`}
+                      row={rIdx}
+                      col={cIdx}
+                      cell={cell}
+                      cellSize={cellSize}
+                      isLast={Boolean(lastMove && lastMove[0] === rIdx && lastMove[1] === cIdx)}
+                      isWinning={isWinningCell(rIdx, cIdx)}
+                      isHovered={Boolean(hoveredCell && hoveredCell[0] === rIdx && hoveredCell[1] === cIdx)}
+                      isMajorRight={(cIdx + 1) % 5 === 0 && cIdx + 1 < size}
+                      isMajorBottom={(rIdx + 1) % 5 === 0 && rIdx + 1 < size}
+                      simulatedPiece={simItem ? simItem.piece : null}
+                      simulatedColor={
+                        simItem
+                          ? simItem.piece === myPiece
+                            ? theme.selfSimulatedColor || '#64748b'
+                            : theme.opponentSimulatedColor || '#64748b'
+                          : undefined
+                      }
+                      currentTurn={currentTurn}
+                      boardDisabled={disabled}
+                      pieceTheme={theme.pieceTheme}
+                      xColor={theme.xColor}
+                      oColor={theme.oColor}
+                      onSelect={handleSelectCell}
+                      onContextMenu={handleCellContextMenu}
+                      onHover={handleHoverCell}
+                    />
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        {countdown !== null && (
+          <div
+            role="status"
+            aria-live="assertive"
+            className="absolute inset-0 z-30 flex items-center justify-center rounded-lg bg-[var(--ui-scrim)] backdrop-blur-[2px]"
+          >
+            <div className="rounded-lg border border-line-strong bg-surface px-8 py-6 text-center shadow-2xl">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">
+                Get ready
+              </p>
+              <p className="mt-1 font-mono text-5xl font-semibold tabular-nums text-ink">
+                {countdown}
+              </p>
+              <p className="mt-2 text-xs text-muted">
+                {isMyTurn
+                  ? `You move first, as ${myPiece}`
+                  : `${opponent?.displayName || 'Your opponent'} moves first`}
+              </p>
+            </div>
+          </div>
+        )}
         </div>
       </div>
     </div>

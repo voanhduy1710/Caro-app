@@ -3,7 +3,23 @@ import type { MatchRecord } from './types';
 
 const LOCAL_HISTORY_KEY = 'caro_app_match_history';
 
-export const saveMatchRecord = async (record: Omit<MatchRecord, 'id' | 'timestamp'>): Promise<void> => {
+export interface SaveMatchOutcome {
+  eloDeltaPlayer1: number;
+  eloDeltaPlayer2: number;
+}
+
+/**
+ * Records a finished match.
+ *
+ * The write goes through the submit-match edge function, which recomputes the
+ * ratings from the values already in the database. The client used to insert the
+ * row and its own ELO numbers directly, so any player could award themselves any
+ * rating they liked.
+ */
+export const saveMatchRecord = async (
+  record: Omit<MatchRecord, 'id' | 'timestamp'>,
+  options: { localOnly?: boolean } = {}
+): Promise<SaveMatchOutcome | null> => {
   const timestamp = Date.now();
   const fullRecord: MatchRecord = {
     ...record,
@@ -11,7 +27,7 @@ export const saveMatchRecord = async (record: Omit<MatchRecord, 'id' | 'timestam
     timestamp,
   };
 
-  // Always save to localStorage as backup
+  // Always keep a local copy so history works offline too.
   try {
     const existing = localStorage.getItem(LOCAL_HISTORY_KEY);
     const historyList: MatchRecord[] = existing ? JSON.parse(existing) : [];
@@ -21,75 +37,66 @@ export const saveMatchRecord = async (record: Omit<MatchRecord, 'id' | 'timestam
     console.warn('Failed to save match history to localStorage:', e);
   }
 
-  // Save to Supabase DB if configured
-  if (isSupabaseConfigured && supabase) {
-    const sb = supabase;
-    try {
-      await sb.from('gomoku_matches').insert({
-        board_size: record.boardSize,
-        winner_uid: record.winnerUid,
-        player1_uid: record.player1Uid,
-        player1_name: record.player1Name,
-        player2_uid: record.player2Uid,
-        player2_name: record.player2Name,
-        elo_delta_player1: record.eloDeltaPlayer1,
-        elo_delta_player2: record.eloDeltaPlayer2,
-        timestamp: new Date().toISOString(),
-      });
+  // Practice games have no second player and no rating at stake, so there is
+  // nothing for the server to verify. They live on this device only.
+  if (options.localOnly) return { eloDeltaPlayer1: 0, eloDeltaPlayer2: 0 };
 
-      // Helper function to update player stats in Supabase gomoku_users for registered users
-      const updatePlayerStats = async (uid: string, displayName: string, eloDelta: number, isWin: boolean, isDraw: boolean) => {
-        if (!uid || uid.startsWith('guest_') || uid === 'ai_bot') return;
+  if (!isSupabaseConfigured || !supabase) return null;
 
-        const { data: userRow } = await sb
-          .from('gomoku_users')
-          .select('elo, wins, losses, draws, streak, photo_url')
-          .eq('uid', uid)
-          .maybeSingle();
+  try {
+    const { data, error } = await supabase.functions.invoke('submit-match', {
+      body: {
+        mode: record.mode ?? 'pvp',
+        boardSize: record.boardSize,
+        winnerUid: record.winnerUid,
+        player1Uid: record.player1Uid,
+        player1Name: record.player1Name,
+        player2Uid: record.player2Uid,
+        player2Name: record.player2Name,
+      },
+    });
 
-        const currentElo = userRow?.elo ?? 1200;
-        const currentWins = userRow?.wins ?? 0;
-        const currentLosses = userRow?.losses ?? 0;
-        const currentDraws = userRow?.draws ?? 0;
-        const currentStreak = userRow?.streak ?? 0;
-
-        await sb.from('gomoku_users').upsert({
-          uid: uid,
-          display_name: displayName,
-          photo_url: userRow?.photo_url || '/Avatar/Zerom.gif',
-          elo: currentElo + eloDelta,
-          wins: currentWins + (isWin ? 1 : 0),
-          losses: currentLosses + (!isWin && !isDraw ? 1 : 0),
-          draws: currentDraws + (isDraw ? 1 : 0),
-          streak: isWin ? currentStreak + 1 : 0,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'uid' });
-      };
-
-      await updatePlayerStats(
-        record.player1Uid,
-        record.player1Name,
-        record.eloDeltaPlayer1,
-        record.winnerUid === record.player1Uid,
-        record.winnerUid === 'DRAW'
-      );
-
-      await updatePlayerStats(
-        record.player2Uid,
-        record.player2Name,
-        record.eloDeltaPlayer2,
-        record.winnerUid === record.player2Uid,
-        record.winnerUid === 'DRAW'
-      );
-    } catch (err) {
-      console.error('Supabase saveMatchRecord error:', err);
+    if (error) {
+      console.error('submit-match failed:', error.message);
+      return null;
     }
+    if (data?.error) {
+      console.error('submit-match rejected the result:', data.error);
+      return null;
+    }
+
+    return {
+      eloDeltaPlayer1: data?.player1?.delta ?? 0,
+      eloDeltaPlayer2: data?.player2?.delta ?? 0,
+    };
+  } catch (err) {
+    console.error('submit-match request threw:', err);
+    return null;
+  }
+};
+
+/** PostgREST filters are comma and dot delimited, so only these may be inlined. */
+const SAFE_UID = /^[A-Za-z0-9_-]{1,128}$/;
+
+/** Records stored on this device that belong to the player who is asking. */
+const readLocalHistory = (userUid: string): MatchRecord[] => {
+  try {
+    const existing = localStorage.getItem(LOCAL_HISTORY_KEY);
+    const all: MatchRecord[] = existing ? JSON.parse(existing) : [];
+    if (!Array.isArray(all)) return [];
+    // Several accounts can share one browser, so a record only belongs to the
+    // current player if their id is actually on it.
+    return all.filter((m) => m.player1Uid === userUid || m.player2Uid === userUid);
+  } catch {
+    return [];
   }
 };
 
 export const fetchUserMatchHistory = async (userUid: string): Promise<MatchRecord[]> => {
+  const local = readLocalHistory(userUid);
+
   // Check Supabase if configured
-  if (isSupabaseConfigured && supabase && userUid && !userUid.startsWith('guest_')) {
+  if (isSupabaseConfigured && supabase && userUid && SAFE_UID.test(userUid) && !userUid.startsWith('guest_')) {
     const sb = supabase;
     try {
       const { data, error } = await sb
@@ -101,10 +108,11 @@ export const fetchUserMatchHistory = async (userUid: string): Promise<MatchRecor
 
       if (error) {
         console.warn('Supabase fetch match history error:', error);
-      } else if (data && data.length > 0) {
+      } else if (data) {
         const records: MatchRecord[] = data.map((row) => ({
           id: row.id,
           boardSize: row.board_size ?? 15,
+          mode: row.mode ?? 'pvp',
           timerConfig: 'Blitz (15s)',
           winnerUid: row.winner_uid,
           winnerName: row.winner_uid === row.player1_uid ? row.player1_name : (row.winner_uid === row.player2_uid ? row.player2_name : 'DRAW'),
@@ -116,18 +124,16 @@ export const fetchUserMatchHistory = async (userUid: string): Promise<MatchRecor
           eloDeltaPlayer2: row.elo_delta_player2 ?? 0,
           timestamp: new Date(row.timestamp).getTime(),
         }));
-        return records;
+
+        // Practice games are never sent to the server, so the two sources have
+        // to be merged or half the player's history would silently disappear.
+        const practice = local.filter((m) => m.mode === 'ai');
+        return [...records, ...practice].sort((a, b) => b.timestamp - a.timestamp);
       }
     } catch (e) {
       console.warn('Supabase fetch match history exception, returning local history:', e);
     }
   }
 
-  // Fallback to local storage history
-  try {
-    const existing = localStorage.getItem(LOCAL_HISTORY_KEY);
-    return existing ? JSON.parse(existing) : [];
-  } catch {
-    return [];
-  }
+  return local.sort((a, b) => b.timestamp - a.timestamp);
 };

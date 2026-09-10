@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { ListSkeleton } from '../../shared/components/ListSkeleton';
+import { X } from 'lucide-react';
 import { fetchTopLeaderboard } from './leaderboardService';
 import type { UserProfile } from '../auth/AuthContext';
 import { getRankTitle } from '../../shared/utils/eloCalculator';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
+import { useModalChrome } from '../../shared/hooks/useModalChrome';
 
 interface LeaderboardModalProps {
   isOpen: boolean;
@@ -11,6 +14,7 @@ interface LeaderboardModalProps {
 }
 
 export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onClose, onSelectPlayer }) => {
+  const dialogProps = useModalChrome(isOpen, onClose, 'leaderboard-modal-title');
   const [players, setPlayers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -30,36 +34,36 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-      <div className="bg-white text-slate-800 w-full max-w-lg max-h-[85vh] rounded-2xl p-6 relative border border-slate-200 shadow-2xl flex flex-col">
+    <div {...dialogProps} className="modal-scrim">
+      <div className="modal-panel max-w-lg max-h-[85vh] relative p-6 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+        <div className="flex items-center justify-between mb-4 border-b border-line pb-3">
           <div>
-            <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Global Leaderboard</h2>
-            <p className="text-[11px] text-slate-500 font-medium">Top rankings sorted by player ELO score</p>
+            <h2 id="leaderboard-modal-title" className="text-lg font-semibold text-ink tracking-tight">Global Leaderboard</h2>
+            <p className="text-[11px] text-muted font-medium">Top rankings sorted by player ELO score</p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={loadLeaderboard}
-              className="px-2.5 py-1 rounded bg-emerald-50 border border-emerald-300 text-[11px] font-mono text-emerald-800 font-bold hover:bg-emerald-100"
+              className="btn btn-tonal btn-sm"
             >
               Refresh
             </button>
             <button
               onClick={onClose}
-              className="text-slate-400 hover:text-slate-700 text-xl font-bold p-1 ml-1"
-            >
-              ×
-            </button>
+              className="btn btn-ghost btn-icon ml-1"
+             aria-label="Close">
+            <X size={18} strokeWidth={1.75} aria-hidden="true" />
+          </button>
           </div>
         </div>
 
         {/* Leaderboard Table Content */}
         <div className="flex-1 overflow-y-auto space-y-2 pr-1">
           {loading ? (
-            <div className="py-12 text-center text-slate-500 text-xs font-mono">Loading rankings...</div>
+            <ListSkeleton rows={5} round />
           ) : players.length === 0 ? (
-            <div className="py-12 text-center text-slate-500 text-xs">No rankings recorded yet.</div>
+            <div className="py-12 text-center text-muted text-xs">No rankings recorded yet.</div>
           ) : (
             players.map((p, idx) => {
               const rankInfo = getRankTitle(p.elo);
@@ -72,14 +76,14 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
                   key={p.uid || idx}
                   onClick={() => onSelectPlayer && onSelectPlayer(p)}
                   title="Click to view full player profile"
-                  className={`p-3 rounded-xl flex items-center justify-between transition border cursor-pointer hover:scale-[1.01] ${
+                  className={`p-3 rounded-md flex items-center justify-between transition border cursor-pointer hover:scale-[1.01] ${
                     idx === 0
-                      ? 'bg-amber-50/80 border-amber-300 shadow-sm hover:bg-amber-100'
-                      : 'bg-slate-50 border-slate-200 hover:border-emerald-400 hover:bg-slate-100'
+                      ? 'bg-warning-soft border-warning shadow-sm hover:bg-warning/20'
+                      : 'bg-surface-2 border-line hover:border-accent hover:bg-surface-3'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs font-bold text-emerald-700 w-6">
+                    <span className="font-mono text-xs font-medium text-accent-text w-6">
                       #{formattedRank}
                     </span>
                     <img
@@ -88,24 +92,24 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
                       onError={(e) => {
                         e.currentTarget.src = '/Avatar/Zerom.gif';
                       }}
-                      className="w-8 h-8 rounded-full border border-emerald-400 bg-white object-contain p-0.5 shadow-xs"
+                      className="w-8 h-8 rounded-full border border-accent bg-surface object-contain p-0.5 shadow-xs"
                     />
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-800">{p.displayName}</span>
-                        <span className={`text-[9px] px-1.5 py-0.2 rounded border ${rankInfo.color} font-mono font-bold bg-white`}>
+                        <span className="text-xs font-medium text-ink">{p.displayName}</span>
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded-sm border ${rankInfo.color} font-mono font-medium bg-surface`}>
                           {rankInfo.title}
                         </span>
                       </div>
-                      <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                      <div className="text-[10px] text-muted font-mono mt-0.5">
                         {p.wins || 0}W - {p.losses || 0}L ({winRate}% Win)
                       </div>
                     </div>
                   </div>
 
                   <div className="text-right font-mono">
-                    <div className="text-sm font-extrabold text-emerald-700">{p.elo} ELO</div>
-                    <div className="text-[10px] text-slate-500">Streak: {p.streak || 0}</div>
+                    <div className="text-sm font-semibold text-accent-text">{p.elo} ELO</div>
+                    <div className="text-[10px] text-muted">Streak: {p.streak || 0}</div>
                   </div>
                 </div>
               );

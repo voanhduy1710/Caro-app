@@ -1,0 +1,283 @@
+/* =============================================================================
+   Design tokens - Antigravity-derived system
+   Reference: https://antigravity.google - the type scale, spacing steps, shape
+   scale, easing set and surface colours were read off their shipped stylesheet.
+   The accent is Antigravity green rather than their blue, because blue collides
+   with player X's piece colour (#006699).
+   ========================================================================== */
+
+/* --- Self-hosted variable fonts -------------------------------------------
+   Never <link> Google Fonts in production. Latin + latin-ext + vietnamese
+   subsets ship because the UI copy is bilingual.                            */
+
+@font-face {
+  font-family: 'Google Sans Flex';
+  font-style: normal;
+  font-weight: 300 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/google-sans-flex-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Google Sans Flex';
+  font-style: normal;
+  font-weight: 300 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/google-sans-flex-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1,
+    U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329,
+    U+1EA0-1EF9, U+20AB;
+}
+
+@font-face {
+  font-family: 'Google Sans Flex';
+  font-style: normal;
+  font-weight: 300 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/google-sans-flex-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Google Sans Code';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/google-sans-code-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Google Sans Code';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/google-sans-code-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1,
+    U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329,
+    U+1EA0-1EF9, U+20AB;
+}
+
+@font-face {
+  font-family: 'Google Sans Code';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/google-sans-code-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* --- Runtime theme values --------------------------------------------------
+   Page Theme Lock: the whole app is one theme. These swap as a set, so no
+   section can flip mid-page. Light is the base definition; dark redefines only
+   the values, guarded so an explicit light choice always wins.              */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --ui-bg: #eff0f3;
+  --ui-surface: #ffffff;
+  --ui-surface-2: #f7f8fa;
+  --ui-surface-3: #eceef1;
+  --ui-border: #dcdfe4;
+  --ui-border-strong: #c3c7cf;
+
+  /* Text - all verified >= WCAG AA against --ui-surface */
+  --ui-text: #121317;
+  --ui-text-muted: #5c6069;
+  --ui-text-subtle: #797d86;
+
+  /* Accent: Antigravity green. #00b95c carries DARK text (8.0:1), never white
+     (2.6:1, fails AA). --ui-accent-text is the darkened variant used for
+     accent-coloured text on light surfaces (5.8:1).                         */
+  --ui-accent: #00b95c;
+  --ui-accent-hover: #00a852;
+  --ui-accent-fg: #06231a;
+  --ui-accent-text: #00753a;
+  --ui-accent-soft: #e6f7ee;
+  --ui-accent-ring: rgb(0 185 92 / 0.35);
+
+  /* Inverse surface, for toasts and high-emphasis pills that need to sit
+     against the page rather than in it. */
+  --ui-inverse: #121317;
+  --ui-inverse-fg: #eff0f3;
+
+  /* Status. `-solid` is the filled-button background and always pairs with its
+     `-fg`; the bare token is the text/icon colour and is never a background
+     for light text. Both stay fixed across modes so the pairing cannot drift
+     out of contrast when the theme swaps. */
+  --ui-danger: #c9302c;
+  --ui-danger-soft: #fdeceb;
+  --ui-danger-solid: #c9302c;
+  --ui-danger-fg: #ffffff;
+  --ui-warning: #8a6100;
+  --ui-warning-soft: #fdf4e0;
+  --ui-warning-solid: #fbbc04;
+  --ui-warning-fg: #2d2000;
+  --ui-info: #1a63d8;
+  --ui-info-soft: #e8f0fe;
+
+  --ui-shadow: 0 1px 2px rgb(18 19 23 / 0.06), 0 8px 24px -12px rgb(18 19 23 / 0.18);
+  --ui-shadow-lg: 0 2px 4px rgb(18 19 23 / 0.06), 0 24px 60px -20px rgb(18 19 23 / 0.28);
+  --ui-scrim: rgb(18 19 23 / 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-ui-theme='light']) {
+    color-scheme: dark;
+
+    --ui-bg: #121317;
+    --ui-surface: #191b20;
+    --ui-surface-2: #212429;
+    --ui-surface-3: #2a2d33;
+    --ui-border: #2f3034;
+    --ui-border-strong: #45474d;
+
+    --ui-text: #eff0f3;
+    --ui-text-muted: #a8acb4;
+    --ui-text-subtle: #868a93;
+
+    /* On #121317 the bright green reads at 7.1:1, so it doubles as text. */
+    --ui-accent: #00b95c;
+    --ui-accent-hover: #1ccb70;
+    --ui-accent-fg: #06231a;
+    --ui-accent-text: #38d17f;
+    --ui-accent-soft: rgb(0 185 92 / 0.14);
+    --ui-accent-ring: rgb(0 185 92 / 0.45);
+
+    --ui-inverse: #eff0f3;
+    --ui-inverse-fg: #121317;
+    --ui-danger: #ff7b77;
+    --ui-danger-solid: #c9302c;
+    --ui-danger-fg: #ffffff;
+    --ui-danger-soft: rgb(252 65 61 / 0.14);
+    --ui-warning: #f5c344;
+    --ui-warning-solid: #fbbc04;
+    --ui-warning-fg: #2d2000;
+    --ui-warning-soft: rgb(251 188 4 / 0.14);
+    --ui-info: #749bff;
+    --ui-info-soft: rgb(49 134 255 / 0.16);
+
+    --ui-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px -12px rgb(0 0 0 / 0.7);
+    --ui-shadow-lg: 0 2px 4px rgb(0 0 0 / 0.5), 0 24px 60px -20px rgb(0 0 0 / 0.8);
+    --ui-scrim: rgb(0 0 0 / 0.6);
+  }
+}
+
+:root[data-ui-theme='dark'] {
+  color-scheme: dark;
+
+  --ui-bg: #121317;
+  --ui-surface: #191b20;
+  --ui-surface-2: #212429;
+  --ui-surface-3: #2a2d33;
+  --ui-border: #2f3034;
+  --ui-border-strong: #45474d;
+
+  --ui-text: #eff0f3;
+  --ui-text-muted: #a8acb4;
+  --ui-text-subtle: #868a93;
+
+  --ui-accent: #00b95c;
+  --ui-accent-hover: #1ccb70;
+  --ui-accent-fg: #06231a;
+  --ui-accent-text: #38d17f;
+  --ui-accent-soft: rgb(0 185 92 / 0.14);
+  --ui-accent-ring: rgb(0 185 92 / 0.45);
+
+  --ui-inverse: #eff0f3;
+  --ui-inverse-fg: #121317;
+  --ui-danger: #ff7b77;
+  --ui-danger-solid: #c9302c;
+  --ui-danger-fg: #ffffff;
+  --ui-danger-soft: rgb(252 65 61 / 0.14);
+  --ui-warning: #f5c344;
+  --ui-warning-solid: #fbbc04;
+  --ui-warning-fg: #2d2000;
+  --ui-warning-soft: rgb(251 188 4 / 0.14);
+  --ui-info: #749bff;
+  --ui-info-soft: rgb(49 134 255 / 0.16);
+
+  --ui-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px -12px rgb(0 0 0 / 0.7);
+  --ui-shadow-lg: 0 2px 4px rgb(0 0 0 / 0.5), 0 24px 60px -20px rgb(0 0 0 / 0.8);
+  --ui-scrim: rgb(0 0 0 / 0.6);
+}
+
+/* --- Tailwind theme --------------------------------------------------------
+   @theme inline keeps the var() reference inside the generated utility, so
+   bg-surface / text-muted resolve at runtime and follow the swap above. No
+   dark: variant is needed anywhere in the markup.                           */
+
+@theme inline {
+  --font-sans: 'Google Sans Flex', 'Google Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Google Sans Code', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --color-bg: var(--ui-bg);
+  --color-surface: var(--ui-surface);
+  --color-surface-2: var(--ui-surface-2);
+  --color-surface-3: var(--ui-surface-3);
+  --color-line: var(--ui-border);
+  --color-line-strong: var(--ui-border-strong);
+
+  --color-ink: var(--ui-text);
+  --color-muted: var(--ui-text-muted);
+  --color-subtle: var(--ui-text-subtle);
+
+  --color-accent: var(--ui-accent);
+  --color-accent-hover: var(--ui-accent-hover);
+  --color-accent-fg: var(--ui-accent-fg);
+  --color-accent-text: var(--ui-accent-text);
+  --color-accent-soft: var(--ui-accent-soft);
+
+  --color-inverse: var(--ui-inverse);
+  --color-inverse-fg: var(--ui-inverse-fg);
+
+  --color-danger: var(--ui-danger);
+  --color-danger-soft: var(--ui-danger-soft);
+  --color-danger-solid: var(--ui-danger-solid);
+  --color-danger-fg: var(--ui-danger-fg);
+  --color-warning: var(--ui-warning);
+  --color-warning-soft: var(--ui-warning-soft);
+  --color-warning-solid: var(--ui-warning-solid);
+  --color-warning-fg: var(--ui-warning-fg);
+  --color-info: var(--ui-info);
+  --color-info-soft: var(--ui-info-soft);
+
+  /* Shape Consistency Lock. The documented rule:
+       full - buttons, chips, badges, avatars
+       lg   - modals, primary panels
+       md   - nested cards, rows, inputs
+       sm   - micro tags, board frame                                        */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 36px;
+
+  /* The reference's spacing steps are 4 / 8 / 16 / 24 / 36 / 48 / 60 / 80 and
+     the component rules below follow them literally. They are deliberately NOT
+     registered as --spacing-* theme keys: Tailwind resolves max-w-* and w-*
+     against the spacing namespace before the container one, so naming a step
+     "md" or "4xl" silently redefines max-w-md and max-w-4xl. */
+
+  --shadow-e1: var(--ui-shadow);
+  --shadow-e2: var(--ui-shadow-lg);
+
+  /* Antigravity easing set */
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.85, 0.64, 1);
+  --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
+}

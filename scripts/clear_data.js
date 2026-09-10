@@ -1,57 +1,30 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+/**
+ * Wipes every user and match row. Irreversible, so it needs --yes.
+ *
+ *   node scripts/clear_data.js --yes
+ */
 import { createClient } from '@supabase/supabase-js';
+import { loadEnv, require_, requireConfirmation } from './_env.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+requireConfirmation('this deletes every row in gomoku_users and gomoku_matches');
 
-const envPath = path.resolve(__dirname, '../.env');
-const envContent = fs.readFileSync(envPath, 'utf8');
-const envVars = {};
-envContent.split('\n').forEach((line) => {
-  const [key, ...vals] = line.split('=');
-  if (key && vals.length > 0) {
-    envVars[key.trim()] = vals.join('=').trim();
-  }
-});
-
-const supabaseUrl = envVars['VITE_SUPABASE_URL'];
-const supabaseAnonKey = envVars['VITE_SUPABASE_ANON_KEY'];
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Supabase URL or Key missing in .env');
-  process.exit(1);
-}
+const env = loadEnv();
+const supabaseUrl = require_(env, 'VITE_SUPABASE_URL');
+const supabaseAnonKey = require_(env, 'VITE_SUPABASE_ANON_KEY');
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function main() {
-  console.log('Clearing all old users and match records from Supabase...');
+  console.log('Clearing all users and match records...');
 
-  const { data: users, error: err1 } = await supabase
-    .from('gomoku_users')
-    .delete()
-    .neq('uid', '0');
+  const { error: usersError } = await supabase.from('gomoku_users').delete().neq('uid', '0');
+  console.log(usersError ? `gomoku_users failed: ${usersError.message}` : 'gomoku_users cleared');
 
-  if (err1) {
-    console.warn('Delete gomoku_users error:', err1.message);
-  } else {
-    console.log('Successfully cleared gomoku_users table!');
-  }
-
-  const { data: matches, error: err2 } = await supabase
-    .from('gomoku_matches')
-    .delete()
-    .neq('id', 0);
-
-  if (err2) {
-    console.warn('Delete gomoku_matches error:', err2.message);
-  } else {
-    console.log('Successfully cleared gomoku_matches table!');
-  }
-
-  console.log('Data wipe complete!');
+  const { error: matchesError } = await supabase.from('gomoku_matches').delete().neq('id', '0');
+  console.log(matchesError ? `gomoku_matches failed: ${matchesError.message}` : 'gomoku_matches cleared');
 }
 
-main().catch(console.error);
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

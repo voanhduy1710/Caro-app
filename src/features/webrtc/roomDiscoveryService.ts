@@ -21,6 +21,9 @@ class RoomDiscoveryManager {
   private activeRoomsMap: Map<string, ActiveRoomInfo> = new Map();
   private listeners: Array<(rooms: ActiveRoomInfo[]) => void> = [];
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private pollInterval: ReturnType<typeof setInterval> | null = null;
+  private currentList: ActiveRoomInfo[] = [];
+  private listSignature = '';
   private currentHostedRoomId: string | null = null;
   private currentHostUser: UserProfile | null = null;
   private currentBoardSize: number = 50;
@@ -91,12 +94,23 @@ class RoomDiscoveryManager {
       }
     }
 
-    // Periodic 2s cleanup and sync
-    setInterval(() => {
+    this.syncFromLocalStorage();
+  }
+
+  // The poll only runs while something is actually listening. It used to run
+  // for the lifetime of the tab and re-render the whole app every 2 seconds,
+  // including in the middle of a match.
+  private startPolling() {
+    if (this.pollInterval) return;
+    this.pollInterval = setInterval(() => {
       this.syncFromLocalStorage();
     }, 2000);
+  }
 
-    this.syncFromLocalStorage();
+  private stopPolling() {
+    if (!this.pollInterval) return;
+    clearInterval(this.pollInterval);
+    this.pollInterval = null;
   }
 
   private syncFromLocalStorage() {
@@ -199,11 +213,27 @@ class RoomDiscoveryManager {
     const activeList = Array.from(this.activeRoomsMap.values()).sort(
       (a, b) => b.createdAt - a.createdAt
     );
+
+    // Heartbeats rewrite lastHeartbeat every couple of seconds without the
+    // lobby actually changing. Compare only what the UI shows, so subscribers
+    // re-render when a room really appears, disappears or is renamed.
+    const signature = activeList
+      .map((room) => `${room.roomId}|${room.hostName}|${room.hostAvatar || ''}|${room.boardSize}`)
+      .join('~');
+
+    this.currentList = activeList;
+    if (signature === this.listSignature) return;
+    this.listSignature = signature;
+
     this.listeners.forEach((fn) => fn(activeList));
   }
 
   public subscribe(fn: (rooms: ActiveRoomInfo[]) => void) {
     this.listeners.push(fn);
+    this.startPolling();
+    // Hand the newcomer the current list directly; notifyListeners is allowed
+    // to stay silent when nothing changed.
+    fn(this.currentList);
     this.syncFromLocalStorage();
     if (this.supabaseChannel) {
       try {
@@ -216,12 +246,13 @@ class RoomDiscoveryManager {
     }
     return () => {
       this.listeners = this.listeners.filter((l) => l !== fn);
+      if (this.listeners.length === 0) this.stopPolling();
     };
   }
 
   // Host starts broadcasting heartbeats for an open room
   public startHostingRoom(roomId: string, user: UserProfile | null, boardSize: number) {
-    this.stopHostingRoom(roomId);
+    if (this.currentHostedRoomId) this.stopHostingRoom(this.currentHostedRoomId);
 
     this.currentHostedRoomId = roomId;
     this.currentHostUser = user;
@@ -235,12 +266,13 @@ class RoomDiscoveryManager {
 
   // Host stops room (game started or room left)
   public stopHostingRoom(roomId: string) {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-
+    // Only the room that owns the heartbeat may stop it, otherwise closing an
+    // unrelated room silently killed the live room's announcements.
     if (this.currentHostedRoomId === roomId) {
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
       this.currentHostedRoomId = null;
       this.currentHostUser = null;
     }

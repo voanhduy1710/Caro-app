@@ -1,6 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { X, Bell, ChevronDown, ChevronUp, ArrowDown, Smile } from 'lucide-react';
 import type { UserProfile } from '../auth/AuthContext';
 import type { ChatMessage } from '../webrtc/types';
+import { getAvatarPublicUrl } from '../avatar/avatarService';
+import { useIsDesktop } from '../../shared/hooks/useMediaQuery';
 
 interface GameControlsProps {
   myPiece: 'X' | 'O';
@@ -18,9 +21,19 @@ interface GameControlsProps {
   onProposeUndo: () => void;
   onProposeRematch: () => void;
   onResign: () => void;
+  /** Leaves the match: back home from practice, out of the room online. */
+  onExitMatch: () => void;
   gameStatus: 'lobby' | 'playing' | 'ended';
   allowUndo: boolean;
   boardSize: number;
+  /** Practice has no opponent to chat with, react to or buzz. */
+  isAiMode: boolean;
+  /** False when there is no move to take back yet. */
+  canUndo: boolean;
+  /** A take-back has been asked for and the opponent has not answered. */
+  undoPending: boolean;
+  /** A rematch has been offered and the opponent has not answered. */
+  rematchPending: boolean;
 }
 
 const REACTION_ICONS = [
@@ -33,6 +46,12 @@ const REACTION_ICONS = [
   { id: 'lmao', label: 'Lmao', emoji: '🤣' },
   { id: 'gg', label: 'GG', emoji: '🤝' },
 ];
+
+const CHAT_OPEN_STORAGE_KEY = 'caro_chat_panel_open';
+/** How close to the bottom still counts as "following the conversation". */
+const STICK_TO_BOTTOM_PX = 56;
+/** How long to keep re-pinning the feed after a message, in milliseconds. */
+const PIN_TO_BOTTOM_MS = 250;
 
 const processImageFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -73,49 +92,217 @@ const processImageFile = (file: File): Promise<string> => {
   });
 };
 
+const formatTime = (timestamp: number) => {
+  try {
+    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+};
+
+/**
+ * Honours a saved preference, and otherwise starts open only where the panel
+ * has its own column. On a phone the chat is an overlay, so defaulting it open
+ * covered the board before the first move.
+ */
+const readStoredChatOpen = (defaultOpen: boolean) => {
+  try {
+    const stored = localStorage.getItem(CHAT_OPEN_STORAGE_KEY);
+    if (stored === 'open') return true;
+    if (stored === 'closed') return false;
+    return defaultOpen;
+  } catch {
+    return defaultOpen;
+  }
+};
+
 export const GameControls: React.FC<GameControlsProps> = ({
   myPiece,
   myUser,
+  opponent,
   chatMessages,
   onSendChat,
   onSendBuzz,
   onProposeUndo,
   onProposeRematch,
   onResign,
+  onExitMatch,
   gameStatus,
   allowUndo,
   boardSize,
+  isAiMode,
+  canUndo,
+  undoPending,
+  rematchPending,
 }) => {
+  const isDesktop = useIsDesktop();
+
   const [chatText, setChatText] = useState('');
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [isBuzzCooldown, setIsBuzzCooldown] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(() => readStoredChatOpen(isDesktop));
+  const [hasNewBelow, setHasNewBelow] = useState(false);
+  /** Reactions are a burst action, not a permanent band across the rail. */
+  const [isReactionsOpen, setIsReactionsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const buzzCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Whether the reader is pinned to the newest message. Auto-scroll only then. */
+  const stickToBottomRef = useRef(true);
+  const seenCountRef = useRef(chatMessages.length);
 
-  // Auto-scroll to bottom of chat feed when new messages arrive
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
+  const isOwnMessage = useCallback(
+    (message: ChatMessage) => {
+      if (!myUser) return false;
+      if (message.senderId) return message.senderId === myUser.uid;
+      return message.sender === myUser.displayName;
+    },
+    [myUser]
+  );
 
-  // Auto-expand textarea height from 1 line up to max 3 lines
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = '36px'; // Reset height to 1 line baseline
-      const scrollHeight = textareaRef.current.scrollHeight;
-      const maxHeight = 76; // Max height for ~3 lines
-      textareaRef.current.style.height = `${Math.min(Math.max(scrollHeight, 36), maxHeight)}px`;
+  const lastMessage = chatMessages[chatMessages.length - 1];
+  const lastMessagePreview = useMemo(() => {
+    if (!lastMessage) return 'No messages yet';
+    const body = lastMessage.text || (lastMessage.image ? 'Sent an image' : '');
+    const who = isOwnMessage(lastMessage) ? 'You' : lastMessage.sender;
+    return lastMessage.system ? body : `${who}: ${body}`;
+  }, [lastMessage, isOwnMessage]);
+
+  /**
+   * Scroll the feed itself, never `scrollIntoView`: that walks every scrollable
+   * ancestor and used to drag the whole page (and the board) out of view whenever
+   * a message arrived.
+   */
+  const scrollFeedToBottom = useCallback((smooth = false) => {
+    const el = listRef.current;
+    if (!el) return;
+    if (smooth) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    } else {
+      // Assign scrollTop rather than scrollTo: the animated path left the newest
+      // bubble clipped by its own margin at the bottom of the feed.
+      el.scrollTop = el.scrollHeight;
     }
+    stickToBottomRef.current = true;
+    setHasNewBelow(false);
+  }, []);
+
+  const handleFeedScroll = useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottom = distanceFromBottom <= STICK_TO_BOTTOM_PX;
+    stickToBottomRef.current = atBottom;
+    if (atBottom) setHasNewBelow(false);
+  }, []);
+
+  // New messages: follow them only when the reader was already at the bottom.
+  useEffect(() => {
+    if (!isChatOpen) {
+      const unseen = Math.max(0, chatMessages.length - seenCountRef.current);
+      setUnreadCount(unseen);
+      return;
+    }
+
+    seenCountRef.current = chatMessages.length;
+    setUnreadCount(0);
+
+    if (stickToBottomRef.current) {
+      // Hold the bottom for a short window instead of scrolling once.
+      //
+      // The last few pixels of a new bubble arrive late and unpredictably: the
+      // gap comes from the bubble's own margin, which no ResizeObserver reports,
+      // and from the composer snapping back to one line. A single scroll (even on
+      // the next frame) raced them and left the newest message clipped.
+      scrollFeedToBottom();
+
+      let raf = 0;
+      const deadline = performance.now() + PIN_TO_BOTTOM_MS;
+      const hold = () => {
+        const el = listRef.current;
+        if (!el || !stickToBottomRef.current) return;
+        el.scrollTop = el.scrollHeight;
+        if (performance.now() < deadline) raf = requestAnimationFrame(hold);
+      };
+      raf = requestAnimationFrame(hold);
+      return () => cancelAnimationFrame(raf);
+    }
+    if (chatMessages.length > 0) {
+      setHasNewBelow(true);
+    }
+  }, [chatMessages, isChatOpen, scrollFeedToBottom]);
+
+  // Opening the panel lands the reader on the newest message.
+  useEffect(() => {
+    if (!isChatOpen) return;
+    seenCountRef.current = chatMessages.length;
+    setUnreadCount(0);
+    stickToBottomRef.current = true;
+    const frame = requestAnimationFrame(() => scrollFeedToBottom());
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isChatOpen]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAT_OPEN_STORAGE_KEY, isChatOpen ? 'open' : 'closed');
+    } catch {
+      // Persisting the panel state is a convenience only.
+    }
+  }, [isChatOpen]);
+
+  // Auto-expand the composer from 1 line up to ~3 lines.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = '38px';
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 38), 78)}px`;
   }, [chatText]);
+
+  useEffect(() => () => {
+    if (buzzCooldownRef.current) clearTimeout(buzzCooldownRef.current);
+  }, []);
+
+  // Anything that changes the feed's height after we pinned it to the bottom
+  // leaves a gap: the composer growing to a second line, an image finishing its
+  // load, the window resizing. Re-pin whenever the box or its content resizes.
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+
+    const repin = () => {
+      if (!stickToBottomRef.current) return;
+      el.scrollTop = el.scrollHeight;
+    };
+
+    const observer = new ResizeObserver(repin);
+    observer.observe(el);
+    for (const child of Array.from(el.children)) observer.observe(child);
+
+    return () => observer.disconnect();
+  }, [isChatOpen, chatMessages.length]);
+
+  // Escape closes the mobile sheet and the lightbox.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (lightboxImage) setLightboxImage(null);
+      else if (!isDesktop && isChatOpen) setIsChatOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxImage, isDesktop, isChatOpen]);
 
   const handleChatSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (chatText.trim() || attachedImage) {
-      onSendChat(chatText.trim(), attachedImage || undefined);
-      setChatText('');
-      setAttachedImage(null);
-    }
+    if (!chatText.trim() && !attachedImage) return;
+    onSendChat(chatText.trim(), attachedImage || undefined);
+    setChatText('');
+    setAttachedImage(null);
+    stickToBottomRef.current = true;
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -136,8 +323,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
         const file = item.getAsFile();
         if (file) {
           try {
-            const resizedDataUrl = await processImageFile(file);
-            setAttachedImage(resizedDataUrl);
+            setAttachedImage(await processImageFile(file));
           } catch (err) {
             console.error('Failed to process pasted image:', err);
           }
@@ -147,194 +333,417 @@ export const GameControls: React.FC<GameControlsProps> = ({
     }
   };
 
-
-
   const handleBuzzClick = () => {
     if (isBuzzCooldown || !onSendBuzz) return;
     onSendBuzz();
     setIsBuzzCooldown(true);
-    setTimeout(() => setIsBuzzCooldown(false), 2000);
+    if (buzzCooldownRef.current) clearTimeout(buzzCooldownRef.current);
+    buzzCooldownRef.current = setTimeout(() => setIsBuzzCooldown(false), 2000);
   };
 
-  return (
-    <div className="w-full h-full min-h-0 flex flex-col gap-4 overflow-hidden p-4 bg-white rounded-2xl border border-slate-300">
-      {/* 1. Quick Action Buttons */}
-      <div className="space-y-2">
-        <div className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider">
-          Game Actions
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {allowUndo && (
-            <button
-              onClick={onProposeUndo}
-              disabled={gameStatus !== 'playing'}
-              className="py-2 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 text-emerald-800 border border-emerald-300 text-xs font-bold transition cursor-pointer"
-            >
-              Undo Move
-            </button>
-          )}
-          <button
-            onClick={onProposeRematch}
-            className="py-2 px-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-300 text-xs font-bold transition cursor-pointer"
-          >
-            Rematch
-          </button>
-          <button
-            onClick={onResign}
-            disabled={gameStatus !== 'playing'}
-            className="py-2 px-2 rounded-xl bg-rose-50 hover:bg-rose-100 disabled:opacity-50 text-rose-800 border border-rose-300 text-xs font-bold transition cursor-pointer"
-          >
-            Resign
-          </button>
-        </div>
+  const handleSendReactionToChat = (emoji: string) => {
+    onSendChat(emoji);
+    stickToBottomRef.current = true;
+  };
 
-        {/* Reaction Icons Bar (Sends directly into chat) */}
-        <div className="grid grid-cols-8 gap-1 p-1.5 bg-slate-50 rounded-xl border border-slate-200">
-          {REACTION_ICONS.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => onSendChat(item.emoji)}
-              title={item.label}
-              className="py-1 px-0.5 hover:bg-slate-200 rounded text-base transition transform hover:scale-125 flex items-center justify-center cursor-pointer"
-            >
-              {item.emoji}
-            </button>
-          ))}
-        </div>
-      </div>
+  /* ------------------------------- sub-views ------------------------------- */
 
-      {/* 2. Live Chat Feed Panel (Flexibly Expands to Match Board Height) */}
-      <div className="flex-1 min-h-0 flex flex-col bg-slate-50 rounded-xl border border-slate-200 p-3">
-        <div className="text-xs font-bold text-slate-700 border-b border-slate-200 pb-1.5 mb-2 flex justify-between items-center">
-          <span>Chat</span>
-          <span className="text-[10px] text-slate-500 font-mono">{chatMessages.length} msgs</span>
-        </div>
+  const undoTitle = !allowUndo
+    ? 'Take-backs are turned off for this match'
+    : !canUndo
+    ? 'There is no move to take back yet'
+    : undoPending
+    ? 'Waiting for your opponent to answer'
+    : isAiMode
+    ? 'Take back your last move'
+    : 'Within 5s of your own move this is instant; after that your opponent has to agree';
 
-        {/* Scrollable Chat Area Stretching Vertically */}
-        <div className="chat-message-list flex-1 min-h-0 overflow-y-scroll overscroll-contain space-y-2 pr-1 text-xs">
-          {chatMessages.length === 0 ? (
-            <p className="text-[11px] text-slate-400 italic py-8 text-center">No messages yet. Send a greeting!</p>
-          ) : (
-            chatMessages.map((m) => {
-              const isMe = myUser && m.sender === myUser.displayName;
+  // A rematch restarts the board, so it is only offered once the match is over.
+  // Practice keeps a "New game" button, which asks before discarding a live game.
+  const rematchDisabled = rematchPending || (!isAiMode && gameStatus !== 'ended');
+
+  const actionButtons = (
+    <div className="grid grid-cols-2 gap-2">
+      <button
+        onClick={onProposeUndo}
+        disabled={!allowUndo || gameStatus !== 'playing' || !canUndo || undoPending}
+        title={undoTitle}
+        className="btn btn-secondary btn-sm"
+      >
+        {undoPending ? 'Sent\u2026' : 'Take back'}
+      </button>
+      {/* Starting over is only the obvious next step once the game is over.
+          Mid-match it is the destructive option, so it does not lead. */}
+      <button
+        onClick={onProposeRematch}
+        disabled={rematchDisabled}
+        title={
+          isAiMode
+            ? 'Start a fresh game against the bot'
+            : gameStatus === 'ended'
+            ? 'Offer your opponent another round'
+            : 'Available once this match has finished'
+        }
+        className={`btn btn-sm ${gameStatus === 'ended' ? 'btn-primary' : 'btn-secondary'}`}
+      >
+        {rematchPending ? 'Sent\u2026' : isAiMode ? 'New game' : 'Rematch'}
+      </button>
+    </div>
+  );
+
+  // Resigning concedes the match. It does not belong on the same rank as a
+  // take-back, so it sits under the pair rather than beside them.
+  const destructiveAction = isAiMode ? (
+    <button
+      onClick={onExitMatch}
+      title="Leave practice and go back to the home screen"
+      className="btn btn-ghost btn-sm text-muted"
+    >
+      Leave practice
+    </button>
+  ) : (
+    <button
+      onClick={onResign}
+      disabled={gameStatus !== 'playing'}
+      title="Give up this match and record it as a loss"
+      className="btn btn-ghost btn-sm text-danger"
+    >
+      Resign
+    </button>
+  );
+
+  const reactionRow = isAiMode || !isReactionsOpen ? null : (
+    <div className="grid grid-cols-8 gap-1 pb-2">
+      {REACTION_ICONS.map((item) => (
+        <button
+          key={item.id}
+          onClick={() => {
+            handleSendReactionToChat(item.emoji);
+            setIsReactionsOpen(false);
+          }}
+          title={item.label}
+          aria-label={`Send ${item.label} reaction`}
+          className="flex items-center justify-center rounded-sm px-0.5 py-1 text-base transition-transform hover:scale-110 hover:bg-surface-2 active:scale-95"
+        >
+          {item.emoji}
+        </button>
+      ))}
+    </div>
+  );
+
+  const chatFeed = (
+    <div className="relative flex-1 min-h-0">
+      <div
+        ref={listRef}
+        onScroll={handleFeedScroll}
+        className="chat-message-list h-full overflow-y-auto overscroll-contain space-y-2 pr-1 text-xs"
+      >
+        {chatMessages.length === 0 ? (
+          <p className="py-10 text-center text-[13px] text-subtle">
+            No messages yet. Say hello to your opponent.
+          </p>
+        ) : (
+          chatMessages.map((m) => {
+            const isMe = isOwnMessage(m);
+
+            if (m.system) {
               return (
-                <div key={m.id} className={`flex ${isMe ? 'justify-start' : 'justify-end'}`}>
-                  <div
-                    className={`max-w-[85%] p-2 rounded-2xl border ${
-                      isMe
-                        ? 'bg-emerald-50/90 border-emerald-200 text-left rounded-tl-none'
-                        : 'bg-rose-50/90 border-rose-200 text-right rounded-tr-none'
-                    }`}
-                  >
-                    <div className="leading-snug">
-                      <span className={`font-black ${isMe ? 'text-emerald-700' : 'text-rose-600'}`}>
-                        {m.sender}:{' '}
-                      </span>
-                      {m.text && <span className="text-slate-800 font-medium whitespace-pre-wrap break-words">{m.text}</span>}
-                    </div>
-
-                    {m.image && (
-                      <div className="mt-1.5">
-                        <img
-                          src={m.image}
-                          alt="Attachment"
-                          onClick={() => setLightboxImage(m.image || null)}
-                          className="max-h-48 rounded-lg border border-slate-200 object-cover cursor-pointer hover:opacity-95 transition shadow-xs"
-                        />
-                      </div>
-                    )}
-                  </div>
+                <div key={m.id} className="flex justify-center">
+                  <span className="chip text-[11px]">
+                    {m.text}
+                  </span>
                 </div>
               );
-            })
-          )}
-          <div ref={chatEndRef} />
-        </div>
+            }
 
-        {/* Image Attachment Preview */}
-        {attachedImage && (
-          <div className="relative pt-2 flex items-center gap-2">
-            <div className="relative inline-block group">
-              <img
-                src={attachedImage}
-                alt="Pasted attachment preview"
-                className="h-16 w-16 object-cover rounded-lg border-2 border-emerald-500 shadow-xs"
-              />
-              <button
-                type="button"
-                onClick={() => setAttachedImage(null)}
-                title="Remove image"
-                className="absolute -top-1.5 -right-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-full w-5 h-5 text-[10px] font-bold flex items-center justify-center shadow transition cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-            <span className="text-[11px] text-slate-500 italic">Image ready to send</span>
-          </div>
+            return (
+              <div key={m.id} className={`flex items-end gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                {!isMe && (
+                  <img
+                    src={getAvatarPublicUrl(opponent?.photoURL)}
+                    alt=""
+                    aria-hidden="true"
+                    className="w-6 h-6 rounded-full border border-line bg-surface object-contain shrink-0 mb-0.5"
+                  />
+                )}
+                <div
+                  className={`max-w-[78%] rounded-md border px-3 py-2 ${
+                    isMe
+                      ? 'bg-accent border-accent text-accent-fg rounded-br-sm'
+                      : 'bg-surface border-line text-ink rounded-bl-sm'
+                  }`}
+                >
+                  {!isMe && (
+                    <div className="text-[10px] font-semibold text-muted mb-0.5">{m.sender}</div>
+                  )}
+                  {m.text && (
+                    <div className="text-[13px] leading-snug whitespace-pre-wrap break-words">{m.text}</div>
+                  )}
+                  {m.image && (
+                    <button
+                      type="button"
+                      onClick={() => setLightboxImage(m.image || null)}
+                      className="mt-1.5 block cursor-pointer"
+                      title="Open image"
+                    >
+                      <img
+                        src={m.image}
+                        alt="Attachment"
+                        className="max-h-44 rounded-sm border border-line object-cover hover:opacity-95 transition"
+                      />
+                    </button>
+                  )}
+                  <div className={`mt-1 font-mono text-[10px] tabular-nums ${isMe ? 'text-accent-fg/70' : 'text-subtle'}`}>
+                    {formatTime(m.timestamp)}
+                  </div>
+                </div>
+              </div>
+            );
+          })
         )}
-
-        <form onSubmit={handleChatSubmit} className="flex gap-1.5 pt-2.5 mt-2 border-t border-slate-200 items-end">
-
-          <textarea
-            ref={textareaRef}
-            value={chatText}
-            onChange={(e) => setChatText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            placeholder="Type message..."
-            title="Shift+Enter for newline, Ctrl+V to paste screenshot"
-            rows={1}
-            className="flex-1 min-w-0 bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-medium resize-none overflow-y-auto leading-tight"
-            style={{ height: '36px', maxHeight: '76px' }}
-          />
-
-          <button
-            type="submit"
-            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shrink-0 h-9 flex items-center justify-center cursor-pointer"
-          >
-            Send
-          </button>
-
-          <button
-            type="button"
-            onClick={handleBuzzClick}
-            disabled={isBuzzCooldown}
-            title="Send Ting Ting sound to opponent"
-            className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-white font-bold text-xs transition flex items-center gap-1 shrink-0 shadow-xs active:scale-95 h-9 cursor-pointer"
-          >
-            <span>🔔</span>
-            <span>{isBuzzCooldown ? '...' : 'Buzz'}</span>
-          </button>
-        </form>
       </div>
 
-      {/* 3. Room Info Summary */}
-      <div className="text-[11px] font-mono text-slate-500 bg-slate-100 p-2.5 rounded-xl border border-slate-200 flex justify-between shrink-0">
-        <span>Grid: {boardSize}×{boardSize}</span>
-        <span>Piece: {myPiece}</span>
-      </div>
-
-      {/* 4. Lightbox Image Modal */}
-      {lightboxImage && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
-          onClick={() => setLightboxImage(null)}
+      {hasNewBelow && (
+        <button
+          type="button"
+          onClick={() => scrollFeedToBottom(true)}
+          className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-inverse px-3 py-1 text-[11px] font-medium text-inverse-fg shadow-lg transition hover:opacity-90"
         >
-          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setLightboxImage(null)}
-              className="absolute -top-10 right-0 text-white hover:text-slate-300 font-bold text-sm px-3 py-1 bg-slate-800/80 rounded-full cursor-pointer"
-            >
-              ✕ Close
-            </button>
-            <img
-              src={lightboxImage}
-              alt="Enlarged attachment preview"
-              className="max-w-full max-h-[85vh] object-contain rounded-xl border border-slate-700 shadow-2xl"
-            />
-          </div>
-        </div>
+          New messages
+          <ArrowDown size={12} strokeWidth={2} aria-hidden="true" />
+        </button>
       )}
     </div>
+  );
+
+  const composer = (
+    <div className="shrink-0">
+      {attachedImage && (
+        <div className="pb-2 flex items-center gap-2">
+          <div className="relative inline-block">
+            <img
+              src={attachedImage}
+              alt="Pasted attachment preview"
+              className="h-14 w-14 object-cover rounded-sm border-2 border-accent"
+            />
+            <button
+              type="button"
+              onClick={() => setAttachedImage(null)}
+              title="Remove image"
+              aria-label="Remove attached image"
+              className="absolute -top-1.5 -right-1.5 bg-danger-solid hover:opacity-90 text-danger-fg rounded-full w-5 h-5 text-[10px] font-medium flex items-center justify-center shadow transition cursor-pointer"
+            >
+              <X size={11} strokeWidth={2.25} aria-hidden="true" />
+            </button>
+          </div>
+          <span className="text-[11px] text-muted">Image ready to send</span>
+        </div>
+      )}
+
+      {reactionRow}
+
+      <form onSubmit={handleChatSubmit} className="flex items-end gap-1.5 border-t border-line pt-2">
+        {!isAiMode && (
+          <button
+            type="button"
+            onClick={() => setIsReactionsOpen((open) => !open)}
+            aria-expanded={isReactionsOpen}
+            aria-label="Reactions"
+            title="Send a reaction"
+            className="btn btn-ghost btn-icon h-9 w-9 shrink-0"
+          >
+            <Smile size={16} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        )}
+        <textarea
+          ref={textareaRef}
+          value={chatText}
+          onChange={(e) => setChatText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          placeholder="Type a message..."
+          title="Shift+Enter for a newline, Ctrl+V to paste a screenshot"
+          aria-label="Chat message"
+          rows={1}
+          className="min-w-0 flex-1 resize-none overflow-y-auto rounded-md border border-line-strong bg-surface px-3 py-2 text-[13px] leading-snug text-ink focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none"
+          style={{ height: '38px', maxHeight: '78px' }}
+        />
+        <button
+          type="submit"
+          disabled={!chatText.trim() && !attachedImage}
+          className="btn btn-primary btn-sm h-9 shrink-0"
+        >
+          Send
+        </button>
+        <button
+          type="button"
+          onClick={handleBuzzClick}
+          disabled={isBuzzCooldown}
+          title="Nudge your opponent with a sound"
+          aria-label="Buzz opponent"
+          className="btn btn-secondary btn-icon h-9 w-9 shrink-0"
+        >
+          <Bell size={16} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      </form>
+    </div>
+  );
+
+  const chatHeader = (
+    <button
+      type="button"
+      onClick={() => setIsChatOpen((open) => !open)}
+      aria-expanded={isChatOpen}
+      aria-controls="chat-panel-body"
+      className="flex w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
+    >
+      <span className="text-xs font-semibold text-ink shrink-0">Chat</span>
+      {unreadCount > 0 && !isChatOpen && (
+        <span className="px-1.5 py-0.5 rounded-full bg-danger-solid text-danger-fg text-[10px] font-semibold leading-none shrink-0">
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
+      )}
+      <span className="flex-1 min-w-0 truncate text-[11px] text-muted font-medium">
+        {isChatOpen ? `${chatMessages.length} message${chatMessages.length === 1 ? '' : 's'}` : lastMessagePreview}
+      </span>
+      <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-subtle" aria-hidden="true">
+        {isChatOpen ? <ChevronUp size={13} strokeWidth={1.75} /> : <ChevronDown size={13} strokeWidth={1.75} />}
+        {isChatOpen ? 'Hide' : 'Show'}
+      </span>
+    </button>
+  );
+
+  const lightbox = lightboxImage ? (
+    <div
+      className="fixed inset-0 z-[70] bg-[var(--ui-scrim)] backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
+      onClick={() => setLightboxImage(null)}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Image preview"
+    >
+      <div className="relative max-w-4xl max-h-[90dvh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={() => setLightboxImage(null)}
+          className="absolute -top-10 right-0 text-inverse-fg hover:text-subtle font-medium text-sm px-3 py-1 bg-inverse/80 rounded-full cursor-pointer"
+        >
+          <X size={14} strokeWidth={1.75} aria-hidden="true" />
+          Close
+        </button>
+        <img
+          src={lightboxImage}
+          alt="Enlarged attachment"
+          className="max-w-full max-h-[85dvh] object-contain rounded-md border border-line-strong shadow-2xl"
+        />
+      </div>
+    </div>
+  ) : null;
+
+  const roomSummary = (
+    <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-2 text-[11px] text-muted">
+      <span>{isAiMode ? 'Practice vs Bot' : 'Online match'}</span>
+      <span>
+        <span className="font-mono tabular-nums">
+          {boardSize} × {boardSize}
+        </span>
+        {' · You play '}
+        <span className="font-mono">{myPiece}</span>
+      </span>
+    </div>
+  );
+
+  /* ------------------------------ practice ------------------------------- */
+
+  // Chat, reactions and Buzz all need a second player. Rendering them against
+  // the bot only offered controls that could not do anything.
+  if (isAiMode) {
+    return (
+      <div className="panel flex w-full flex-col overflow-hidden">
+        <div className="shrink-0 space-y-2 p-3">
+          {actionButtons}
+          <div className="flex justify-end">{destructiveAction}</div>
+        </div>
+        <p className="border-t border-line px-3 py-3 text-xs leading-relaxed text-muted">
+          Practice games stay on this device. They are saved to your history but never
+          change your rating.
+        </p>
+        <div className="border-t border-line bg-surface-2">{roomSummary}</div>
+      </div>
+    );
+  }
+
+  /* --------------------------------- desktop -------------------------------- */
+
+  if (isDesktop) {
+    return (
+      <>
+        {/* One rail divided by hairlines. Nesting a bordered box per section
+            turned the sidebar into four floating islands. */}
+        <div className="panel flex h-full min-h-0 w-full flex-col overflow-hidden">
+          <div className="shrink-0 space-y-2 p-3">
+            {actionButtons}
+            <div className="flex justify-end">{destructiveAction}</div>
+          </div>
+
+          <div className="shrink-0 border-t border-line">{chatHeader}</div>
+
+          {isChatOpen && (
+            <div
+              id="chat-panel-body"
+              className="flex min-h-0 flex-1 flex-col border-t border-line px-3 pt-2 pb-3"
+            >
+              {chatFeed}
+              {composer}
+            </div>
+          )}
+
+          <div className="mt-auto shrink-0 border-t border-line bg-surface-2">{roomSummary}</div>
+        </div>
+        {lightbox}
+      </>
+    );
+  }
+
+  /* --------------------------------- mobile --------------------------------- */
+
+  return (
+    <>
+      {/* In-flow actions stay put; only the chat dock overlays, so the board never shifts. */}
+      <div className="panel w-full overflow-hidden">
+        <div className="space-y-2 p-3">
+          {actionButtons}
+          <div className="flex justify-end">{destructiveAction}</div>
+        </div>
+        <div className="border-t border-line bg-surface-2">{roomSummary}</div>
+      </div>
+
+      {/* Reserve room for the collapsed dock so it never covers the last row. */}
+      <div aria-hidden="true" className="h-16" />
+
+      {isChatOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-[var(--ui-scrim)] backdrop-blur-[2px]"
+          onClick={() => setIsChatOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <div className="fixed inset-x-0 bottom-0 z-50 px-2 pb-2 pointer-events-none">
+        <div className="pointer-events-auto mx-auto max-w-2xl rounded-lg bg-surface border border-line-strong shadow-[0_-8px_30px_-12px_rgba(15,23,42,0.35)] overflow-hidden">
+          {chatHeader}
+          {isChatOpen && (
+            <div
+              id="chat-panel-body"
+              className="flex flex-col border-t border-line px-3 pb-3 pt-2 bg-surface-2"
+              style={{ height: 'min(58dvh, 460px)' }}
+            >
+              {chatFeed}
+              {composer}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {lightbox}
+    </>
   );
 };

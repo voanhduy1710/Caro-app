@@ -16,15 +16,25 @@ export type PeerMessageType =
   | 'INSTANT_UNDO'
   | 'PROPOSE_REMATCH'
   | 'ACCEPT_REMATCH'
+  | 'DECLINE_REMATCH'
+  | 'DECLINE_UNDO'
+  | 'READY_STATE'
+  | 'LEAVE_ROOM'
   | 'GAME_OVER'
+  | 'CLOCK_SYNC'
+  | 'RATING_UPDATED'
   | 'BUZZ';
 
 export interface ChatMessage {
   id: string;
+  /** Stable author id. Display names are not unique, so ownership is keyed on this. */
+  senderId?: string;
   sender: string;
   text: string;
   image?: string;
   timestamp: number;
+  /** Locally generated notices (buzz) render as a centred system line. */
+  system?: boolean;
 }
 
 export interface PeerMessage {
@@ -36,6 +46,10 @@ export interface WebRTCState {
   roomId: string | null;
   isHost: boolean;
   isConnected: boolean;
+  /** True from the moment a room is created or joined until it connects or fails. */
+  isConnecting: boolean;
+  /** Set when the other player left deliberately, so it never reads as a dropout. */
+  peerLeft: boolean;
   isReconnecting: boolean;
   reconnectTimeLeft: number;
   connectionTimedOut: boolean;
