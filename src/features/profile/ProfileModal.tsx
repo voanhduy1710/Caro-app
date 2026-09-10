@@ -26,7 +26,7 @@ export const ProfileModal: React.FC = () => {
   useEffect(() => {
     if (user) {
       setDisplayName(user.displayName || '');
-      setSelectedPhotoURL(user.photoURL || getAvatarPublicUrl('Zerom.gif'));
+      setSelectedPhotoURL(user.photoURL || getAvatarPublicUrl());
     }
   }, [user, showProfileModal]);
 
@@ -110,9 +110,9 @@ export const ProfileModal: React.FC = () => {
                 src={activeAvatarPreviewUrl}
                 alt="Selected Avatar"
                 onError={(e) => {
-                  e.currentTarget.src = '/Avatar/Zerom.gif';
+                  e.currentTarget.src = getAvatarPublicUrl();
                 }}
-                className="w-12 h-12 rounded-full border-2 border-accent bg-surface p-0.5 shadow-sm object-contain"
+                className="w-12 h-12 rounded-md border-2 border-accent bg-surface shadow-sm object-cover"
               />
               {hoveredAvatarFilename && (
                 <span className="absolute -top-1 -right-1 px-1.5 py-0.5 bg-warning-solid text-warning-fg font-mono text-[9px] font-medium rounded-full animate-bounce">
@@ -206,7 +206,7 @@ export const ProfileModal: React.FC = () => {
                         <img
                           src={getAvatarLocalUrl(av.filename)}
                           alt={av.name}
-                          className="w-8 h-8 object-contain"
+                          className="w-8 h-8 rounded-sm object-cover"
                         />
                         <span className="text-[9px] font-mono text-muted font-semibold truncate w-full text-center mt-0.5 group-hover:text-accent-text">
                           {av.name}
