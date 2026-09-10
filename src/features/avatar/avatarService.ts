@@ -4,167 +4,239 @@ export interface AvatarItem {
   filename: string;
 }
 
-export const AVATAR_BUCKET_NAME = 'avatar';
+/**
+ * Riot Data Dragon version used for champion icons.
+ * Update this when a new patch drops to pick up new champions.
+ */
+const DDRAGON_VERSION = '16.18.1';
+const DDRAGON_CDN = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion`;
 
-export const RAW_AVATAR_FILES: string[] = [
-  'Agni L.gif',
-  'Agni M.gif',
-  'Agni S.gif',
-  'Alicel.gif',
-  'Aliot.gif',
-  'Aliza.gif',
-  'Amon Ra.gif',
-  'Angry penguin.gif',
-  'Aqua L.gif',
-  'Aqua M.gif',
-  'Aqua S.gif',
-  'Aqua XL.gif',
-  'Atroce.gif',
-  'Baby Wolf.gif',
-  'Bacsojin.gif',
-  'Banshee.gif',
-  'Baphomet Jr.gif',
-  'Baphomet.gif',
-  'Bday poring.gif',
-  'Blue pixy poring.gif',
-  'Bluewolf.gif',
-  'Bombring.gif',
-  'Bongun.gif',
-  'Caramel.gif',
-  'Carat.gif',
-  'Cat O Nine Tails.gif',
-  'Cat sailor.gif',
-  'Cenere.gif',
-  'Chung E.gif',
-  'Coco.gif',
-  'Condor.gif',
-  'Dame of Sentinel.gif',
-  'Deviruchi.gif',
-  'Dolor.gif',
-  'Domovoi.gif',
-  'ESL.gif',
-  'Eddga.gif',
-  'Eggring.gif',
-  'Evil Nymph.gif',
-  'Fabre.gif',
-  'Firefox.gif',
-  'Fur seal.gif',
-  'Garling.gif',
-  'Garm baby.gif',
-  'Garm.gif',
-  'Geffen mage.gif',
-  'Gemini.gif',
-  'Ghostring.gif',
-  'Gloom.gif',
-  'Green Ferus.gif',
-  'Harpy.gif',
-  'Hydra.gif',
-  'Ifrit.gif',
-  'Iguana.gif',
-  'Imp.gif',
-  'Incantation Samurai.gif',
-  'Incubus.gif',
-  'Injustice.gif',
-  'Isis.gif',
-  'Jejering.gif',
-  'Kafra 1.gif',
-  'Kafra 2.gif',
-  'King Poring.gif',
-  'Kraken leg.gif',
-  'Lady Solace.gif',
-  'Lady Tanee.gif',
-  'Lion.gif',
-  'Loli Ruri.gif',
-  'Lord of Death.gif',
-  'Lunatic.gif',
-  'Martin.gif',
-  'Mavka.gif',
-  'Maya purple.gif',
-  'Medusa.gif',
-  'Mer.gif',
-  'Mimic.gif',
-  'Minorous.gif',
-  'Mistress of Shelter.gif',
-  'Misty.gif',
-  'Miyabi Doll.gif',
-  'Monk female.gif',
-  'Monk male.gif',
-  'Moonlight Flower.gif',
-  'Nekoring.gif',
-  'Nightmare.gif',
-  'Ninja female.gif',
-  'Ninja male.gif',
-  'Owl Duke.gif',
-  'P Echidna.gif',
-  'P Hera.gif',
-  'P Lilith.gif',
-  'P Siren.gif',
-  'Phen.gif',
-  'Piamette.gif',
-  'Picky egg.gif',
-  'Picky.gif',
-  'Pinguicula.gif',
-  'Pitman.gif',
-  'Pixy poring.gif',
-  'Poison spore.gif',
-  'Pope merc.gif',
-  'Pope.gif',
-  'Poporing.gif',
-  'Pouring.gif',
-  'Question octopus.gif',
-  'Red Eruma.gif',
-  'Red Ferus.gif',
-  'Requiem.gif',
-  'Ricecake.gif',
-  'Roda Frog.gif',
-  'Rotar Zairo.gif',
-  'Roween.gif',
-  'Siroma.gif',
-  'Skeleton prisoner.gif',
-  'Spore.gif',
-  'Sting.gif',
-  'Succubus.gif',
-  'Tarou.gif',
-  'Tera S.gif',
-  'Valkyrie.gif',
-  'Ventus L.gif',
-  'Ventus M.gif',
-  'Ventus S.gif',
-  'Ventus XL.gif',
-  'Watermelonring.gif',
-  'Wicked Nymph.gif',
-  'Wild rider.gif',
-  'Wizard female.gif',
-  'Wizard male.gif',
-  'Zealotus.gif',
-  'Zerom.gif',
-  'Zipper Bear.gif',
-  'Zombie prisoner.gif',
+/**
+ * Every champion in League of Legends, keyed by their Data Dragon ID.
+ * The `name` is the human-readable display name.
+ */
+const CHAMPION_DATA: Array<{ id: string; name: string }> = [
+  { id: 'Aatrox', name: 'Aatrox' },
+  { id: 'Ahri', name: 'Ahri' },
+  { id: 'Akali', name: 'Akali' },
+  { id: 'Akshan', name: 'Akshan' },
+  { id: 'Alistar', name: 'Alistar' },
+  { id: 'Ambessa', name: 'Ambessa' },
+  { id: 'Amumu', name: 'Amumu' },
+  { id: 'Anivia', name: 'Anivia' },
+  { id: 'Annie', name: 'Annie' },
+  { id: 'Aphelios', name: 'Aphelios' },
+  { id: 'Ashe', name: 'Ashe' },
+  { id: 'AurelionSol', name: 'Aurelion Sol' },
+  { id: 'Aurora', name: 'Aurora' },
+  { id: 'Azir', name: 'Azir' },
+  { id: 'Bard', name: 'Bard' },
+  { id: 'Belveth', name: "Bel'Veth" },
+  { id: 'Blitzcrank', name: 'Blitzcrank' },
+  { id: 'Brand', name: 'Brand' },
+  { id: 'Braum', name: 'Braum' },
+  { id: 'Briar', name: 'Briar' },
+  { id: 'Caitlyn', name: 'Caitlyn' },
+  { id: 'Camille', name: 'Camille' },
+  { id: 'Cassiopeia', name: 'Cassiopeia' },
+  { id: 'Chogath', name: "Cho'Gath" },
+  { id: 'Corki', name: 'Corki' },
+  { id: 'Darius', name: 'Darius' },
+  { id: 'Diana', name: 'Diana' },
+  { id: 'Draven', name: 'Draven' },
+  { id: 'DrMundo', name: 'Dr. Mundo' },
+  { id: 'Ekko', name: 'Ekko' },
+  { id: 'Elise', name: 'Elise' },
+  { id: 'Evelynn', name: 'Evelynn' },
+  { id: 'Ezreal', name: 'Ezreal' },
+  { id: 'Fiddlesticks', name: 'Fiddlesticks' },
+  { id: 'Fiora', name: 'Fiora' },
+  { id: 'Fizz', name: 'Fizz' },
+  { id: 'Galio', name: 'Galio' },
+  { id: 'Gangplank', name: 'Gangplank' },
+  { id: 'Garen', name: 'Garen' },
+  { id: 'Gnar', name: 'Gnar' },
+  { id: 'Gragas', name: 'Gragas' },
+  { id: 'Graves', name: 'Graves' },
+  { id: 'Gwen', name: 'Gwen' },
+  { id: 'Hecarim', name: 'Hecarim' },
+  { id: 'Heimerdinger', name: 'Heimerdinger' },
+  { id: 'Hwei', name: 'Hwei' },
+  { id: 'Illaoi', name: 'Illaoi' },
+  { id: 'Irelia', name: 'Irelia' },
+  { id: 'Ivern', name: 'Ivern' },
+  { id: 'Janna', name: 'Janna' },
+  { id: 'JarvanIV', name: 'Jarvan IV' },
+  { id: 'Jax', name: 'Jax' },
+  { id: 'Jayce', name: 'Jayce' },
+  { id: 'Jhin', name: 'Jhin' },
+  { id: 'Jinx', name: 'Jinx' },
+  { id: 'Kaisa', name: "Kai'Sa" },
+  { id: 'Kalista', name: 'Kalista' },
+  { id: 'Karma', name: 'Karma' },
+  { id: 'Karthus', name: 'Karthus' },
+  { id: 'Kassadin', name: 'Kassadin' },
+  { id: 'Katarina', name: 'Katarina' },
+  { id: 'Kayle', name: 'Kayle' },
+  { id: 'Kayn', name: 'Kayn' },
+  { id: 'Kennen', name: 'Kennen' },
+  { id: 'Khazix', name: "Kha'Zix" },
+  { id: 'Kindred', name: 'Kindred' },
+  { id: 'Kled', name: 'Kled' },
+  { id: 'KogMaw', name: "Kog'Maw" },
+  { id: 'KSante', name: "K'Sante" },
+  { id: 'Leblanc', name: 'LeBlanc' },
+  { id: 'LeeSin', name: 'Lee Sin' },
+  { id: 'Leona', name: 'Leona' },
+  { id: 'Lillia', name: 'Lillia' },
+  { id: 'Lissandra', name: 'Lissandra' },
+  { id: 'Locke', name: 'Locke' },
+  { id: 'Lucian', name: 'Lucian' },
+  { id: 'Lulu', name: 'Lulu' },
+  { id: 'Lux', name: 'Lux' },
+  { id: 'Malphite', name: 'Malphite' },
+  { id: 'Malzahar', name: 'Malzahar' },
+  { id: 'Maokai', name: 'Maokai' },
+  { id: 'MasterYi', name: 'Master Yi' },
+  { id: 'Mel', name: 'Mel' },
+  { id: 'Milio', name: 'Milio' },
+  { id: 'MissFortune', name: 'Miss Fortune' },
+  { id: 'MonkeyKing', name: 'Wukong' },
+  { id: 'Mordekaiser', name: 'Mordekaiser' },
+  { id: 'Morgana', name: 'Morgana' },
+  { id: 'Naafiri', name: 'Naafiri' },
+  { id: 'Nami', name: 'Nami' },
+  { id: 'Nasus', name: 'Nasus' },
+  { id: 'Nautilus', name: 'Nautilus' },
+  { id: 'Neeko', name: 'Neeko' },
+  { id: 'Nidalee', name: 'Nidalee' },
+  { id: 'Nilah', name: 'Nilah' },
+  { id: 'Nocturne', name: 'Nocturne' },
+  { id: 'Nunu', name: 'Nunu & Willump' },
+  { id: 'Olaf', name: 'Olaf' },
+  { id: 'Orianna', name: 'Orianna' },
+  { id: 'Ornn', name: 'Ornn' },
+  { id: 'Pantheon', name: 'Pantheon' },
+  { id: 'Poppy', name: 'Poppy' },
+  { id: 'Pyke', name: 'Pyke' },
+  { id: 'Qiyana', name: 'Qiyana' },
+  { id: 'Quinn', name: 'Quinn' },
+  { id: 'Rakan', name: 'Rakan' },
+  { id: 'Rammus', name: 'Rammus' },
+  { id: 'RekSai', name: "Rek'Sai" },
+  { id: 'Rell', name: 'Rell' },
+  { id: 'Renata', name: 'Renata Glasc' },
+  { id: 'Renekton', name: 'Renekton' },
+  { id: 'Rengar', name: 'Rengar' },
+  { id: 'Riven', name: 'Riven' },
+  { id: 'Rumble', name: 'Rumble' },
+  { id: 'Ryze', name: 'Ryze' },
+  { id: 'Samira', name: 'Samira' },
+  { id: 'Sejuani', name: 'Sejuani' },
+  { id: 'Senna', name: 'Senna' },
+  { id: 'Seraphine', name: 'Seraphine' },
+  { id: 'Sett', name: 'Sett' },
+  { id: 'Shaco', name: 'Shaco' },
+  { id: 'Shen', name: 'Shen' },
+  { id: 'Shyvana', name: 'Shyvana' },
+  { id: 'Singed', name: 'Singed' },
+  { id: 'Sion', name: 'Sion' },
+  { id: 'Sivir', name: 'Sivir' },
+  { id: 'Skarner', name: 'Skarner' },
+  { id: 'Smolder', name: 'Smolder' },
+  { id: 'Sona', name: 'Sona' },
+  { id: 'Soraka', name: 'Soraka' },
+  { id: 'Swain', name: 'Swain' },
+  { id: 'Sylas', name: 'Sylas' },
+  { id: 'Syndra', name: 'Syndra' },
+  { id: 'TahmKench', name: 'Tahm Kench' },
+  { id: 'Taliyah', name: 'Taliyah' },
+  { id: 'Talon', name: 'Talon' },
+  { id: 'Taric', name: 'Taric' },
+  { id: 'Teemo', name: 'Teemo' },
+  { id: 'Thresh', name: 'Thresh' },
+  { id: 'Tristana', name: 'Tristana' },
+  { id: 'Trundle', name: 'Trundle' },
+  { id: 'Tryndamere', name: 'Tryndamere' },
+  { id: 'TwistedFate', name: 'Twisted Fate' },
+  { id: 'Twitch', name: 'Twitch' },
+  { id: 'Udyr', name: 'Udyr' },
+  { id: 'Urgot', name: 'Urgot' },
+  { id: 'Varus', name: 'Varus' },
+  { id: 'Vayne', name: 'Vayne' },
+  { id: 'Veigar', name: 'Veigar' },
+  { id: 'Velkoz', name: "Vel'Koz" },
+  { id: 'Vex', name: 'Vex' },
+  { id: 'Vi', name: 'Vi' },
+  { id: 'Viego', name: 'Viego' },
+  { id: 'Viktor', name: 'Viktor' },
+  { id: 'Vladimir', name: 'Vladimir' },
+  { id: 'Volibear', name: 'Volibear' },
+  { id: 'Warwick', name: 'Warwick' },
+  { id: 'Xayah', name: 'Xayah' },
+  { id: 'Xerath', name: 'Xerath' },
+  { id: 'XinZhao', name: 'Xin Zhao' },
+  { id: 'Yasuo', name: 'Yasuo' },
+  { id: 'Yone', name: 'Yone' },
+  { id: 'Yorick', name: 'Yorick' },
+  { id: 'Yunara', name: 'Yunara' },
+  { id: 'Yuumi', name: 'Yuumi' },
+  { id: 'Zaahen', name: 'Zaahen' },
+  { id: 'Zac', name: 'Zac' },
+  { id: 'Zed', name: 'Zed' },
+  { id: 'Zeri', name: 'Zeri' },
+  { id: 'Ziggs', name: 'Ziggs' },
+  { id: 'Zilean', name: 'Zilean' },
+  { id: 'Zoe', name: 'Zoe' },
+  { id: 'Zyra', name: 'Zyra' },
 ];
 
-export const AVATAR_ITEMS: AvatarItem[] = RAW_AVATAR_FILES.map((filename) => {
-  const name = filename.replace(/\.gif$/i, '');
-  const id = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-  return { id, name, filename };
-});
+/** Default champion shown when no avatar is set. */
+const DEFAULT_CHAMPION_ID = 'Teemo';
 
+export const AVATAR_BUCKET_NAME = 'avatar';
+
+/** Kept for backwards compatibility. Not used for fetching anymore. */
+export const RAW_AVATAR_FILES: string[] = CHAMPION_DATA.map((c) => `${c.id}.png`);
+
+export const AVATAR_ITEMS: AvatarItem[] = CHAMPION_DATA.map((c) => ({
+  id: c.id.toLowerCase(),
+  name: c.name,
+  filename: `${c.id}.png`,
+}));
+
+/**
+ * Build the CDN URL for a champion icon.
+ * Accepts a champion ID (e.g. "Ahri"), a filename (e.g. "Ahri.png"),
+ * a legacy Ragnarok-style path, or a full URL. Anything it cannot
+ * recognise falls back to the default champion.
+ */
 export const getAvatarPublicUrl = (filenameOrUrl?: string | null): string => {
-  if (!filenameOrUrl || filenameOrUrl.includes('dicebear.com')) {
-    return '/Avatar/Zerom.gif';
+  if (!filenameOrUrl) {
+    return `${DDRAGON_CDN}/${DEFAULT_CHAMPION_ID}.png`;
   }
-  if (filenameOrUrl.startsWith('http://') || filenameOrUrl.startsWith('https://')) {
-    if (filenameOrUrl.includes('/storage/v1/object/public/avatar/')) {
-      const parts = filenameOrUrl.split('/storage/v1/object/public/avatar/');
-      const filename = decodeURIComponent(parts[1] || '');
-      return `/Avatar/${encodeURIComponent(filename)}`;
-    }
+
+  // Already a full URL pointing to ddragon — pass it through.
+  if (filenameOrUrl.startsWith('https://ddragon.leagueoflegends.com/')) {
     return filenameOrUrl;
   }
-  let clean = filenameOrUrl.replace(/^\/?Avatar\//i, '');
-  if (!clean.endsWith('.gif') && !clean.includes('.')) {
-    clean = `${clean}.gif`;
+
+  // Legacy full URL from Supabase or DiceBear — fall back.
+  if (filenameOrUrl.startsWith('http://') || filenameOrUrl.startsWith('https://')) {
+    return `${DDRAGON_CDN}/${DEFAULT_CHAMPION_ID}.png`;
   }
-  return `/Avatar/${encodeURIComponent(clean)}`;
+
+  // Strip legacy path prefixes ("/Avatar/", "Avatar/", etc.)
+  let clean = filenameOrUrl.replace(/^\/?(Avatar|avatar)\//i, '');
+  // Strip the extension: both old .gif and new .png
+  clean = clean.replace(/\.(gif|png)$/i, '');
+
+  // Exact match against known champion IDs (case-insensitive)
+  const match = CHAMPION_DATA.find(
+    (c) => c.id.toLowerCase() === clean.toLowerCase()
+  );
+  const champId = match ? match.id : DEFAULT_CHAMPION_ID;
+  return `${DDRAGON_CDN}/${champId}.png`;
 };
 
 export const getAvatarLocalUrl = (filenameOrUrl?: string | null): string => {
