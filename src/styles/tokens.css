@@ -142,6 +142,11 @@
   --ui-accent-fg: #ffffff;
   --ui-accent-text: #0b6ca8;  /*  5.64:1 on white */
   --ui-accent-soft: #ddeffc;
+  /* Hover has to move the tint and the ink together. A tonal button only has
+     4.79:1 at rest, so deepening the face alone would push its label under AA
+     the moment the pointer lands on it. */
+  --ui-accent-soft-hover: #c8e6fa;
+  --ui-accent-text-hover: #08527f;  /*  6.40:1 on --ui-accent-soft-hover */
   --ui-accent-ring: rgb(15 124 191 / 0.4);
   --ui-accent-shadow: #08527f;
 
@@ -156,6 +161,9 @@
      against the page rather than in it. */
   --ui-inverse: #0d2b45;
   --ui-inverse-fg: #eaf4fc;
+  /* Its own ledge. Falling back to --ui-border-strong put a pale blue under a
+     navy face, which reads as a highlight and inverts the extrusion. */
+  --ui-inverse-shadow: #04101d;
 
   /* Status. `-solid` is the filled-button background and always pairs with its
      `-fg`; the bare token is the text/icon colour and is never a background
@@ -163,6 +171,8 @@
      out of contrast when the theme swaps. */
   --ui-danger: #c62828;
   --ui-danger-soft: #ffe9e7;
+  --ui-danger-soft-hover: #ffd4d0;
+  --ui-danger-text-hover: #a81f1f;  /*  5.41:1 on --ui-danger-soft-hover */
   --ui-danger-solid: #c62828;
   --ui-danger-fg: #ffffff;
   --ui-danger-shadow: #8e1a1a;
@@ -203,6 +213,8 @@
     --ui-accent-fg: #0a1a2e;
     --ui-accent-text: #4fb8ec;
     --ui-accent-soft: rgb(79 184 236 / 0.16);
+    --ui-accent-soft-hover: rgb(79 184 236 / 0.28);
+    --ui-accent-text-hover: #7cc9f1;  /*  5.01:1 on --ui-accent-soft-hover */
     --ui-accent-ring: rgb(79 184 236 / 0.5);
     --ui-accent-shadow: #0c5c8a;
 
@@ -214,11 +226,14 @@
 
     --ui-inverse: #eaf4fc;
     --ui-inverse-fg: #0d2b45;
+    --ui-inverse-shadow: #9db9d1;
 
     --ui-danger: #ff7b77;
     --ui-danger-solid: #c62828;
     --ui-danger-fg: #ffffff;
     --ui-danger-soft: rgb(255 123 119 / 0.16);
+    --ui-danger-soft-hover: rgb(255 123 119 / 0.28);
+    --ui-danger-text-hover: #ff9d9a;  /*  5.13:1 on --ui-danger-soft-hover */
     --ui-danger-shadow: #7a1414;
     --ui-warning: #ffc766;
     --ui-warning-solid: #ffa53d;

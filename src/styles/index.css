@@ -175,7 +175,8 @@
   }
 
   .btn-tonal:not(:disabled):hover {
-    background-color: var(--ui-surface-3);
+    background-color: var(--ui-accent-soft-hover);
+    color: var(--ui-accent-text-hover);
   }
 
   /* Flat controls squash instead of pressing down. */
@@ -204,7 +205,8 @@
   }
 
   .btn-danger:not(:disabled):hover {
-    background-color: var(--ui-surface-3);
+    background-color: var(--ui-danger-soft-hover);
+    color: var(--ui-danger-text-hover);
   }
 
   .btn-danger-solid {
@@ -218,7 +220,7 @@
   .btn-inverse {
     background-color: var(--ui-inverse);
     color: var(--ui-inverse-fg);
-    --btn-shadow: var(--ui-border-strong);
+    --btn-shadow: var(--ui-inverse-shadow);
   }
 
   .btn-inverse:not(:disabled):hover {
@@ -673,6 +675,20 @@
   outline: 3px solid var(--ui-text);
   outline-offset: -3px;
   z-index: 30;
+}
+
+/* Graph paper is the only board that follows the app theme, so it is the only
+   one whose focus ring can. The other three are fixed materials: on them
+   --ui-text is whatever the app theme says, which put a near-white ring on
+   bamboo at 1.10:1 and a navy ring on the laser grid at 1.42:1. Each fixed
+   board pins a ring measured against its own tile instead. */
+.board-theme-light-wood .board-cell:focus-visible,
+.board-theme-classic-wood .board-cell:focus-visible {
+  outline-color: #0d2b45;  /* 11.78:1 on bamboo, 4.22:1 on classic wood */
+}
+
+.board-theme-laser-futuristic .board-cell:focus-visible {
+  outline-color: #ffffff;  /* 20.23:1 on the grid, and not a piece colour */
 }
 
 .board-grid-inner {
