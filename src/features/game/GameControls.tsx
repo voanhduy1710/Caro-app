@@ -76,6 +76,11 @@ const CHAT_OPEN_STORAGE_KEY = 'caro_chat_panel_open';
 const STICK_TO_BOTTOM_PX = 56;
 /** How long to keep re-pinning the feed after a message, in milliseconds. */
 const PIN_TO_BOTTOM_MS = 250;
+/**
+ * Height of the phone's fixed chat bar. The page reserves the same height under
+ * the action rail, so the bar is pinned to it rather than sized by its content.
+ */
+const CHAT_BAR_HEIGHT_PX = 60;
 
 const processImageFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -125,18 +130,16 @@ const formatTime = (timestamp: number) => {
 };
 
 /**
- * Honours a saved preference, and otherwise starts open only where the panel
- * has its own column. On a phone the chat is an overlay, so defaulting it open
- * covered the board before the first move.
+ * Whether the desktop chat column starts open: as the player last left it, and
+ * open when nothing is saved. A phone never reads it. There the chat is a sheet
+ * over the board, and restoring a column left open on a wide window covered the
+ * board before the first move.
  */
-const readStoredChatOpen = (defaultOpen: boolean) => {
+const readStoredChatOpen = () => {
   try {
-    const stored = localStorage.getItem(CHAT_OPEN_STORAGE_KEY);
-    if (stored === 'open') return true;
-    if (stored === 'closed') return false;
-    return defaultOpen;
+    return localStorage.getItem(CHAT_OPEN_STORAGE_KEY) !== 'closed';
   } catch {
-    return defaultOpen;
+    return true;
   }
 };
 
@@ -217,7 +220,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [isBuzzCooldown, setIsBuzzCooldown] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState<boolean>(() => readStoredChatOpen(isDesktop));
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(() => isDesktop && readStoredChatOpen());
   const [hasNewBelow, setHasNewBelow] = useState(false);
   /** Reactions are a burst action, not a permanent band across the rail. */
   const [isReactionsOpen, setIsReactionsOpen] = useState(false);
@@ -225,6 +228,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
   const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  /** The phone's chat bar, which opens the sheet and takes focus back from it. */
+  const chatBarRef = useRef<HTMLButtonElement>(null);
   const buzzCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Whether the reader is pinned to the newest message. Auto-scroll only then. */
   const stickToBottomRef = useRef(true);
@@ -322,13 +327,16 @@ export const GameControls: React.FC<GameControlsProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isChatOpen]);
 
+  // Only the desktop column's state is saved. The phone sheet always starts
+  // closed, and saving it would overwrite what the column was left as.
   useEffect(() => {
+    if (!isDesktop) return;
     try {
       localStorage.setItem(CHAT_OPEN_STORAGE_KEY, isChatOpen ? 'open' : 'closed');
     } catch {
       // Persisting the panel state is a convenience only.
     }
-  }, [isChatOpen]);
+  }, [isChatOpen, isDesktop]);
 
   // Auto-expand the composer from 1 line up to ~3 lines.
   useEffect(() => {
@@ -381,16 +389,35 @@ export const GameControls: React.FC<GameControlsProps> = ({
     };
   }, [isPrefsOpen]);
 
+  // On a phone the sheet is modal, so opening it moves focus to its composer.
+  // Left on the bar, focus would sit behind the scrim, and a screen reader
+  // would never learn that a dialog had opened.
+  useEffect(() => {
+    if (isDesktop || !isChatOpen) return;
+    const frame = requestAnimationFrame(() => textareaRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [isDesktop, isChatOpen]);
+
+  /**
+   * Closes the phone's chat sheet and hands focus back to the bar that opened
+   * it. Left alone, focus falls to the page body as the sheet turns inert, and
+   * a keyboard user starts again from the top of the page.
+   */
+  const closeChatSheet = useCallback(() => {
+    setIsChatOpen(false);
+    chatBarRef.current?.focus();
+  }, []);
+
   // Escape closes the mobile sheet and the lightbox.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (lightboxImage) setLightboxImage(null);
-      else if (!isDesktop && isChatOpen) setIsChatOpen(false);
+      else if (!isDesktop && isChatOpen) closeChatSheet();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [lightboxImage, isDesktop, isChatOpen]);
+  }, [lightboxImage, isDesktop, isChatOpen, closeChatSheet]);
 
   const handleChatSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -876,26 +903,66 @@ export const GameControls: React.FC<GameControlsProps> = ({
         {actionsCell()}
       </div>
 
-      <div className="fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-40 border-t border-line bg-surface p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+      {/* The chat bar is fixed over the bottom of the screen, so the page ends
+          in a strip exactly as tall as the bar. Without it the bar sat on the
+          action rail, and no amount of scrolling brought the rail out from
+          under it. */}
+      <div style={{ height: `calc(${CHAT_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom))` }} />
+
+      <div
+        className="fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-40 border-t border-line bg-surface p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]"
+        style={{ height: CHAT_BAR_HEIGHT_PX }}
+      >
         <button
+          ref={chatBarRef}
+          type="button"
           onClick={() => setIsChatOpen(true)}
-          className="flex w-full items-center justify-between rounded-full bg-surface-2 px-4 py-2.5 text-left transition-colors hover:bg-surface-3"
+          aria-label={
+            unreadCount > 0
+              ? `Open chat, ${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`
+              : 'Open chat'
+          }
+          aria-expanded={isChatOpen}
+          aria-controls="chat-sheet"
+          className="flex h-full w-full items-center justify-between gap-2 rounded-full bg-surface-2 px-4 text-left transition-colors hover:bg-surface-3"
         >
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] font-medium text-muted">
+          {/* One line, always. A long or multi-line message would otherwise
+              grow the bar past the strip the page reserves for it. */}
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 truncate text-[13px] font-medium text-muted">
               {lastMessagePreview}
             </span>
             {unreadCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-danger-solid text-danger-fg text-[10px] font-semibold leading-none">
+              <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-danger-solid text-danger-fg text-[10px] font-semibold leading-none">
                 {unreadCount}
               </span>
             )}
           </div>
-          <ChevronUp size={16} className="text-subtle" />
+          <ChevronUp size={16} className="shrink-0 text-subtle" />
         </button>
       </div>
 
+      {/* Without a scrim a tap above the open sheet landed on the page
+          underneath, board cells included. It sits over the bar (z-40) and
+          under the sheet (z-50). */}
+      {isChatOpen && (
+        <div
+          className="fixed inset-0 z-[45] bg-[var(--ui-scrim)] backdrop-blur-[2px]"
+          onClick={closeChatSheet}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Closed, the sheet is only moved off screen, so it is made inert too.
+          Otherwise a screen reader read out a chat nobody could see, and Tab
+          reached its composer, which could still send. */}
       <div
+        id="chat-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="chat-sheet-title"
+        aria-hidden={isChatOpen ? undefined : true}
+        inert={!isChatOpen}
         className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t border-line bg-surface shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
           isChatOpen ? 'translate-y-0' : 'translate-y-full'
         }`}
@@ -905,9 +972,10 @@ export const GameControls: React.FC<GameControlsProps> = ({
         }}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-line px-2 py-1">
-          <h2 className="px-2 text-base text-ink">Chat</h2>
+          <h2 id="chat-sheet-title" className="px-2 text-base text-ink">Chat</h2>
           <button
-            onClick={() => setIsChatOpen(false)}
+            type="button"
+            onClick={closeChatSheet}
             className="btn btn-ghost btn-icon h-10 w-10 shrink-0 text-muted hover:bg-surface-2 hover:text-ink"
             aria-label="Close chat"
           >
