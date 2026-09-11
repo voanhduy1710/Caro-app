@@ -14,6 +14,8 @@ interface SettingsAndThemeModalProps {
   onUpdateSettings: (newSettings: RoomSettings) => void;
   isHost: boolean;
   gameStatus: 'lobby' | 'playing' | 'ended';
+  /** Which seat the player holds, so the piece-colour rows can name it. */
+  myPiece?: 'X' | 'O';
 }
 
 const BOARD_THEMES: Array<{ id: BoardTheme; name: string }> = [
@@ -35,6 +37,17 @@ const UI_THEMES: Array<{ id: UiTheme; label: string; icon: typeof Sun }> = [
   { id: 'dark', label: 'Dark', icon: Moon },
   { id: 'system', label: 'System', icon: Monitor },
 ];
+
+/** Swatch names. A hex is neither speakable nor meaningful read aloud. */
+const COLOUR_NAMES: Record<string, string> = {
+  '#006699': 'ocean blue', '#2563eb': 'blue', '#10b981': 'green', '#00f0ff': 'cyan',
+  '#8b5cf6': 'purple', '#f59e0b': 'amber', '#0f172a': 'near-black',
+  '#e11d24': 'red', '#dc2626': 'crimson', '#ef4444': 'coral', '#ff007f': 'hot pink',
+  '#ec4899': 'pink', '#f97316': 'orange', '#ffffff': 'white',
+  '#64748b': 'slate', '#475569': 'dark slate', '#334155': 'charcoal',
+  '#b45309': 'brown', '#d97706': 'dark amber', '#c05621': 'burnt orange',
+  '#78350f': 'dark brown',
+};
 
 const X_PRESETS = ['#006699', '#2563eb', '#10b981', '#00f0ff', '#8b5cf6', '#f59e0b', '#0f172a'];
 const O_PRESETS = ['#e11d24', '#dc2626', '#ef4444', '#ff007f', '#ec4899', '#f97316', '#ffffff'];
@@ -75,22 +88,35 @@ const Choice: React.FC<{
   </button>
 );
 
+/**
+ * The label has to be tied to the options, not merely sitting above them. Both
+ * clocks offer a button whose entire accessible name is "None", so without the
+ * association a screen reader announces the same control twice with nothing to
+ * tell them apart.
+ */
 const Group: React.FC<{ label: string; cols: 2 | 3 | 4; children: React.ReactNode }> = ({
   label,
   cols,
   children,
-}) => (
-  <div>
-    <p className="field-label mb-2">{label}</p>
-    <div
-      className={`grid gap-2 ${
-        cols === 2 ? 'grid-cols-2' : cols === 3 ? 'grid-cols-3' : 'grid-cols-4'
-      }`}
-    >
-      {children}
+}) => {
+  const labelId = React.useId();
+  return (
+    <div>
+      <p id={labelId} className="field-label mb-2">
+        {label}
+      </p>
+      <div
+        role="group"
+        aria-labelledby={labelId}
+        className={`grid gap-2 ${
+          cols === 2 ? 'grid-cols-2' : cols === 3 ? 'grid-cols-3' : 'grid-cols-4'
+        }`}
+      >
+        {children}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 /** A colour row: the presets, then a picker for anything they do not cover. */
 const ColourPickerRow: React.FC<{
@@ -98,10 +124,12 @@ const ColourPickerRow: React.FC<{
   value: string;
   presets: string[];
   onChange: (hex: string) => void;
-}> = ({ label, value, presets, onChange }) => (
+}> = ({ label, value, presets, onChange }) => {
+  const labelId = React.useId();
+  return (
   <div>
     <div className="mb-2 flex items-center justify-between">
-      <p className="field-label">{label}</p>
+      <p id={labelId} className="field-label">{label}</p>
       <input
         type="color"
         value={value}
@@ -110,14 +138,14 @@ const ColourPickerRow: React.FC<{
         className="h-7 w-9 cursor-pointer rounded-sm border-2 border-line-strong bg-transparent p-0"
       />
     </div>
-    <div className="flex flex-wrap items-center gap-2">
+    <div role="group" aria-labelledby={labelId} className="flex flex-wrap items-center gap-2">
       {presets.map((c) => (
         <button
           key={`${label}-${c}`}
           type="button"
           onClick={() => onChange(c)}
           aria-pressed={value === c}
-          aria-label={c}
+          aria-label={`${label}: ${COLOUR_NAMES[c] ?? c}`}
           title={c}
           className={`h-6 w-6 rounded-full border-2 transition hover:scale-110 ${
             value === c ? 'border-ink ring-2 ring-accent' : 'border-surface-3'
@@ -127,7 +155,8 @@ const ColourPickerRow: React.FC<{
       ))}
     </div>
   </div>
-);
+  );
+};
 
 export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
   isOpen,
@@ -136,6 +165,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
   onUpdateSettings,
   isHost,
   gameStatus,
+  myPiece = 'X',
 }) => {
   const dialogProps = useModalChrome(isOpen, onClose, 'settings-modal-title');
   const { theme: uiTheme, setTheme: setUiTheme } = useUiTheme();
@@ -153,6 +183,22 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
 
   const canEditRules = isHost && gameStatus !== 'playing';
   const lockNote = gameStatus === 'playing' ? 'Locked mid-match' : 'Host only';
+
+  /* xColor always paints the X glyph and oColor always paints the O glyph,
+     whichever seat the player is in. The host plays X, so for a guest a row
+     labelled "Your pieces" bound to xColor recolours the OPPONENT's stones.
+     Name the rows from the seat and keep the letter in the label; never swap
+     which field a row writes. */
+  const pieceRows =
+    myPiece === 'O'
+      ? [
+          { label: 'Your O pieces', value: theme.oColor || '#e11d24', presets: O_PRESETS, onChange: setOColor },
+          { label: 'Their X pieces', value: theme.xColor || '#006699', presets: X_PRESETS, onChange: setXColor },
+        ]
+      : [
+          { label: 'Your X pieces', value: theme.xColor || '#006699', presets: X_PRESETS, onChange: setXColor },
+          { label: 'Their O pieces', value: theme.oColor || '#e11d24', presets: O_PRESETS, onChange: setOColor },
+        ];
 
   return (
     <div {...dialogProps} className="modal-scrim">
@@ -289,18 +335,9 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
             </Group>
 
             <div className="space-y-4 border-t-2 border-line pt-4">
-              <ColourPickerRow
-                label="Your piece"
-                value={theme.xColor || '#006699'}
-                presets={X_PRESETS}
-                onChange={setXColor}
-              />
-              <ColourPickerRow
-                label="Their piece"
-                value={theme.oColor || '#e11d24'}
-                presets={O_PRESETS}
-                onChange={setOColor}
-              />
+              {pieceRows.map((row) => (
+                <ColourPickerRow key={row.label} {...row} />
+              ))}
             </div>
 
             {/* The right-click scratchpad marks, which only this device draws. */}

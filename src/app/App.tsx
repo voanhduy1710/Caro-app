@@ -1774,6 +1774,7 @@ export const App: React.FC = () => {
         }}
         isHost={!webrtc.roomId || webrtc.isHost}
         gameStatus={gameStatus}
+        myPiece={myPiece}
       />
 
       <LeaderboardModal

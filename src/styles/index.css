@@ -303,24 +303,6 @@
     box-shadow: none;
   }
 
-  .card-pick {
-    cursor: pointer;
-    transition:
-      transform 0.14s var(--ease-out-quart),
-      box-shadow 0.14s var(--ease-out-quart),
-      background-color 0.18s var(--ease-out-quart);
-  }
-
-  .card-pick:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 0 var(--ui-lift);
-  }
-
-  .card-pick:active {
-    transform: translateY(5px);
-    box-shadow: 0 0 0 var(--ui-lift);
-  }
-
   /* The avatar art is pixel art; default smoothing turns it to mush at 96px. */
   .pixel-art {
     image-rendering: pixelated;
@@ -541,7 +523,7 @@
 /* =============================================================================
    Motion. Every animation names a job: panel-pop a layer opened, pop-in the
    screen arrived, piece-drop your move landed, turn-bob whose turn it is,
-   winning-pulse the line that won, nudge your opponent buzzed you.
+   winning-pulse the line that won.
    Nothing loops for decoration.
    ========================================================================== */
 
@@ -581,15 +563,6 @@
   50% { transform: translateY(-5px); }
 }
 
-@keyframes nudge {
-  0%, 100% { transform: translateX(0); }
-  15% { transform: translateX(-7px) rotate(-2deg); }
-  30% { transform: translateX(7px) rotate(2deg); }
-  45% { transform: translateX(-5px) rotate(-1deg); }
-  60% { transform: translateX(5px) rotate(1deg); }
-  80% { transform: translateX(-2px); }
-}
-
 .animate-winning-cell {
   animation: winning-pulse 0.8s infinite ease-in-out;
 }
@@ -600,10 +573,6 @@
 
 .animate-turn-bob {
   animation: turn-bob 1.4s infinite ease-in-out;
-}
-
-.animate-nudge {
-  animation: nudge 0.5s ease-in-out;
 }
 
 /* The child sets --i and the delay follows, so no JS orchestrator is needed. */
