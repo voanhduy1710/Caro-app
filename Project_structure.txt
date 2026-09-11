@@ -1,0 +1,257 @@
+Generated at: 2026-09-07 10:58:19
+Root directory: C:\Caro-app
+Folders: 23
+Files: 193
+Lines of code: 7845
+Bytes: 5,123,740
+
+Structure:
+📁 Caro-app/
+├── 📁 .agents/
+│   └── 📄 AGENTS.md
+├── 📁 public/
+│   ├── 📁 Avatar/
+│   │   ├── 📄 Agni L.gif
+│   │   ├── 📄 Agni M.gif
+│   │   ├── 📄 Agni S.gif
+│   │   ├── 📄 Alicel.gif
+│   │   ├── 📄 Aliot.gif
+│   │   ├── 📄 Aliza.gif
+│   │   ├── 📄 Amon Ra.gif
+│   │   ├── 📄 Angry penguin.gif
+│   │   ├── 📄 Aqua L.gif
+│   │   ├── 📄 Aqua M.gif
+│   │   ├── 📄 Aqua S.gif
+│   │   ├── 📄 Aqua XL.gif
+│   │   ├── 📄 Atroce.gif
+│   │   ├── 📄 Baby Wolf.gif
+│   │   ├── 📄 Bacsojin.gif
+│   │   ├── 📄 Banshee.gif
+│   │   ├── 📄 Baphomet Jr.gif
+│   │   ├── 📄 Baphomet.gif
+│   │   ├── 📄 Bday poring.gif
+│   │   ├── 📄 Blue pixy poring.gif
+│   │   ├── 📄 Bluewolf.gif
+│   │   ├── 📄 Bombring.gif
+│   │   ├── 📄 Bongun.gif
+│   │   ├── 📄 Caramel.gif
+│   │   ├── 📄 Carat.gif
+│   │   ├── 📄 Cat O Nine Tails.gif
+│   │   ├── 📄 Cat sailor.gif
+│   │   ├── 📄 Cenere.gif
+│   │   ├── 📄 Chung E.gif
+│   │   ├── 📄 Coco.gif
+│   │   ├── 📄 Condor.gif
+│   │   ├── 📄 Dame of Sentinel.gif
+│   │   ├── 📄 Deviruchi.gif
+│   │   ├── 📄 Dolor.gif
+│   │   ├── 📄 Domovoi.gif
+│   │   ├── 📄 Eddga.gif
+│   │   ├── 📄 Eggring.gif
+│   │   ├── 📄 ESL.gif
+│   │   ├── 📄 Evil Nymph.gif
+│   │   ├── 📄 Fabre.gif
+│   │   ├── 📄 Firefox.gif
+│   │   ├── 📄 Fur seal.gif
+│   │   ├── 📄 Garling.gif
+│   │   ├── 📄 Garm baby.gif
+│   │   ├── 📄 Garm.gif
+│   │   ├── 📄 Geffen mage.gif
+│   │   ├── 📄 Gemini.gif
+│   │   ├── 📄 Ghostring.gif
+│   │   ├── 📄 Gloom.gif
+│   │   ├── 📄 Green Ferus.gif
+│   │   ├── 📄 Harpy.gif
+│   │   ├── 📄 Hydra.gif
+│   │   ├── 📄 Ifrit.gif
+│   │   ├── 📄 Iguana.gif
+│   │   ├── 📄 Imp.gif
+│   │   ├── 📄 Incantation Samurai.gif
+│   │   ├── 📄 Incubus.gif
+│   │   ├── 📄 information.md
+│   │   ├── 📄 Injustice.gif
+│   │   ├── 📄 Isis.gif
+│   │   ├── 📄 Jejering.gif
+│   │   ├── 📄 Kafra 1.gif
+│   │   ├── 📄 Kafra 2.gif
+│   │   ├── 📄 King Poring.gif
+│   │   ├── 📄 Kraken leg.gif
+│   │   ├── 📄 Lady Solace.gif
+│   │   ├── 📄 Lady Tanee.gif
+│   │   ├── 📄 Lion.gif
+│   │   ├── 📄 Loli Ruri.gif
+│   │   ├── 📄 Lord of Death.gif
+│   │   ├── 📄 Lunatic.gif
+│   │   ├── 📄 Martin.gif
+│   │   ├── 📄 Mavka.gif
+│   │   ├── 📄 Maya purple.gif
+│   │   ├── 📄 Medusa.gif
+│   │   ├── 📄 Mer.gif
+│   │   ├── 📄 Mimic.gif
+│   │   ├── 📄 Minorous.gif
+│   │   ├── 📄 Mistress of Shelter.gif
+│   │   ├── 📄 Misty.gif
+│   │   ├── 📄 Miyabi Doll.gif
+│   │   ├── 📄 Monk female.gif
+│   │   ├── 📄 Monk male.gif
+│   │   ├── 📄 Moonlight Flower.gif
+│   │   ├── 📄 Nekoring.gif
+│   │   ├── 📄 Nightmare.gif
+│   │   ├── 📄 Ninja female.gif
+│   │   ├── 📄 Ninja male.gif
+│   │   ├── 📄 Owl Duke.gif
+│   │   ├── 📄 P Echidna.gif
+│   │   ├── 📄 P Hera.gif
+│   │   ├── 📄 P Lilith.gif
+│   │   ├── 📄 P Siren.gif
+│   │   ├── 📄 Phen.gif
+│   │   ├── 📄 Piamette.gif
+│   │   ├── 📄 Picky egg.gif
+│   │   ├── 📄 Picky.gif
+│   │   ├── 📄 Pinguicula.gif
+│   │   ├── 📄 Pitman.gif
+│   │   ├── 📄 Pixy poring.gif
+│   │   ├── 📄 Poison spore.gif
+│   │   ├── 📄 Pope merc.gif
+│   │   ├── 📄 Pope.gif
+│   │   ├── 📄 Poporing.gif
+│   │   ├── 📄 Pouring.gif
+│   │   ├── 📄 Question octopus.gif
+│   │   ├── 📄 Red Eruma.gif
+│   │   ├── 📄 Red Ferus.gif
+│   │   ├── 📄 Requiem.gif
+│   │   ├── 📄 Ricecake.gif
+│   │   ├── 📄 Roda Frog.gif
+│   │   ├── 📄 Rotar Zairo.gif
+│   │   ├── 📄 Roween.gif
+│   │   ├── 📄 Siroma.gif
+│   │   ├── 📄 Skeleton prisoner.gif
+│   │   ├── 📄 Spore.gif
+│   │   ├── 📄 Sting.gif
+│   │   ├── 📄 Succubus.gif
+│   │   ├── 📄 Tarou.gif
+│   │   ├── 📄 Tera S.gif
+│   │   ├── 📄 Valkyrie.gif
+│   │   ├── 📄 Ventus L.gif
+│   │   ├── 📄 Ventus M.gif
+│   │   ├── 📄 Ventus S.gif
+│   │   ├── 📄 Ventus XL.gif
+│   │   ├── 📄 Watermelonring.gif
+│   │   ├── 📄 Wicked Nymph.gif
+│   │   ├── 📄 Wild rider.gif
+│   │   ├── 📄 Wizard female.gif
+│   │   ├── 📄 Wizard male.gif
+│   │   ├── 📄 Zealotus.gif
+│   │   ├── 📄 Zerom.gif
+│   │   ├── 📄 Zipper Bear.gif
+│   │   └── 📄 Zombie prisoner.gif
+│   ├── 📄 favicon.svg
+│   ├── 📄 icons.svg
+│   └── 📄 Logo.svg
+├── 📁 scripts/
+│   ├── 📄 clear_data.js
+│   └── 📄 upload_avatars.js
+├── 📁 src/
+│   ├── 📁 app/
+│   │   └── 📄 App.tsx
+│   ├── 📁 assets/
+│   │   ├── 📄 hero.png
+│   │   ├── 📄 Logo.svg
+│   │   ├── 📄 react.svg
+│   │   └── 📄 vite.svg
+│   ├── 📁 config/
+│   │   └── 📄 supabase.ts
+│   ├── 📁 features/
+│   │   ├── 📁 auth/
+│   │   │   ├── 📄 AuthContext.tsx
+│   │   │   ├── 📄 AuthModal.tsx
+│   │   │   └── 📄 SupabaseConfigModal.tsx
+│   │   ├── 📁 avatar/
+│   │   │   └── 📄 avatarService.ts
+│   │   ├── 📁 game/
+│   │   │   ├── 📄 Board.tsx
+│   │   │   └── 📄 GameControls.tsx
+│   │   ├── 📁 history/
+│   │   │   ├── 📄 HistoryModal.tsx
+│   │   │   ├── 📄 historyService.ts
+│   │   │   └── 📄 types.ts
+│   │   ├── 📁 leaderboard/
+│   │   │   ├── 📄 LeaderboardModal.tsx
+│   │   │   └── 📄 leaderboardService.ts
+│   │   ├── 📁 profile/
+│   │   │   └── 📄 ProfileModal.tsx
+│   │   ├── 📁 settings/
+│   │   │   ├── 📄 SettingsAndThemeModal.tsx
+│   │   │   └── 📄 types.ts
+│   │   ├── 📁 theme/
+│   │   │   ├── 📄 ThemeContext.tsx
+│   │   │   └── 📄 types.ts
+│   │   └── 📁 webrtc/
+│   │       ├── 📄 roomDiscoveryService.ts
+│   │       ├── 📄 types.ts
+│   │       └── 📄 useWebRTC.ts
+│   ├── 📁 shared/
+│   │   ├── 📁 components/
+│   │   │   └── 📄 Navbar.tsx
+│   │   ├── 📁 hooks/
+│   │   │   └── 📄 useSound.ts
+│   │   └── 📁 utils/
+│   │       ├── 📄 eloCalculator.ts
+│   │       └── 📄 gomokuLogic.ts
+│   ├── 📁 styles/
+│   │   └── 📄 index.css
+│   ├── 📄 App.css
+│   ├── 📄 App.tsx
+│   ├── 📄 index.css
+│   └── 📄 main.tsx
+├── 📄 .env
+├── 📄 .env.example
+├── 📄 .gitignore
+├── 📄 .mcp.json
+├── 📄 .oxlintrc.json
+├── 📄 clean_restart.ps1
+├── 📄 deploy_local.ps1
+├── 📄 index.html
+├── 📄 package-lock.json
+├── 📄 package.json
+├── 📄 project_structure.py
+├── 📄 README.md
+├── 📄 tsconfig.app.json
+├── 📄 tsconfig.json
+├── 📄 tsconfig.node.json
+├── 📄 vite.config.ts
+├── 📄 walkthrough.md
+├── 📄 Z_prompt_typer.md
+└── 📄 Z_updating_prompt.md
+
+Heavy files (> 100 kb):
+📄 public/Logo.svg: 766.38 KB
+📄 src/assets/Logo.svg: 766.38 KB
+📄 public/Avatar/Lord of Death.gif: 232.18 KB
+📄 public/Avatar/Incantation Samurai.gif: 126.61 KB
+
+Large Files (> 300 lines):
+📄 src/app/App.tsx: 761 lines
+📄 src/features/auth/AuthContext.tsx: 475 lines
+📄 src/features/game/Board.tsx: 439 lines
+📄 src/features/settings/SettingsAndThemeModal.tsx: 331 lines
+
+Small Files (< 60 lines):
+📄 src/App.tsx: 2 lines
+📄 tsconfig.json: 7 lines
+📄 .oxlintrc.json: 8 lines
+📄 src/config/supabase.ts: 10 lines
+📄 src/features/settings/types.ts: 13 lines
+📄 src/features/history/types.ts: 14 lines
+📄 vite.config.ts: 16 lines
+📄 src/main.tsx: 16 lines
+📄 src/features/theme/types.ts: 20 lines
+📄 tsconfig.node.json: 23 lines
+📄 tsconfig.app.json: 26 lines
+📄 package.json: 34 lines
+📄 src/features/webrtc/types.ts: 39 lines
+📄 src/features/leaderboard/leaderboardService.ts: 44 lines
+📄 .mcp.json: 50 lines
+📄 src/shared/utils/eloCalculator.ts: 54 lines
+📄 src/shared/hooks/useSound.ts: 56 lines
+📄 scripts/clear_data.js: 57 lines
