@@ -5,22 +5,26 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
  * Records a finished match and updates both players' ratings.
  *
  * Ratings are computed here from the values already stored in the database, so
- * a client cannot decide its own ELO. Two further rules decide who may record
- * a result at all:
+ * a client cannot decide its own ELO. Who may record a result:
  *
- * - The caller must be one of the two players, proven by their own session.
- * - The result must not raise the caller's own rating. On a decisive result
- *   only the loser may record it; on a draw, only the player whose rating does
- *   not rise.
+ * - The caller must be one of the two players, proven by their own session,
+ *   and must hold a rating of their own.
+ * - A result that does not favour the caller is recorded at once: on a
+ *   decisive result that is the loser, on a draw the player whose rating does
+ *   not rise. Nobody fabricates a result against themselves.
+ * - A result that favours the caller is only a claim. It is accepted when both
+ *   players hold a seat ticket for the game (see the seat-ticket function), and
+ *   it is recorded ten minutes later unless a player disputes it. A loser can no
+ *   longer dodge by closing the tab before submitting, and a result can still
+ *   never be recorded against an account that did not play the game.
+ * - Either player may dispute a game they hold a ticket for. A disputed game
+ *   counts for nobody, unless the loser later concedes it.
  *
- * Version 2 had only the first rule, so any registered account could name
- * itself the winner against any victim and take the victim's rating without a
- * game ever being played. With the second rule a submission can only ever cost
- * the account that sends it, and nobody fabricates a result against themselves.
- * Games involving a guest are unrated and stay on the players' devices.
+ * Claims are recorded by public.finalize_due_match_claims, which runs every
+ * minute and also at the start of every call here.
  *
- * gameId, when sent, makes the submission idempotent: a repeat of the same game
- * returns the first row and never applies the ratings twice.
+ * gameId makes a submission idempotent: a repeat of the same game returns the
+ * first row and never applies the ratings twice.
  *
  * verify_jwt stays off at the gateway: the anon key is itself a valid JWT, so
  * the gateway check would admit every caller anyway. The real check is the user
@@ -147,6 +151,48 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Only a player in this match can record it' }, 403);
   }
 
+  // Record any claims whose window has closed before looking at this one, so a
+  // quiet night without the scheduler still settles on the next game played.
+  await admin.rpc('finalize_due_match_claims');
+
+  const claimRow = (winner: string) => ({
+    game_id: gameId,
+    claimant_uid: callerId,
+    mode,
+    board_size: boardSize,
+    winner_uid: winner,
+    player1_uid: player1Uid,
+    player1_name: player1Name,
+    player2_uid: player2Uid,
+    player2_name: player2Name,
+    seat_log: seatLog,
+  });
+
+  // A dispute. Only a player who sat in the game may raise one, and only while
+  // nothing has been recorded: the loser conceding is still honoured later.
+  if (body.dispute === true) {
+    if (!gameId) return json({ error: 'A dispute needs a game id' }, 400);
+    const { data: ticket } = await admin
+      .from('gomoku_game_seats')
+      .select('uid')
+      .eq('game_id', gameId)
+      .eq('uid', callerId)
+      .maybeSingle();
+    if (!ticket) {
+      return json({ error: 'Only a player who sat in this game can dispute it', code: 'no_seat_ticket' }, 403);
+    }
+    const { data: recorded } = await admin.from('gomoku_matches').select('id').eq('game_id', gameId).limit(1);
+    if (recorded && recorded.length > 0) {
+      return json({ error: 'This game is already on record', code: 'already_recorded' }, 409);
+    }
+    const { error: disputeError } = await admin
+      .from('gomoku_match_claims')
+      .upsert({ ...claimRow('DISPUTED'), status: 'disputed' }, { onConflict: 'game_id,claimant_uid' });
+    if (disputeError) return json({ error: 'Could not record the dispute', detail: disputeError.message }, 500);
+    await admin.from('gomoku_match_claims').update({ status: 'disputed' }).eq('game_id', gameId).eq('status', 'pending');
+    return json({ ok: true, disputed: true });
+  }
+
   // A repeat of a game already on record, checked before anything is computed:
   // both players may offer a draw, and a retry may follow a lost response.
   if (gameId) {
@@ -212,11 +258,27 @@ Deno.serve(async (req: Request) => {
   const delta1 = Math.round(K_FACTOR * (score1 - expectedScore(elo1, elo2)));
   const delta2 = Math.round(K_FACTOR * (score2 - expectedScore(elo2, elo1)));
 
-  // The rule that makes fabrication pointless: a result may only be recorded by
-  // a player it does not favour.
+  // A result that favours the caller is only ever a claim, and only against a
+  // player who really sat in this game.
   const callerDelta = callerId === player1Uid ? delta1 : delta2;
   if (callerDelta > 0) {
-    return json({ error: 'Only the player this result does not favour can record it', code: 'caller_would_gain' }, 403);
+    if (!gameId) {
+      return json({ error: 'Only the player this result does not favour can record it', code: 'caller_would_gain' }, 403);
+    }
+    const { data: tickets } = await admin
+      .from('gomoku_game_seats')
+      .select('uid')
+      .eq('game_id', gameId)
+      .in('uid', [player1Uid, player2Uid]);
+    if ((tickets ?? []).length < 2) {
+      return json({ error: 'Both players need a seat ticket for this game', code: 'caller_would_gain' }, 403);
+    }
+    const { data: claim, error: claimError } = await admin
+      .from('gomoku_match_claims')
+      .upsert(claimRow(winnerUid), { onConflict: 'game_id,claimant_uid', ignoreDuplicates: true })
+      .select('confirm_after');
+    if (claimError) return json({ error: 'Could not record the claim', detail: claimError.message }, 500);
+    return json({ ok: true, pending: true, confirmAfter: claim?.[0]?.confirm_after ?? null });
   }
 
   const { data: inserted, error: insertError } = await admin
@@ -246,6 +308,11 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, duplicate: true, matchId: first?.[0]?.id });
     }
     return json({ error: 'Could not record the match', detail: insertError.message }, 500);
+  }
+
+  // The loser has conceded, so any claim still waiting on this game is settled.
+  if (gameId) {
+    await admin.from('gomoku_match_claims').update({ status: 'superseded' }).eq('game_id', gameId).eq('status', 'pending');
   }
 
   const applyStats = async (uid: string, delta: number) => {
