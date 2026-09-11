@@ -58,6 +58,7 @@ const RESULT_REASONS: Record<string, string> = {
   total_time_out: 'A player used up their total time.',
   resigned: 'A player resigned.',
   opponent_disconnected: 'Your opponent lost connection and did not come back in time.',
+  opponent_left: 'Your opponent left the room.',
 };
 
 const describeResultReason = (reason?: string) =>
@@ -623,7 +624,8 @@ export const App: React.FC = () => {
   // Both players see the same paused countdown; when it expires, the connected player wins.
   useEffect(() => {
     if (!webrtc.connectionTimedOut || gameStatus !== 'playing' || isAiMode) return;
-    handleGameOver(myPiece === 'X' ? 'O' : 'X', null, 'opponent_disconnected', false);
+    // handleGameOver takes the winner, and the winner is whoever is still here.
+    handleGameOver(myPiece, null, 'opponent_disconnected', false);
   }, [webrtc.connectionTimedOut, gameStatus, isAiMode, myPiece, handleGameOver]);
 
   // An opponent who left on purpose is gone. Drop every request that was
@@ -644,7 +646,9 @@ export const App: React.FC = () => {
     setUndoRequestOpen(false);
     setRematchOffer('none');
     if (gameStatus === 'playing' && !isAiMode) {
-      handleGameOver(myPiece === 'X' ? 'O' : 'X', null, 'opponent_disconnected', false);
+      // The player who stayed wins, and the result says they left rather than
+      // that they dropped, since LEAVE_ROOM is only ever sent on purpose.
+      handleGameOver(myPiece, null, 'opponent_left', false);
     } else {
       showNotice('Your opponent left the room.');
     }
