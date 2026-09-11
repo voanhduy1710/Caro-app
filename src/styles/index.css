@@ -240,13 +240,6 @@
      the contrast. Fill and outline are welded together here so no caller can
      take one without the other.                                            */
 
-  .display {
-    font-family: var(--font-display);
-    font-weight: 800;
-    line-height: 1.05;
-    letter-spacing: 0.01em;
-  }
-
   .display-brand {
     --outline: var(--ui-text);
     font-family: var(--font-display);
