@@ -674,7 +674,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       }
       if (r.hostLostSince === null) return;
       if (now - r.hostLostSince > HOST_LOST_GIVE_UP_MS) {
-        finish('host_lost', 'The host disconnected and did not come back, so the room has closed.');
+        finish('host_lost', 'The host disconnected and did not come back, so the game ended for everyone.');
       } else if (now - r.lastRetryAt >= HOST_RETRY_MS) {
         r.lastRetryAt = now;
         connectToHost();
@@ -888,7 +888,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           finish('full', `Room ${r.roomId} is full (${message.payload.capacity} of ${message.payload.capacity}).`);
           return;
         case 'ROOM_CLOSED':
-          finish('host_left', `The room has closed. ${message.payload.hostName} was hosting and left, so the game ended for everyone.`);
+          finish('host_left', `${message.payload.hostName} was hosting and left, so the game ended for everyone.`);
           return;
         case 'SUPERSEDED':
           finish('superseded', 'This room is open in another tab.');
