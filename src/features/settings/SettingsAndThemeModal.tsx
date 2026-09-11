@@ -70,19 +70,15 @@ const Choice: React.FC<{
     onClick={onClick}
     disabled={disabled}
     aria-pressed={selected}
-    className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-sm px-2 py-2.5 font-display text-[13px] font-bold transition ${
-      selected ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-ink'
-    } ${
-      disabled
-        ? /* A guest opens this dialog to READ the rules binding them, so the
-             chosen option keeps full contrast even when it cannot be changed.
-             Only the options they cannot take are dimmed, and losing the
-             extrusion is what says the whole group is inert. */
-          `cursor-not-allowed ${selected ? '' : 'opacity-55'}`
-        : `${selected
-            ? 'shadow-[0_3px_0_var(--ui-accent-shadow)]'
-            : 'shadow-[0_3px_0_var(--ui-border-strong)] hover:bg-surface-3'}`
-    }`}
+    className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-sm px-2 py-2 font-display text-[13px] font-bold transition ${
+      selected
+        ? 'bg-accent text-accent-fg'
+        : disabled
+        ? /* Not dimmed with opacity: on a tinted track that compounds to 2.1:1.
+             The subtle token measures 4.17:1 and still reads as unavailable. */
+          'text-subtle'
+        : 'text-muted hover:bg-surface-2 hover:text-ink'
+    } ${disabled ? 'cursor-not-allowed' : ''}`}
   >
     {children}
   </button>
@@ -105,10 +101,12 @@ const Group: React.FC<{ label: string; cols: 2 | 3 | 4; children: React.ReactNod
       <p id={labelId} className="field-label mb-2">
         {label}
       </p>
+      {/* One recessed track per setting, rather than four raised boxes. The
+          extruded controls stay for actions; configuration is quieter. */}
       <div
         role="group"
         aria-labelledby={labelId}
-        className={`grid gap-2 ${
+        className={`grid gap-1 rounded-md bg-surface-3 p-1 ${
           cols === 2 ? 'grid-cols-2' : cols === 3 ? 'grid-cols-3' : 'grid-cols-4'
         }`}
       >
