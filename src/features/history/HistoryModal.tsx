@@ -45,7 +45,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, onP
     <div {...dialogProps} className="modal-scrim">
       <div className="modal-panel max-w-lg max-h-[85vh] relative p-6 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4 border-b-2 border-line pb-3">
+        <div className="flex items-center justify-between mb-4 border-b border-line pb-3">
           <div>
             <h2 id="history-modal-title" className="text-lg font-semibold text-ink tracking-tight">Match History Log</h2>
             <p className="text-[11px] text-muted font-medium">

@@ -1142,7 +1142,7 @@ export const App: React.FC = () => {
                 {WIN_RULE_TEXT}
               </p>
               {(!user || user.isGuest) && (
-                <p className="chip chip-brand animate-pop-in" style={stagger(2)}>
+                <p className="chip animate-pop-in" style={stagger(2)}>
                   Play now, no account needed
                 </p>
               )}
@@ -1242,9 +1242,9 @@ export const App: React.FC = () => {
                 </button>
 
                 <div className="relative flex items-center py-1">
-                  <div className="flex-grow border-t-2 border-line"></div>
+                  <div className="flex-grow border-t border-line"></div>
                   <span className="mx-3 flex-shrink text-xs text-subtle">or</span>
-                  <div className="flex-grow border-t-2 border-line"></div>
+                  <div className="flex-grow border-t border-line"></div>
                 </div>
 
                 {/* A form, so Enter and the button behave identically. */}
@@ -1307,13 +1307,13 @@ export const App: React.FC = () => {
             </div>
 
             <div className="card animate-pop-in text-left" style={stagger(6)}>
-              <div className="flex items-center justify-between border-b-2 border-line px-5 py-3.5">
+              <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
                 <h2 className="text-lg text-ink">Public rooms</h2>
                 <span className="chip font-mono tabular-nums">{availableRooms.length}</span>
               </div>
               <div className="p-5">
                 {availableRooms.length === 0 ? (
-                  <div className="space-y-3 rounded-md border-2 border-dashed border-line bg-surface-2 p-6 text-center">
+                  <div className="space-y-3 rounded-md border border-dashed border-line bg-surface-2 p-6 text-center">
                     {/* "Still looking" and "nobody is hosting" are different
                         situations, and only the second one needs a way out. */}
                     <p className="text-sm font-medium text-ink">
@@ -1374,7 +1374,7 @@ export const App: React.FC = () => {
         {gameStatus === 'lobby' && webrtc.roomId && (
           <div className="w-full max-w-md space-y-4 text-left">
             <div className="panel space-y-4 p-5">
-              <div className="flex items-start justify-between gap-3 border-b-2 border-line pb-3">
+              <div className="flex items-start justify-between gap-3 border-b border-line pb-3">
                 <div>
                   <span className="block text-xs font-semibold text-muted">Room code</span>
                   <span className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-subtle">
@@ -1801,7 +1801,7 @@ export const App: React.FC = () => {
 
       {/* Footer */}
       {!inMatch && (
-        <footer className="w-full border-t-2 border-line bg-surface py-4 text-center text-xs text-muted">
+        <footer className="w-full border-t border-line bg-surface py-4 text-center text-xs text-muted">
           Peer-to-peer Caro. No servers between you and your opponent.
         </footer>
       )}

@@ -70,7 +70,7 @@ const Choice: React.FC<{
     onClick={onClick}
     disabled={disabled}
     aria-pressed={selected}
-    className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-sm px-2 py-2 font-display text-[13px] font-bold transition ${
+    className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-sm px-2 py-2 text-[13px] font-semibold transition ${
       selected
         ? 'bg-accent text-accent-fg'
         : disabled
@@ -201,7 +201,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
   return (
     <div {...dialogProps} className="modal-scrim">
       <div className="modal-panel relative flex max-h-[90vh] max-w-3xl flex-col overflow-hidden p-6">
-        <div className="mb-4 flex shrink-0 items-center justify-between border-b-2 border-line pb-3">
+        <div className="mb-4 flex shrink-0 items-center justify-between border-b border-line pb-3">
           <h2 id="settings-modal-title" className="text-xl text-ink">
             Settings
           </h2>
@@ -212,8 +212,8 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
 
         <div className="grid flex-1 grid-cols-1 gap-6 overflow-y-auto pr-1 md:grid-cols-2">
           {/* MATCH. The rules both players are bound by. */}
-          <div className="space-y-5 border-b-2 border-line pb-5 md:border-b-0 md:border-r-2 md:pb-0 md:pr-6">
-            <div className="flex items-center justify-between gap-2 border-b-2 border-line pb-2">
+          <div className="space-y-5 border-b border-line pb-5 md:border-b-0 md:border-r md:pb-0 md:pr-6">
+            <div className="flex items-center justify-between gap-2 border-b border-line pb-2">
               <h3 className="text-base text-ink">Match</h3>
               {!canEditRules && <span className="chip">{lockNote}</span>}
             </div>
@@ -288,7 +288,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
 
           {/* LOOK. This device only, and never sent to the other player. */}
           <div className="space-y-5">
-            <div className="border-b-2 border-line pb-2">
+            <div className="border-b border-line pb-2">
               <h3 className="text-base text-ink">Look</h3>
             </div>
 
@@ -332,14 +332,14 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
               ))}
             </Group>
 
-            <div className="space-y-4 border-t-2 border-line pt-4">
+            <div className="space-y-4 border-t border-line pt-4">
               {pieceRows.map((row) => (
                 <ColourPickerRow key={row.label} {...row} />
               ))}
             </div>
 
             {/* The right-click scratchpad marks, which only this device draws. */}
-            <div className="space-y-4 border-t-2 border-line pt-4">
+            <div className="space-y-4 border-t border-line pt-4">
               <ColourPickerRow
                 label="Your ghost moves"
                 value={theme.selfSimulatedColor}

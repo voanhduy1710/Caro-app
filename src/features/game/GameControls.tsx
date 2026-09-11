@@ -699,7 +699,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
       {reactionRow}
 
-      <form onSubmit={handleChatSubmit} className="flex items-end gap-1.5 border-t-2 border-line pt-2">
+      <form onSubmit={handleChatSubmit} className="flex items-end gap-1.5 border-t border-line pt-2">
         {!isAiMode && (
           <button
             type="button"
@@ -837,7 +837,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
         </div>
 
         <aside className="area-right flex min-h-0 flex-col overflow-hidden">
-          <div className="shrink-0 border-b-2 border-line">
+          <div className="shrink-0 border-b border-line">
             {chatHeader}
           </div>
           {isChatOpen && (
@@ -845,7 +845,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
               {chatFeed}
             </div>
           )}
-          <div className="area-compose flex flex-col justify-center px-3 py-2 border-t-2 border-line">
+          <div className="area-compose flex flex-col justify-center px-3 py-2 border-t border-line">
             {reactionRow}
             {composer}
           </div>
@@ -872,7 +872,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
         {actionsCell()}
       </div>
 
-      <div className="fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-40 border-t-2 border-line bg-surface p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+      <div className="fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-40 border-t border-line bg-surface p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
         <button
           onClick={() => setIsChatOpen(true)}
           className="flex w-full items-center justify-between rounded-full bg-surface-2 px-4 py-2.5 text-left transition-colors hover:bg-surface-3"
@@ -892,7 +892,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
       </div>
 
       <div
-        className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t-2 border-line bg-surface shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
+        className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t border-line bg-surface shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
           isChatOpen ? 'translate-y-0' : 'translate-y-full'
         }`}
         style={{
@@ -900,7 +900,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}
       >
-        <div className="flex shrink-0 items-center justify-between border-b-2 border-line px-2 py-1">
+        <div className="flex shrink-0 items-center justify-between border-b border-line px-2 py-1">
           <h2 className="px-2 text-base text-ink">Chat</h2>
           <button
             onClick={() => setIsChatOpen(false)}

@@ -381,7 +381,7 @@ export const AuthModal: React.FC = () => {
       {/* Header and submit button stay put while the fields scroll, so the way
           out and the way forward survive an open on-screen keyboard. */}
       <div className="modal-panel max-w-md relative flex max-h-[90dvh] flex-col">
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b-2 border-line p-6 pb-4">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line p-6 pb-4">
           <div>
             <h2 id="auth-modal-title" className="text-xl font-semibold tracking-tight text-ink">
               {isSignIn ? 'Sign in' : 'Create an account'}
@@ -444,7 +444,7 @@ export const AuthModal: React.FC = () => {
           {isSignIn ? signInBody : createBody}
         </div>
 
-        <div className="shrink-0 border-t-2 border-line p-6 pt-4">
+        <div className="shrink-0 border-t border-line p-6 pt-4">
           <button
             type="submit"
             form="auth-form"

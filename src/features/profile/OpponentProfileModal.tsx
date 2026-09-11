@@ -35,7 +35,7 @@ export const OpponentProfileModal: React.FC<OpponentProfileModalProps> = ({
     >
       <div className="modal-panel max-w-md relative p-6 space-y-5">
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b-2 border-line pb-3">
+        <div className="flex items-center justify-between border-b border-line pb-3">
           <div>
             <h2 id="opponent-profile-modal-title" className="text-xl font-semibold text-ink tracking-tight">
               Opponent Profile

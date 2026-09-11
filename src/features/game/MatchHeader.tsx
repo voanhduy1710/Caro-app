@@ -121,7 +121,7 @@ const Seat: React.FC<SeatProps> = ({
       </span>
       {(clock > 0 || isTurn) && (
         <span
-          className={`min-w-[4.5rem] rounded-sm px-2.5 py-1 text-center font-display text-sm font-bold leading-tight transition-colors ${
+          className={`min-w-[4.5rem] rounded-sm px-2.5 py-1 text-center text-sm font-semibold leading-tight transition-colors ${
             clock > 0 ? 'font-mono tabular-nums' : ''
           } ${
             isTurn

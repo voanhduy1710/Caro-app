@@ -28,16 +28,21 @@
     color: var(--ui-accent-fg);
   }
 
-  /* Baloo ships tall vertical metrics, so leading is set explicitly rather
+  /* The display face is the game's voice: the wordmark, headings, the score,
+     the result, and the one action that is the point of a screen. It is not
+     the voice of every chip, label and tool button. Anything below h4 is
+     structure rather than voice, so it stays on the body face.
+
+     Baloo ships tall vertical metrics, so leading is set explicitly rather
      than left to the font's own line gap. */
-  h1, h2, h3, h4 {
+  h1, h2, h3 {
     font-family: var(--font-display);
     font-weight: 700;
     letter-spacing: 0.01em;
     line-height: 1.1;
   }
 
-  h5, h6 {
+  h4, h5, h6 {
     font-weight: 600;
     letter-spacing: 0;
   }
@@ -85,10 +90,9 @@
     border-radius: var(--radius-md);
     border: none;
     padding: 9px 18px;
-    font-family: var(--font-display);
     font-size: 15px;
-    font-weight: 700;
-    letter-spacing: 0.01em;
+    font-weight: 600;
+    letter-spacing: 0;
     line-height: 20px;
     cursor: pointer;
     box-shadow: 0 var(--btn-lift) 0 var(--btn-shadow);
@@ -125,9 +129,13 @@
     border-radius: var(--radius-sm);
   }
 
+  /* The loud one. A screen has at most one, so it keeps the game's voice. */
   .btn-lg {
     padding: 14px 28px;
+    font-family: var(--font-display);
     font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
     line-height: 24px;
     --btn-lift: 6px;
   }
@@ -154,13 +162,13 @@
     background-color: var(--ui-surface);
     color: var(--ui-text);
     box-shadow:
-      0 0 0 2px var(--ui-border) inset,
+      0 0 0 1px var(--ui-border) inset,
       0 var(--btn-lift) 0 var(--btn-shadow);
     --btn-shadow: var(--ui-border-strong);
   }
 
   .btn-secondary:not(:disabled):active {
-    box-shadow: 0 0 0 2px var(--ui-border) inset, 0 0 0 var(--btn-shadow);
+    box-shadow: 0 0 0 1px var(--ui-border) inset, 0 0 0 var(--btn-shadow);
   }
 
   .btn-secondary:not(:disabled):hover {
@@ -279,13 +287,13 @@
   .panel {
     background-color: var(--ui-surface);
     border-radius: var(--radius-lg);
-    box-shadow: 0 6px 0 var(--ui-lift);
+    box-shadow: 0 4px 0 var(--ui-lift);
   }
 
   .card {
     background-color: var(--ui-surface);
     border-radius: var(--radius-md);
-    box-shadow: 0 5px 0 var(--ui-lift);
+    box-shadow: 0 3px 0 var(--ui-lift);
   }
 
   /* Inset cards press in rather than out. */
@@ -312,7 +320,6 @@
     background-color: var(--ui-surface-3);
     color: var(--ui-text-muted);
     padding: 4px 10px;
-    font-family: var(--font-display);
     font-size: 13px;
     font-weight: 600;
     line-height: 18px;
@@ -339,9 +346,8 @@
 
   /* Label above input, always. Never placeholder-as-label. */
   .field-label {
-    font-family: var(--font-display);
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 18px;
     color: var(--ui-text);
   }

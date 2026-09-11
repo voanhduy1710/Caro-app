@@ -36,7 +36,7 @@ export const SupabaseConfigModal: React.FC = () => {
             <X size={18} strokeWidth={2.25} aria-hidden="true" />
           </button>
 
-        <div className="border-b-2 border-line pb-3">
+        <div className="border-b border-line pb-3">
           <h2 id="supabase-config-modal-title" className="text-lg font-semibold text-ink tracking-tight mt-0.5">
             Google Authentication Configuration
           </h2>
@@ -84,7 +84,7 @@ export const SupabaseConfigModal: React.FC = () => {
           </form>
         </div>
 
-        <div className="space-y-3 text-xs text-muted border-t-2 border-line pt-3">
+        <div className="space-y-3 text-xs text-muted border-t border-line pt-3">
           <p className="font-medium text-ink">
             Steps to enable Google 1-Click Authentication:
           </p>
