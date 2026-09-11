@@ -16,7 +16,7 @@ const EyeIcon: React.FC<{ visible: boolean }> = ({ visible }) => {
 };
 
 const USERNAME_RULE = '3-24 characters. Lowercase letters, numbers and underscores only.';
-const PASSWORD_RULE = 'At least 8 characters. There is no reset yet, so keep it somewhere safe.';
+const PASSWORD_RULE = 'There is no password reset yet, so keep it somewhere safe.';
 
 /** What an account actually buys, limited to what the app really does today. */
 const ACCOUNT_BENEFITS = [
@@ -239,8 +239,7 @@ export const AuthModal: React.FC = () => {
       {/* No "forgot password" link: nothing behind it would work yet, and a
           dead link costs more trust than the missing feature does. */}
       <p className="field-hint">
-        Passwords cannot be reset from here yet. If you have lost yours, create a new
-        account or keep playing as a guest.
+        Passwords cannot be reset yet. Create a new account, or keep playing as a guest.
       </p>
     </form>
   );
@@ -279,7 +278,7 @@ export const AuthModal: React.FC = () => {
         {fieldErrors.username ? (
           <p id="create-username-error" className="field-error">{fieldErrors.username}</p>
         ) : (
-          <p id="create-username-hint" className="field-hint">{USERNAME_RULE} This is what you log in with.</p>
+          <p id="create-username-hint" className="field-hint">{USERNAME_RULE}</p>
         )}
       </div>
 
@@ -303,7 +302,7 @@ export const AuthModal: React.FC = () => {
           <p id="create-display-name-error" className="field-error">{fieldErrors.displayName}</p>
         ) : (
           <p id="create-display-name-hint" className="field-hint">
-            Leave this empty to use your username. You can change it later.
+            Leave empty to use your username.
           </p>
         )}
       </div>
@@ -383,12 +382,9 @@ export const AuthModal: React.FC = () => {
       <div className="modal-panel max-w-md relative flex max-h-[90dvh] flex-col">
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line p-6 pb-4">
           <div>
-            <h2 id="auth-modal-title" className="text-xl font-semibold tracking-tight text-ink">
+            <h2 id="auth-modal-title" className="text-xl text-ink">
               {isSignIn ? 'Sign in' : 'Create an account'}
             </h2>
-            <p className="mt-1 text-xs text-muted">
-              You can keep playing as a guest; an account only adds a saved rating.
-            </p>
           </div>
           <button
             onClick={handleClose}

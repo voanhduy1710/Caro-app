@@ -37,8 +37,8 @@ export const OpponentProfileModal: React.FC<OpponentProfileModalProps> = ({
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div>
-            <h2 id="opponent-profile-modal-title" className="text-xl font-semibold text-ink tracking-tight">
-              Opponent Profile
+            <h2 id="opponent-profile-modal-title" className="text-xl text-ink">
+              Opponent
             </h2>
           </div>
           <button

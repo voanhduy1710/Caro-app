@@ -39,8 +39,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
         {/* Header */}
         <div className="flex items-center justify-between mb-4 border-b border-line pb-3">
           <div>
-            <h2 id="leaderboard-modal-title" className="text-lg font-semibold text-ink tracking-tight">Global Leaderboard</h2>
-            <p className="text-[11px] text-muted font-medium">Top rankings sorted by player ELO score</p>
+            <h2 id="leaderboard-modal-title" className="text-xl text-ink">Leaderboard</h2>
           </div>
           <div className="flex items-center gap-2">
             <button

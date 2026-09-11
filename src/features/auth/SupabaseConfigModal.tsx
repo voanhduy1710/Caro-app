@@ -37,7 +37,7 @@ export const SupabaseConfigModal: React.FC = () => {
           </button>
 
         <div className="border-b border-line pb-3">
-          <h2 id="supabase-config-modal-title" className="text-lg font-semibold text-ink tracking-tight mt-0.5">
+          <h2 id="supabase-config-modal-title" className="text-xl text-ink mt-0.5">
             Google Authentication Configuration
           </h2>
         </div>

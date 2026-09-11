@@ -89,8 +89,8 @@ export const ProfileModal: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-line pb-2 shrink-0">
           <div>
-            <h2 id="profile-modal-title" className="text-lg font-semibold text-ink tracking-tight">
-              Player Profile & Avatar Settings
+            <h2 id="profile-modal-title" className="text-xl text-ink">
+              Profile
             </h2>
           </div>
           <button
@@ -164,7 +164,7 @@ export const ProfileModal: React.FC = () => {
             {/* Display Name */}
             <div>
               <label className="block text-[11px] font-medium text-ink mb-1">
-                Display Name (In-Game Name)
+                Display name
               </label>
               <input
                 type="text"
@@ -231,7 +231,7 @@ export const ProfileModal: React.FC = () => {
                 type="submit"
                 className="btn btn-primary btn-sm flex-1"
               >
-                {isSavedSuccess ? (<><Check size={14} strokeWidth={2} aria-hidden="true" />Saved</>) : ('Save profile changes')}
+                {isSavedSuccess ? (<><Check size={14} strokeWidth={2} aria-hidden="true" />Saved</>) : ('Save changes')}
               </button>
             </div>
           </form>

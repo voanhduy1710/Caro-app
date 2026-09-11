@@ -1464,9 +1464,7 @@ export const App: React.FC = () => {
                     </span>
                   ))}
                 </div>
-                <p className="text-[11px] leading-relaxed text-muted">
-                  {WIN_RULE_TEXT} The host plays X and moves first.
-                </p>
+                <p className="text-xs text-muted">The host plays X and moves first.</p>
                 {webrtc.isHost && (
                   <button
                     type="button"
@@ -1671,7 +1669,7 @@ export const App: React.FC = () => {
             </div>
             <div className="p-7 text-center">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-warning-soft text-warning"><WifiOff size={24} strokeWidth={2.25} aria-hidden="true" /></div>
-              <h3 id="reconnect-title" className="mt-2 text-xl font-semibold tracking-tight text-ink">Reconnecting opponent</h3>
+              <h3 id="reconnect-title" className="mt-2 text-xl text-ink">Reconnecting opponent</h3>
               <p className="mt-2 text-sm leading-6 text-muted">Your opponent disconnected. The board and clocks are paused while we keep their seat open.</p>
               <div className="my-6 rounded-lg bg-inverse px-5 py-4 text-inverse-fg">
                 <span className="font-mono text-4xl font-semibold tabular-nums">{webrtc.reconnectTimeLeft}s</span>

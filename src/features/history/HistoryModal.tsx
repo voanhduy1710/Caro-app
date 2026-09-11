@@ -47,10 +47,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, onP
         {/* Header */}
         <div className="flex items-center justify-between mb-4 border-b border-line pb-3">
           <div>
-            <h2 id="history-modal-title" className="text-lg font-semibold text-ink tracking-tight">Match History Log</h2>
-            <p className="text-[11px] text-muted font-medium">
-              Online matches and practice games played on this device
-            </p>
+            <h2 id="history-modal-title" className="text-xl text-ink">Match history</h2>
           </div>
           <button
             onClick={onClose}
