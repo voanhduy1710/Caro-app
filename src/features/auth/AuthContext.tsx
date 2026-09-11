@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../../config/supabase';
 import { hashPassword, verifyPassword, isLegacyPlaintext } from './passwordHash';
-import { getAvatarPublicUrl } from '../avatar/avatarService';
+import { getAvatarPublicUrl, getChampionIdForSeed } from '../avatar/avatarService';
 
 export interface UserProfile {
   uid: string;
@@ -37,7 +37,8 @@ interface AuthContextType {
   showProfileModal: boolean;
   setShowProfileModal: (show: boolean) => void;
   openProfileModal: () => void;
-  updateUserProfile: (updates: { displayName?: string; photoURL?: string }) => Promise<void>;
+  /** Resolves false when the server refused the change, which is then taken back out. */
+  updateUserProfile: (updates: { displayName?: string; photoURL?: string }) => Promise<boolean>;
   /** Re-reads ratings from the server after a match, so the ELO shown is current. */
   refreshUserProfile: () => Promise<void>;
   changePassword: (newPassword: string) => Promise<{ success: boolean; message?: string }>;
@@ -73,6 +74,23 @@ const normalizeUsername = (value: string) => value.trim().toLowerCase();
 
 const usernameToEmail = (username: string) => `${username}@gomoku.app`;
 
+const GUEST_UID_PREFIX = 'guest_';
+
+/** What every guest was called before names came from the uid. */
+const LEGACY_GUEST_NAME = 'Guest Player';
+
+/**
+ * A guest's name, taken from their uid so it is the same on every load and two
+ * guests in one lobby can tell each other apart. The uid ends in random
+ * base-36 characters; read as a number, its last four digits make a suffix
+ * that is short and easy to say out loud.
+ */
+const guestNameFor = (uid: string): string => {
+  const value = parseInt(uid.slice(GUEST_UID_PREFIX.length), 36);
+  const suffix = Number.isFinite(value) ? value % 10000 : 0;
+  return `Guest ${String(suffix).padStart(4, '0')}`;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -92,22 +110,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setShowProfileModal(true);
   };
 
-  const getInitialGuest = (name = 'Guest Player'): UserProfile => {
+  /**
+   * Guests stored before names came from the uid are all "Guest Player", and
+   * most still wear the one default avatar. They get the name and avatar a new
+   * guest with the same uid would get, so two of them in a lobby stop looking
+   * identical. A guest who renamed themselves is left alone, and an avatar
+   * that already differs from the default is kept.
+   */
+  const upgradeLegacyGuest = (profile: UserProfile, storageKey: string): UserProfile => {
+    if (!profile.isGuest || profile.displayName !== LEGACY_GUEST_NAME) return profile;
+
+    const upgraded: UserProfile = {
+      ...profile,
+      displayName: guestNameFor(profile.uid),
+      photoURL: getAvatarPublicUrl(profile.photoURL) === getAvatarPublicUrl()
+        ? getChampionIdForSeed(profile.uid)
+        : profile.photoURL,
+    };
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(upgraded));
+    } catch (e) {
+      console.warn('Failed to save upgraded guest to localStorage:', e);
+    }
+    return upgraded;
+  };
+
+  const getInitialGuest = (customName?: string): UserProfile => {
     try {
       const savedProfile = localStorage.getItem(SAVED_PROFILE_KEY);
-      if (savedProfile) return JSON.parse(savedProfile);
+      if (savedProfile) return upgradeLegacyGuest(JSON.parse(savedProfile), SAVED_PROFILE_KEY);
 
       const savedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
-      if (savedGuest) return JSON.parse(savedGuest);
+      if (savedGuest) return upgradeLegacyGuest(JSON.parse(savedGuest), GUEST_STORAGE_KEY);
     } catch (e) {
       console.warn('Failed to parse user from localStorage:', e);
     }
 
-    const guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
+    // The avatar is stored as a bare champion id, the same form a picked one
+    // takes, so it is rebuilt on whatever patch is current when it renders.
+    const guestId = GUEST_UID_PREFIX + Math.random().toString(36).substring(2, 9);
     const guestUser: UserProfile = {
       uid: guestId,
-      displayName: name,
-      photoURL: getAvatarPublicUrl(),
+      displayName: customName?.trim() || guestNameFor(guestId),
+      photoURL: getChampionIdForSeed(guestId),
       email: '',
       elo: 1200,
       wins: 0,
@@ -467,24 +512,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.warn('Failed to clear localStorage on signout:', e);
     }
-    const freshGuest = getInitialGuest('Guest Player');
+    const freshGuest = getInitialGuest();
     setUser(freshGuest);
   };
 
-  const loginAsGuest = (customName = 'Guest Player') => {
+  const loginAsGuest = (customName?: string) => {
     const guestUser = getInitialGuest(customName);
     setUser(guestUser);
   };
 
-  const updateUserProfile = async (updates: { displayName?: string; photoURL?: string }) => {
-    if (!user) return;
+  const updateUserProfile = async (updates: { displayName?: string; photoURL?: string }): Promise<boolean> => {
+    if (!user) return false;
+    const previous = user;
     const updated: UserProfile = {
       ...user,
       displayName: updates.displayName !== undefined ? updates.displayName.trim() : user.displayName,
       photoURL: updates.photoURL !== undefined ? updates.photoURL : user.photoURL,
     };
+    // Shown straight away so the navbar keeps up with the modal. Nothing else
+    // is written until the server has taken the change.
     setUser(updated);
 
+    if (supabase && isSupabaseConfigured && !updated.isGuest) {
+      // Only the columns a player edits. The authenticated role may update
+      // display_name, photo_url and updated_at but not uid, and an upsert sets
+      // every column it sends, uid included, so the upsert this replaces was
+      // refused on every save. supabase-js returns that as { error } instead
+      // of throwing, which is why the modal said "Saved" all the same.
+      let saved = false;
+      try {
+        const { data, error } = await supabase
+          .from('gomoku_users')
+          .update({
+            display_name: updated.displayName,
+            photo_url: updated.photoURL,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('uid', updated.uid)
+          .select('uid');
+        if (error) {
+          console.warn('Failed to sync profile update to Supabase:', error.message);
+        } else if (!data?.length) {
+          // No error, but no row either: this account has no gomoku_users row,
+          // or a policy hid it from the update. Nothing was written.
+          console.warn('Profile update matched no gomoku_users row for', updated.uid);
+        } else {
+          saved = true;
+        }
+      } catch (err) {
+        console.warn('Failed to sync profile update to Supabase:', err);
+      }
+
+      if (!saved) {
+        // Take back the two fields this save changed, and only while the same
+        // player is signed in. Anything else that moved in the meantime, such
+        // as a rating refresh, is left as it is.
+        setUser((current) => (current?.uid === previous.uid
+          ? { ...current, displayName: previous.displayName, photoURL: previous.photoURL }
+          : current));
+        return false;
+      }
+    }
+
+    // The browser's copies are written only once the change is known to stand,
+    // so a refused save never reaches them and a reload cannot bring it back.
     try {
       localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(updated));
       if (updated.isGuest) {
@@ -503,21 +594,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       saveLocalAccounts(accounts);
     }
 
-    if (supabase && isSupabaseConfigured && !updated.isGuest) {
-      try {
-        await supabase.from('gomoku_users').upsert(
-          {
-            uid: updated.uid,
-            display_name: updated.displayName,
-            photo_url: updated.photoURL,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'uid' }
-        );
-      } catch (err) {
-        console.warn('Failed to sync profile update to Supabase:', err);
-      }
-    }
+    return true;
   };
 
   const refreshUserProfile = async () => {

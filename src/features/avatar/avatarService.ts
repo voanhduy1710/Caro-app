@@ -233,7 +233,10 @@ const ddragonIdOf = (value: string): string | null => {
  * picked under - the value in the database never has to be rewritten.
  */
 export const getChampionId = (value?: string | null): string | null => {
-  if (!value) return null;
+  // Values reach here from localStorage, database rows and other players'
+  // broadcasts, so the declared type is not a guarantee. Anything that is not
+  // a string counts as no avatar; the string methods below would throw on it.
+  if (typeof value !== 'string' || !value) return null;
 
   let clean = value;
 
@@ -258,13 +261,35 @@ export const getChampionId = (value?: string | null): string | null => {
 };
 
 /**
+ * A champion chosen by a seed string: the same one every time for the same
+ * seed, spread across the whole table for different ones. A guest's default
+ * avatar comes from their uid this way, so it survives a reload and two
+ * guests in one lobby rarely share a face.
+ */
+export const getChampionIdForSeed = (seed: string): string => {
+  // FNV-1a. Guest uids can differ in a single character, and a plain sum of
+  // character codes would put those guests on neighbouring champions.
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = Math.imul(hash ^ seed.charCodeAt(i), 0x01000193);
+  }
+  return CHAMPION_DATA[(hash >>> 0) % CHAMPION_DATA.length].id;
+};
+
+/**
  * Resolve whatever is stored as a player's avatar into something renderable.
  * Accepts a champion ID ("Ahri"), a filename ("Ahri.png"), a legacy
  * Ragnarok-style path, or a full URL.
  */
 export const getAvatarPublicUrl = (filenameOrUrl?: string | null): string => {
+  // A room broadcast from anyone lands in hostAvatar and is rendered through
+  // here, so this can be handed a number or an object whatever the type says.
+  // It resolves like a missing avatar instead of throwing mid-render, which
+  // would blank the whole app.
+  const value = typeof filenameOrUrl === 'string' ? filenameOrUrl : null;
+
   // One of ours: always rebuilt on the current patch, whatever was stored.
-  const champion = getChampionId(filenameOrUrl);
+  const champion = getChampionId(value);
   if (champion) {
     return `${DDRAGON_CDN}/${champion}.png`;
   }
@@ -273,7 +298,7 @@ export const getAvatarPublicUrl = (filenameOrUrl?: string | null): string => {
   // newer than the table. Passing it through would keep it on the patch it was
   // saved under, so it is rebuilt on the current one too; if the id no longer
   // exists, every avatar image falls back to the default in its onError.
-  const unlistedId = filenameOrUrl ? ddragonIdOf(filenameOrUrl) : null;
+  const unlistedId = value ? ddragonIdOf(value) : null;
   if (unlistedId) {
     return `${DDRAGON_CDN}/${unlistedId}.png`;
   }
@@ -282,11 +307,11 @@ export const getAvatarPublicUrl = (filenameOrUrl?: string | null): string => {
   // user_metadata. It passes through, unless its host is one that no longer
   // resolves and would render as a broken image.
   if (
-    filenameOrUrl &&
-    (filenameOrUrl.startsWith('http://') || filenameOrUrl.startsWith('https://')) &&
-    !DEAD_AVATAR_HOSTS.some((host) => filenameOrUrl.includes(host))
+    value &&
+    (value.startsWith('http://') || value.startsWith('https://')) &&
+    !DEAD_AVATAR_HOSTS.some((host) => value.includes(host))
   ) {
-    return filenameOrUrl;
+    return value;
   }
 
   return `${DDRAGON_CDN}/${DEFAULT_CHAMPION_ID}.png`;

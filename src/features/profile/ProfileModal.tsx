@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Check, AlertTriangle, Lock } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
@@ -14,6 +14,8 @@ export const ProfileModal: React.FC = () => {
   const [selectedPhotoURL, setSelectedPhotoURL] = useState('');
   const [hoveredAvatarFilename, setHoveredAvatarFilename] = useState<string | null>(null);
   const [isSavedSuccess, setIsSavedSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Change Password state
   const [newPassword, setNewPassword] = useState('');
@@ -23,11 +25,21 @@ export const ProfileModal: React.FC = () => {
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
+  // Fill the form when the modal opens, and again only if a different player
+  // is signed in underneath it. Refilling on every change to the profile would
+  // wipe what the player typed whenever a save fails, because the failure puts
+  // the old profile back.
+  const filledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (user) {
-      setDisplayName(user.displayName || '');
-      setSelectedPhotoURL(getChampionId(user.photoURL) ?? (user.photoURL || getAvatarPublicUrl()));
+    if (!showProfileModal || !user) {
+      filledFor.current = null;
+      return;
     }
+    if (filledFor.current === user.uid) return;
+    filledFor.current = user.uid;
+    setDisplayName(user.displayName || '');
+    setSelectedPhotoURL(getChampionId(user.photoURL) ?? (user.photoURL || getAvatarPublicUrl()));
+    setSaveError(null);
   }, [user, showProfileModal]);
 
   if (!showProfileModal || !user) return null;
@@ -46,13 +58,25 @@ export const ProfileModal: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!displayName.trim()) return;
+    const name = displayName.trim();
+    if (!name || isSaving) return;
 
-    await updateUserProfile({
-      displayName: displayName.trim(),
+    setSaveError(null);
+    setIsSavedSuccess(false);
+    setIsSaving(true);
+    const saved = await updateUserProfile({
+      displayName: name,
       photoURL: selectedPhotoURL,
     });
+    setIsSaving(false);
 
+    // "Saved" only when it was. On a failure the form keeps what the player
+    // chose, so trying again is one click.
+    if (!saved) {
+      setSaveError('Your profile was not saved. Please try again.');
+      return;
+    }
+    setDisplayName(name);
     setIsSavedSuccess(true);
     setTimeout(() => setIsSavedSuccess(false), 2000);
   };
@@ -228,12 +252,22 @@ export const ProfileModal: React.FC = () => {
             </div>
 
             {/* Save & Feedback */}
+            {saveError && (
+              <div role="alert" className="bg-danger-soft border border-danger p-2 rounded-md text-danger text-xs font-medium">
+                <AlertTriangle size={13} strokeWidth={2.25} className="inline shrink-0 mr-1.5 -mt-0.5" aria-hidden="true" />{saveError}
+              </div>
+            )}
             <div className="flex items-center gap-2 pt-1">
               <button
                 type="submit"
+                disabled={isSaving}
                 className="btn btn-primary btn-sm flex-1"
               >
-                {isSavedSuccess ? (<><Check size={14} strokeWidth={2} aria-hidden="true" />Saved</>) : ('Save changes')}
+                {isSaving
+                  ? 'Saving...'
+                  : isSavedSuccess
+                    ? (<><Check size={14} strokeWidth={2} aria-hidden="true" />Saved</>)
+                    : ('Save changes')}
               </button>
             </div>
           </form>
