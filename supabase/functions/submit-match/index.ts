@@ -5,12 +5,22 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
  * Records a finished match and updates both players' ratings.
  *
  * Ratings are computed here from the values already stored in the database, so
- * a client cannot decide its own ELO. The caller must also be one of the two
- * players, proven by their own session. Version 1 trusted any caller, which let
- * anyone holding the public anon key post fabricated results against any
- * registered player and walk their rating down to the floor, without ever
- * playing them. Games between two guests are unrated and stay on the players'
- * devices, since no guest has a session to prove who they are.
+ * a client cannot decide its own ELO. Two further rules decide who may record
+ * a result at all:
+ *
+ * - The caller must be one of the two players, proven by their own session.
+ * - The result must not raise the caller's own rating. On a decisive result
+ *   only the loser may record it; on a draw, only the player whose rating does
+ *   not rise.
+ *
+ * Version 2 had only the first rule, so any registered account could name
+ * itself the winner against any victim and take the victim's rating without a
+ * game ever being played. With the second rule a submission can only ever cost
+ * the account that sends it, and nobody fabricates a result against themselves.
+ * Games involving a guest are unrated and stay on the players' devices.
+ *
+ * gameId, when sent, makes the submission idempotent: a repeat of the same game
+ * returns the first row and never applies the ratings twice.
  *
  * verify_jwt stays off at the gateway: the anon key is itself a valid JWT, so
  * the gateway check would admit every caller anyway. The real check is the user
@@ -19,7 +29,10 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const K_FACTOR = 32;
 const SAFE_UID = /^[A-Za-z0-9_-]{1,128}$/;
+const GAME_ID = /^[A-Za-z0-9_-]{8,40}$/;
 const DUPLICATE_WINDOW_MS = 5000;
+const MAX_SEAT_CHANGES = 32;
+const SEAT_CHANGE_REASONS = new Set(['stood', 'left', 'dropped', 'sat', 'removed']);
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -43,6 +56,35 @@ const cleanName = (value: unknown, fallback: string) => {
 
 const expectedScore = (rating: number, opponentRating: number) =>
   1 / (1 + Math.pow(10, (opponentRating - rating) / 400));
+
+/**
+ * Keeps whatever part of a seat log is well formed. A malformed or oversized
+ * log is trimmed or dropped, and is never allowed to fail the rating it rides
+ * along with: the log is a record for later, the result is what matters now.
+ */
+const cleanSeatLog = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object') return null;
+  const log = value as { startedWith?: unknown; changes?: unknown };
+  const started = log.startedWith as { X?: unknown; O?: unknown } | undefined;
+  const startedWith =
+    started && typeof started.X === 'string' && typeof started.O === 'string' &&
+    SAFE_UID.test(started.X) && SAFE_UID.test(started.O)
+      ? { X: started.X, O: started.O }
+      : null;
+  const raw = Array.isArray(log.changes) ? log.changes : [];
+  const changes = raw
+    .filter((c): c is Record<string, unknown> => !!c && typeof c === 'object')
+    .map((c) => ({
+      seat: c.seat === 'X' || c.seat === 'O' ? c.seat : null,
+      fromUid: typeof c.fromUid === 'string' && SAFE_UID.test(c.fromUid) ? c.fromUid : null,
+      toUid: typeof c.toUid === 'string' && SAFE_UID.test(c.toUid) ? c.toUid : null,
+      atMove: typeof c.atMove === 'number' && Number.isInteger(c.atMove) && c.atMove >= 0 && c.atMove <= 10000 ? c.atMove : null,
+      reason: typeof c.reason === 'string' && SEAT_CHANGE_REASONS.has(c.reason) ? c.reason : null,
+    }))
+    .filter((c) => c.seat !== null && c.reason !== null && c.atMove !== null);
+  const truncated = changes.length > MAX_SEAT_CHANGES || changes.length < raw.length;
+  return { startedWith, changes: changes.slice(0, MAX_SEAT_CHANGES), ...(truncated ? { truncated: true } : {}) };
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -74,6 +116,13 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Invalid board size' }, 400);
   }
 
+  const rawGameId = body.gameId;
+  const gameId = typeof rawGameId === 'string' && GAME_ID.test(rawGameId) ? rawGameId : null;
+  if (rawGameId !== undefined && rawGameId !== null && gameId === null) {
+    return json({ error: 'Invalid game id' }, 400);
+  }
+  const seatLog = body.seatLog === undefined ? null : cleanSeatLog(body.seatLog);
+
   const player1Name = cleanName(body.player1Name, 'Player 1');
   const player2Name = cleanName(body.player2Name, 'Player 2');
 
@@ -98,18 +147,30 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Only a player in this match can record it' }, 403);
   }
 
-  // Reject an accidental double submission of the same game.
-  const since = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
-  const { data: recent } = await admin
-    .from('gomoku_matches')
-    .select('id')
-    .eq('player1_uid', player1Uid)
-    .eq('player2_uid', player2Uid)
-    .gte('timestamp', since)
-    .limit(1);
-
-  if (recent && recent.length > 0) {
-    return json({ ok: true, duplicate: true, matchId: recent[0].id });
+  // A repeat of a game already on record, checked before anything is computed:
+  // both players may offer a draw, and a retry may follow a lost response.
+  if (gameId) {
+    const { data: existing } = await admin
+      .from('gomoku_matches')
+      .select('id')
+      .eq('game_id', gameId)
+      .limit(1);
+    if (existing && existing.length > 0) {
+      return json({ ok: true, duplicate: true, matchId: existing[0].id });
+    }
+  } else {
+    // Clients that send no game id fall back to a short same-pair window.
+    const since = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
+    const { data: recent } = await admin
+      .from('gomoku_matches')
+      .select('id')
+      .eq('player1_uid', player1Uid)
+      .eq('player2_uid', player2Uid)
+      .gte('timestamp', since)
+      .limit(1);
+    if (recent && recent.length > 0) {
+      return json({ ok: true, duplicate: true, matchId: recent[0].id });
+    }
   }
 
   // Ratings come from the store, never from the request.
@@ -135,6 +196,13 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // The caller has to hold a rating of their own. Without one, "the result must
+  // not raise the caller's rating" would be true of every result, and the rule
+  // below would protect nobody.
+  if (!ratings.has(callerId)) {
+    return json({ error: 'Only a registered player can record a rated match', code: 'caller_not_rated' }, 403);
+  }
+
   const elo1 = ratings.get(player1Uid)?.elo ?? 1200;
   const elo2 = ratings.get(player2Uid)?.elo ?? 1200;
 
@@ -143,6 +211,13 @@ Deno.serve(async (req: Request) => {
 
   const delta1 = Math.round(K_FACTOR * (score1 - expectedScore(elo1, elo2)));
   const delta2 = Math.round(K_FACTOR * (score2 - expectedScore(elo2, elo1)));
+
+  // The rule that makes fabrication pointless: a result may only be recorded by
+  // a player it does not favour.
+  const callerDelta = callerId === player1Uid ? delta1 : delta2;
+  if (callerDelta > 0) {
+    return json({ error: 'Only the player this result does not favour can record it', code: 'caller_would_gain' }, 403);
+  }
 
   const { data: inserted, error: insertError } = await admin
     .from('gomoku_matches')
@@ -157,11 +232,19 @@ Deno.serve(async (req: Request) => {
       elo_delta_player1: ratings.has(player1Uid) ? delta1 : 0,
       elo_delta_player2: ratings.has(player2Uid) ? delta2 : 0,
       timestamp: new Date().toISOString(),
+      ...(gameId ? { game_id: gameId } : {}),
+      ...(seatLog ? { seat_log: seatLog } : {}),
     })
     .select('id')
     .single();
 
   if (insertError) {
+    // Two submissions of one game can both pass the check above; the unique
+    // index lets exactly one of them in, and the ratings are applied only for it.
+    if (insertError.code === '23505' && gameId) {
+      const { data: first } = await admin.from('gomoku_matches').select('id').eq('game_id', gameId).limit(1);
+      return json({ ok: true, duplicate: true, matchId: first?.[0]?.id });
+    }
     return json({ error: 'Could not record the match', detail: insertError.message }, 500);
   }
 
