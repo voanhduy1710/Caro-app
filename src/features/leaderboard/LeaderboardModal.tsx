@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ListSkeleton } from '../../shared/components/ListSkeleton';
 import { X } from 'lucide-react';
 import { fetchTopLeaderboard } from './leaderboardService';
+import { finalizeDueClaims } from '../history/historyService';
 import type { UserProfile } from '../auth/AuthContext';
 import { getRankTitle } from '../../shared/utils/eloCalculator';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
@@ -20,6 +21,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
 
   const loadLeaderboard = async () => {
     setLoading(true);
+    await finalizeDueClaims();
     const data = await fetchTopLeaderboard(25);
     setPlayers(data);
     setLoading(false);

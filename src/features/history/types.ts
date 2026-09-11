@@ -13,4 +13,8 @@ export interface MatchRecord {
   eloDeltaPlayer1: number;
   eloDeltaPlayer2: number;
   timestamp: number;
+  /** The room's id for the game, shared by the server row and any local copy. */
+  gameId?: string;
+  /** Who held each seat and when, as the room recorded it. */
+  seatLog?: unknown;
 }

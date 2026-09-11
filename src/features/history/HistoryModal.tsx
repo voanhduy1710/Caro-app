@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ListSkeleton } from '../../shared/components/ListSkeleton';
 import { X } from 'lucide-react';
-import { fetchUserMatchHistory } from './historyService';
+import { fetchUserMatchHistory, finalizeDueClaims } from './historyService';
 import type { MatchRecord } from './types';
 import { useAuth } from '../auth/AuthContext';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
@@ -23,6 +23,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, onP
   const loadHistory = async () => {
     if (!user) return;
     setLoading(true);
+    await finalizeDueClaims();
     const data = await fetchUserMatchHistory(user.uid);
     setHistory(data);
     setLoading(false);

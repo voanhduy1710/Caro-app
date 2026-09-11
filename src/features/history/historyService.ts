@@ -53,6 +53,8 @@ export const saveMatchRecord = async (
         player1Name: record.player1Name,
         player2Uid: record.player2Uid,
         player2Name: record.player2Name,
+        ...(record.gameId ? { gameId: record.gameId } : {}),
+        ...(record.seatLog !== undefined ? { seatLog: record.seatLog } : {}),
       },
     });
 
@@ -123,12 +125,15 @@ export const fetchUserMatchHistory = async (userUid: string): Promise<MatchRecor
           eloDeltaPlayer1: row.elo_delta_player1 ?? 0,
           eloDeltaPlayer2: row.elo_delta_player2 ?? 0,
           timestamp: new Date(row.timestamp).getTime(),
+          gameId: row.game_id ?? undefined,
         }));
 
-        // Practice games are never sent to the server, so the two sources have
-        // to be merged or half the player's history would silently disappear.
-        const practice = local.filter((m) => m.mode === 'ai');
-        return [...records, ...practice].sort((a, b) => b.timestamp - a.timestamp);
+        // Practice games are never sent to the server, and an online game whose
+        // rating could not be recorded only exists here, so both are merged in.
+        // A game the server does have is shown once, from the server.
+        const onServer = new Set(records.map((r) => r.gameId).filter(Boolean));
+        const localOnly = local.filter((m) => m.mode === 'ai' || (m.gameId !== undefined && !onServer.has(m.gameId)));
+        return [...records, ...localOnly].sort((a, b) => b.timestamp - a.timestamp);
       }
     } catch (e) {
       console.warn('Supabase fetch match history exception, returning local history:', e);
@@ -136,4 +141,176 @@ export const fetchUserMatchHistory = async (userUid: string): Promise<MatchRecor
   }
 
   return local.sort((a, b) => b.timestamp - a.timestamp);
+};
+
+/* -------------------------------------------------------------------------
+   Rated results from a room (room v2)
+
+   submit-match records a result at once when it comes from the player it does
+   not favour. From the player it favours it is only a claim, recorded ten
+   minutes later unless disputed, and only when both players hold a seat ticket
+   for the game. Both seated registered players therefore always submit, and a
+   client that cannot confirm the result on its own copy of the game disputes it.
+   ------------------------------------------------------------------------- */
+
+/** The body a room sends to submit-match. */
+export interface RatedResultBody {
+  mode: 'pvp';
+  boardSize: number;
+  /** A player's uid, or 'DRAW'. */
+  winnerUid: string;
+  player1Uid: string;
+  player1Name: string;
+  player2Uid: string;
+  player2Name: string;
+  gameId: string;
+  seatLog?: unknown;
+  dispute?: boolean;
+}
+
+export type RatedSubmitOutcome =
+  | { status: 'saved'; deltas: { player1: number; player2: number } }
+  | { status: 'duplicate' }
+  | { status: 'pending_claim'; confirmAfter: string | null }
+  | { status: 'disputed' }
+  | { status: 'refused'; code: string }
+  | { status: 'failed'; why: string }
+  | { status: 'network' };
+
+const PENDING_RATINGS_KEY = 'caro_pending_ratings';
+/** Long enough to outlive a closed laptop, short enough that nothing stale is replayed. */
+const PENDING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+interface PendingRatedResult {
+  body: RatedResultBody;
+  createdAt: number;
+}
+
+const pendingKey = (body: RatedResultBody) => `${body.gameId}:${body.dispute ? 'dispute' : 'result'}`;
+
+const readPending = (): PendingRatedResult[] => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PENDING_RATINGS_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter((e) => e && e.body && typeof e.body.gameId === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+const writePending = (entries: PendingRatedResult[]) => {
+  try {
+    if (entries.length) localStorage.setItem(PENDING_RATINGS_KEY, JSON.stringify(entries));
+    else localStorage.removeItem(PENDING_RATINGS_KEY);
+  } catch {
+    // Storage full or blocked: the submission is still attempted, just not kept.
+  }
+};
+
+const rememberPending = (body: RatedResultBody) => {
+  const key = pendingKey(body);
+  writePending([...readPending().filter((e) => pendingKey(e.body) !== key), { body, createdAt: Date.now() }]);
+};
+
+const forgetPending = (body: RatedResultBody) => {
+  const key = pendingKey(body);
+  writePending(readPending().filter((e) => pendingKey(e.body) !== key));
+};
+
+/** Signed out mid-flight: worth sending again once the player is back. */
+const worthKeeping = (outcome: RatedSubmitOutcome) =>
+  outcome.status === 'network' || (outcome.status === 'refused' && outcome.code === 'http_401');
+
+const postRatedResult = async (body: RatedResultBody): Promise<RatedSubmitOutcome> => {
+  if (!isSupabaseConfigured || !supabase) return { status: 'failed', why: 'not_configured' };
+  try {
+    const { data, error } = await supabase.functions.invoke('submit-match', { body });
+    if (error) {
+      // An HTTP error carries the Response; a fetch error means none arrived.
+      const response = (error as { context?: unknown }).context as Response | undefined;
+      if (!response || typeof response.status !== 'number') return { status: 'network' };
+      let payload: { code?: string; error?: string } = {};
+      try {
+        payload = await response.json();
+      } catch {
+        // No JSON body: the status alone has to do.
+      }
+      if (response.status >= 500) return { status: 'failed', why: payload.error || `HTTP ${response.status}` };
+      return { status: 'refused', code: payload.code || `http_${response.status}` };
+    }
+    if (data?.disputed) return { status: 'disputed' };
+    if (data?.pending) return { status: 'pending_claim', confirmAfter: data.confirmAfter ?? null };
+    if (data?.duplicate) return { status: 'duplicate' };
+    if (data?.ok) {
+      return { status: 'saved', deltas: { player1: data.player1?.delta ?? 0, player2: data.player2?.delta ?? 0 } };
+    }
+    return { status: 'failed', why: data?.error || 'unexpected_response' };
+  } catch {
+    return { status: 'network' };
+  }
+};
+
+/**
+ * Sends a rated result or a dispute. It is written to this device first, so a
+ * tab closed mid-request is sent again the next time the player opens the app:
+ * an accidental close costs nobody a rating, in either direction.
+ */
+export const submitRatedResult = async (body: RatedResultBody): Promise<RatedSubmitOutcome> => {
+  rememberPending(body);
+  const outcome = await postRatedResult(body);
+  if (!worthKeeping(outcome)) forgetPending(body);
+  return outcome;
+};
+
+let resending: Promise<void> | null = null;
+
+/** Sends whatever an earlier session could not. Safe to call repeatedly. */
+export const resendPendingRatedResults = (): Promise<void> => {
+  if (resending) return resending;
+  resending = (async () => {
+    const now = Date.now();
+    const fresh = readPending().filter((e) => now - e.createdAt < PENDING_MAX_AGE_MS);
+    writePending(fresh);
+    for (const entry of fresh) {
+      const outcome = await postRatedResult(entry.body);
+      if (!worthKeeping(outcome)) forgetPending(entry.body);
+    }
+  })().finally(() => {
+    resending = null;
+  });
+  return resending;
+};
+
+/**
+ * Records that this signed-in player sits in a game, so a win against them can
+ * be claimed if they walk away. Quietly retried; a guest simply has no ticket.
+ */
+export const requestSeatTicket = async (gameId: string, seat: 'X' | 'O', roomId: string): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) return false;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const { error } = await supabase.functions.invoke('seat-ticket', { body: { gameId, seat, roomId } });
+      if (!error) return true;
+      const status = ((error as { context?: unknown }).context as Response | undefined)?.status;
+      // A guest, a bad request or a missing session: retrying cannot change it.
+      if (typeof status === 'number' && status < 500) return false;
+    } catch {
+      // Network trouble: fall through to the retry.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt));
+  }
+  return false;
+};
+
+/**
+ * Records any claims whose ten minutes are up. The database does this every
+ * minute anyway; calling it before showing ratings just means the leaderboard
+ * and history never lag behind a claim that is already due.
+ */
+export const finalizeDueClaims = async (): Promise<void> => {
+  if (!isSupabaseConfigured || !supabase) return;
+  try {
+    await supabase.rpc('finalize_due_match_claims');
+  } catch {
+    // The scheduler will settle them; nothing to show the player.
+  }
 };

@@ -23,7 +23,7 @@ import { createEmptyBoard, checkWin, isBoardFull } from '../shared/utils/gomokuL
 import type { BoardMatrix } from '../shared/utils/gomokuLogic';
 import { useAiEngine } from '../features/game/useAiEngine';
 import { calculateElo } from '../shared/utils/eloCalculator';
-import { saveMatchRecord } from '../features/history/historyService';
+import { saveMatchRecord, resendPendingRatedResults } from '../features/history/historyService';
 import type { PeerMessage } from '../features/webrtc/types';
 
 interface MoveHistoryItem {
@@ -96,6 +96,15 @@ const readSavedMatchSnapshot = (): MatchSnapshot | null => {
 
 export const App: React.FC = () => {
   const { user, loading: authLoading, openProfileModal, refreshUserProfile } = useAuth();
+
+  // A rated result that could not be sent, because the tab closed mid-request
+  // or the network dropped, is kept on this device and sent again once the
+  // player is back and signed in.
+  const signedInUid = user && !user.isGuest ? user.uid : null;
+  useEffect(() => {
+    if (authLoading || !signedInUid) return;
+    void resendPendingRatedResults();
+  }, [authLoading, signedInUid]);
   const { playMoveSound, playWinSound, playTimerWarningSound, playBuzzSound } = useSound();
 
   // WebRTC Hook
