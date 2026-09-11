@@ -76,6 +76,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 src={getAvatarPublicUrl(user.photoURL)}
                 alt=""
                 aria-hidden="true"
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = getAvatarPublicUrl();
+                }}
                 className="h-7 w-7 shrink-0 rounded-full bg-surface object-cover"
               />
               <span className="hidden text-left leading-tight md:block">

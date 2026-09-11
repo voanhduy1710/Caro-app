@@ -98,6 +98,10 @@ const Seat: React.FC<SeatProps> = ({
         src={getAvatarPublicUrl(photoURL)}
         alt=""
         aria-hidden="true"
+        onError={(e) => {
+          e.currentTarget.onerror = null;
+          e.currentTarget.src = getAvatarPublicUrl();
+        }}
         className="h-full w-full rounded-full object-contain p-1.5"
       />
       {/* The piece rides on the portrait instead of sitting under the name:

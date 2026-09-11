@@ -201,24 +201,34 @@ export const AVATAR_ITEMS: AvatarItem[] = CHAMPION_DATA.map((c) => ({
 }));
 
 /**
- * Build the CDN URL for a champion icon.
- * Accepts a champion ID (e.g. "Ahri"), a filename (e.g. "Ahri.png"),
- * a legacy Ragnarok-style path, or a full URL. Anything it cannot
- * recognise falls back to the default champion.
+ * Hosts whose URLs are known not to resolve any more, so a stored photo_url
+ * holding one has to be replaced rather than rendered. DiceBear was the
+ * leaderboard's placeholder before the migration, and avatars briefly lived in
+ * a Supabase storage bucket that no longer exists - nothing in the app uploads
+ * to one. Everything else is passed through, so a player keeps the picture they
+ * actually have.
+ */
+const DEAD_AVATAR_HOSTS = ['api.dicebear.com', '.supabase.co/storage/'];
+
+/**
+ * Resolve whatever is stored as a player's avatar into something renderable.
+ * Accepts a champion ID ("Ahri"), a filename ("Ahri.png"), a legacy
+ * Ragnarok-style path, or a full URL. A URL is kept as-is unless its host is
+ * known dead; anything else that matches no champion falls back to the default.
  */
 export const getAvatarPublicUrl = (filenameOrUrl?: string | null): string => {
   if (!filenameOrUrl) {
     return `${DDRAGON_CDN}/${DEFAULT_CHAMPION_ID}.png`;
   }
 
-  // Already a full URL pointing to ddragon — pass it through.
-  if (filenameOrUrl.startsWith('https://ddragon.leagueoflegends.com/')) {
-    return filenameOrUrl;
-  }
-
-  // Legacy full URL from Supabase or DiceBear — fall back.
+  // A full URL is either a champion icon this module built earlier or the
+  // player's own picture - most often the Google photo Supabase seeds from
+  // user_metadata. Both pass through; only the dead hosts are swapped out,
+  // because replacing every URL would throw away real profile photos.
   if (filenameOrUrl.startsWith('http://') || filenameOrUrl.startsWith('https://')) {
-    return `${DDRAGON_CDN}/${DEFAULT_CHAMPION_ID}.png`;
+    return DEAD_AVATAR_HOSTS.some((host) => filenameOrUrl.includes(host))
+      ? `${DDRAGON_CDN}/${DEFAULT_CHAMPION_ID}.png`
+      : filenameOrUrl;
   }
 
   // Strip legacy path prefixes ("/Avatar/", "Avatar/", etc.)

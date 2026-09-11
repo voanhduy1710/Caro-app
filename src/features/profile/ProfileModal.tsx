@@ -110,6 +110,7 @@ export const ProfileModal: React.FC = () => {
                 src={activeAvatarPreviewUrl}
                 alt="Selected Avatar"
                 onError={(e) => {
+                  e.currentTarget.onerror = null;
                   e.currentTarget.src = getAvatarPublicUrl();
                 }}
                 className="w-12 h-12 rounded-md border-2 border-accent bg-surface shadow-sm object-cover"

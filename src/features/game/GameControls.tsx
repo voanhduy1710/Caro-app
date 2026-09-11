@@ -620,6 +620,10 @@ export const GameControls: React.FC<GameControlsProps> = ({
                     src={getAvatarPublicUrl(opponent?.photoURL)}
                     alt=""
                     aria-hidden="true"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = getAvatarPublicUrl();
+                    }}
                     className="w-6 h-6 rounded-full border border-line bg-surface object-contain shrink-0 mb-0.5"
                   />
                 )}
