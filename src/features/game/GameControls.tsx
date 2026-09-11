@@ -771,6 +771,9 @@ export const GameControls: React.FC<GameControlsProps> = ({
         </div>
       )}
 
+      {/* The reaction row is part of the composer, so every layout that shows
+          the composer gets it exactly once. Both layouts used to render it
+          again just above, and opening reactions showed two rows. */}
       {reactionRow}
 
       <form onSubmit={handleChatSubmit} className="flex items-end gap-1.5 border-t border-line pt-2">
@@ -920,7 +923,6 @@ export const GameControls: React.FC<GameControlsProps> = ({
             </div>
           )}
           <div className="area-compose flex flex-col justify-center px-3 py-2 border-t border-line">
-            {reactionRow}
             {composer}
           </div>
         </aside>
@@ -1031,7 +1033,6 @@ export const GameControls: React.FC<GameControlsProps> = ({
         </div>
         <div className="flex min-h-0 flex-1 flex-col p-3 pb-0">{chatFeed}</div>
         <div className="shrink-0 p-3 shadow-[0_-8px_16px_-8px_rgba(0,0,0,0.05)]">
-          {reactionRow}
           {composer}
         </div>
       </div>
