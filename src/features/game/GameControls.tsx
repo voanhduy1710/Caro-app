@@ -221,6 +221,17 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [isBuzzCooldown, setIsBuzzCooldown] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(() => isDesktop && readStoredChatOpen());
+  // One open/closed state serves two layouts with opposite defaults: the
+  // desktop column comes back as the player left it, the phone sheet always
+  // starts closed. Crossing 1024px mid-match, by snapping a window to half the
+  // screen or rotating a tablet, carried one layout's state into the other and
+  // opened an 80dvh sheet over the board. Adjusting state during render is how
+  // React resets state when an input changes, without a stale frame between.
+  const [chatLayoutIsDesktop, setChatLayoutIsDesktop] = useState(isDesktop);
+  if (chatLayoutIsDesktop !== isDesktop) {
+    setChatLayoutIsDesktop(isDesktop);
+    setIsChatOpen(isDesktop && readStoredChatOpen());
+  }
   const [hasNewBelow, setHasNewBelow] = useState(false);
   /** Reactions are a burst action, not a permanent band across the rail. */
   const [isReactionsOpen, setIsReactionsOpen] = useState(false);
@@ -230,6 +241,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   /** The phone's chat bar, which opens the sheet and takes focus back from it. */
   const chatBarRef = useRef<HTMLButtonElement>(null);
+  /** The phone's chat sheet, which takes focus when it opens and keeps Tab inside. */
+  const sheetRef = useRef<HTMLDivElement>(null);
   const buzzCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Whether the reader is pinned to the newest message. Auto-scroll only then. */
   const stickToBottomRef = useRef(true);
@@ -389,12 +402,15 @@ export const GameControls: React.FC<GameControlsProps> = ({
     };
   }, [isPrefsOpen]);
 
-  // On a phone the sheet is modal, so opening it moves focus to its composer.
-  // Left on the bar, focus would sit behind the scrim, and a screen reader
-  // would never learn that a dialog had opened.
+  // On a phone the sheet is modal, so opening it moves focus into it. Left on
+  // the bar, focus would sit behind the scrim, and a screen reader would never
+  // learn that a dialog had opened. It goes to the sheet itself, not to the
+  // composer: a focus() in the frame after the tap still counts as the tap on
+  // Android, so the soft keyboard came up and covered half the sheet for
+  // someone who had only opened it to read.
   useEffect(() => {
     if (isDesktop || !isChatOpen) return;
-    const frame = requestAnimationFrame(() => textareaRef.current?.focus());
+    const frame = requestAnimationFrame(() => sheetRef.current?.focus({ preventScroll: true }));
     return () => cancelAnimationFrame(frame);
   }, [isDesktop, isChatOpen]);
 
@@ -406,6 +422,33 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const closeChatSheet = useCallback(() => {
     setIsChatOpen(false);
     chatBarRef.current?.focus();
+  }, []);
+
+  /**
+   * Keeps Tab inside the open sheet. It is aria-modal, but the chat bar, the
+   * action rail and every board cell come before it in the page, under the
+   * scrim, so Shift+Tab from its first control walked out onto Resign and the
+   * board.
+   */
+  const trapSheetFocus = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const sheet = sheetRef.current;
+    if (event.key !== 'Tab' || !sheet) return;
+    const items = Array.from(
+      sheet.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+      )
+    );
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || active === sheet)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }, []);
 
   // Escape closes the mobile sheet and the lightbox.
@@ -924,12 +967,13 @@ export const GameControls: React.FC<GameControlsProps> = ({
           }
           aria-expanded={isChatOpen}
           aria-controls="chat-sheet"
+          aria-describedby="chat-bar-preview"
           className="flex h-full w-full items-center justify-between gap-2 rounded-full bg-surface-2 px-4 text-left transition-colors hover:bg-surface-3"
         >
           {/* One line, always. A long or multi-line message would otherwise
               grow the bar past the strip the page reserves for it. */}
           <div className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 truncate text-[13px] font-medium text-muted">
+            <span id="chat-bar-preview" className="min-w-0 truncate text-[13px] font-medium text-muted">
               {lastMessagePreview}
             </span>
             {unreadCount > 0 && (
@@ -958,12 +1002,15 @@ export const GameControls: React.FC<GameControlsProps> = ({
           reached its composer, which could still send. */}
       <div
         id="chat-sheet"
+        ref={sheetRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="chat-sheet-title"
         aria-hidden={isChatOpen ? undefined : true}
         inert={!isChatOpen}
-        className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t border-line bg-surface shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
+        tabIndex={-1}
+        onKeyDown={trapSheetFocus}
+        className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl outline-none border-t border-line bg-surface shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
           isChatOpen ? 'translate-y-0' : 'translate-y-full'
         }`}
         style={{
