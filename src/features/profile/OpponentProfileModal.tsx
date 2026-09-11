@@ -56,7 +56,8 @@ export const OpponentProfileModal: React.FC<OpponentProfileModalProps> = ({
               src={getAvatarPublicUrl(opponent.photoURL)}
               alt={opponent.displayName}
               onError={(e) => {
-                e.currentTarget.src = '/Avatar/Zerom.gif';
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = getAvatarPublicUrl();
               }}
               className="w-16 h-16 rounded-full border-2 border-accent bg-surface p-0.5 shadow-sm object-contain"
             />

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../../config/supabase';
 import { hashPassword, verifyPassword, isLegacyPlaintext } from './passwordHash';
+import { getAvatarPublicUrl } from '../avatar/avatarService';
 
 export interface UserProfile {
   uid: string;
@@ -106,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const guestUser: UserProfile = {
       uid: guestId,
       displayName: name,
-      photoURL: '/Avatar/Zerom.gif',
+      photoURL: getAvatarPublicUrl(),
       email: '',
       elo: 1200,
       wins: 0,
@@ -142,7 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           uid: data.uid,
           username: data.username || authUser.user_metadata?.username,
           displayName: data.display_name || authUser.user_metadata?.full_name || 'Gomoku Master',
-          photoURL: data.photo_url || authUser.user_metadata?.avatar_url || '/Avatar/Zerom.gif',
+          photoURL: getAvatarPublicUrl(data.photo_url || authUser.user_metadata?.avatar_url),
           email: data.email || authUser.email || '',
           elo: data.elo ?? 1200,
           wins: data.wins ?? 0,
@@ -157,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         uid: authUser.id,
         username: authUser.user_metadata?.username,
         displayName: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Gomoku Master',
-        photoURL: authUser.user_metadata?.avatar_url || '/Avatar/Zerom.gif',
+        photoURL: getAvatarPublicUrl(authUser.user_metadata?.avatar_url),
         email: authUser.email || '',
         elo: 1200,
         wins: 0,
@@ -185,7 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return {
         uid: authUser.id,
         displayName: authUser.user_metadata?.full_name || 'Gomoku Master',
-        photoURL: authUser.user_metadata?.avatar_url || '/Avatar/Zerom.gif',
+        photoURL: getAvatarPublicUrl(authUser.user_metadata?.avatar_url),
         email: authUser.email || '',
         elo: 1200,
         wins: 0,
@@ -318,7 +319,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             uid: authData.user.id,
             username,
             displayName,
-            photoURL: '/Avatar/Zerom.gif',
+            photoURL: getAvatarPublicUrl(),
             email,
             elo: 1200,
             wins: 0,
@@ -377,7 +378,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       uid,
       username,
       displayName,
-      photoURL: '/Avatar/Zerom.gif',
+      photoURL: getAvatarPublicUrl(),
       email,
       elo: 1200,
       wins: 0,

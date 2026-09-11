@@ -90,7 +90,8 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
                       src={getAvatarPublicUrl(p.photoURL)}
                       alt={p.displayName}
                       onError={(e) => {
-                        e.currentTarget.src = '/Avatar/Zerom.gif';
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = getAvatarPublicUrl();
                       }}
                       className="w-8 h-8 rounded-full border border-accent bg-surface object-contain p-0.5 shadow-xs"
                     />

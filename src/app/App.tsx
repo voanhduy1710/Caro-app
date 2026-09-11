@@ -15,6 +15,7 @@ import { HistoryModal } from '../features/history/HistoryModal';
 import { AuthModal } from '../features/auth/AuthModal';
 import { ProfileModal } from '../features/profile/ProfileModal';
 import { OpponentProfileModal } from '../features/profile/OpponentProfileModal';
+import { getAvatarPublicUrl } from '../features/avatar/avatarService';
 import type { UserProfile } from '../features/auth/AuthContext';
 import { DEFAULT_ROOM_SETTINGS, WIN_RULE_TEXT, summariseRoomSettings } from '../features/settings/types';
 import type { RoomSettings } from '../features/settings/types';
@@ -1082,7 +1083,7 @@ export const App: React.FC = () => {
     ? {
         uid: 'ai_bot',
         displayName: 'AI Bot 🤖',
-        photoURL: '/Avatar/Gemini.gif',
+        photoURL: getAvatarPublicUrl('Blitzcrank'),
         email: '',
         elo: 1350,
         wins: 50,
@@ -1206,7 +1207,7 @@ export const App: React.FC = () => {
                       type="button"
                       onClick={() => setIsRoomPublic(true)}
                       aria-pressed={isRoomPublic}
-                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-2 font-display text-sm font-bold transition ${
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-2 text-sm font-semibold transition ${
                         isRoomPublic ? 'bg-surface text-accent-text shadow-[0_3px_0_var(--ui-border-strong)]' : 'text-muted hover:text-ink'
                       }`}
                     >
@@ -1217,7 +1218,7 @@ export const App: React.FC = () => {
                       type="button"
                       onClick={() => setIsRoomPublic(false)}
                       aria-pressed={!isRoomPublic}
-                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-2 font-display text-sm font-bold transition ${
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-2 text-sm font-semibold transition ${
                         !isRoomPublic ? 'bg-surface text-accent-text shadow-[0_3px_0_var(--ui-border-strong)]' : 'text-muted hover:text-ink'
                       }`}
                     >
@@ -1338,13 +1339,13 @@ export const App: React.FC = () => {
                       >
                         <div className="flex min-w-0 items-center gap-3">
                           <img
-                            src={room.hostAvatar || '/Avatar/Poring.gif'}
+                            src={getAvatarPublicUrl(room.hostAvatar)}
                             alt=""
                             aria-hidden="true"
                             className="h-11 w-11 shrink-0 rounded-full border-2 border-accent bg-surface object-contain"
                           />
                           <div className="min-w-0">
-                            <div className="truncate font-display text-[15px] font-bold text-ink">
+                            <div className="truncate text-[15px] font-semibold text-ink">
                               {room.hostName}'s room
                             </div>
                             <div className="mt-0.5 font-mono text-[11px] text-muted">

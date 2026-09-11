@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../../config/supabase';
 import type { UserProfile } from '../auth/AuthContext';
+import { getAvatarPublicUrl } from '../avatar/avatarService';
 
 const MOCK_LEADERBOARD: UserProfile[] = [];
 
@@ -23,7 +24,7 @@ export const fetchTopLeaderboard = async (topLimit = 20): Promise<UserProfile[]>
               uid: row.uid,
               username: row.username || row.display_name,
               displayName: row.display_name || row.username,
-              photoURL: row.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${row.uid}`,
+              photoURL: getAvatarPublicUrl(row.photo_url),
               email: row.email || '',
               elo: row.elo ?? 1200,
               wins: row.wins ?? 0,
