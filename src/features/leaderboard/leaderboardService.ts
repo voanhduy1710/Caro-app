@@ -9,7 +9,10 @@ export const fetchTopLeaderboard = async (topLimit = 20): Promise<UserProfile[]>
     try {
       const { data, error } = await supabase
         .from('gomoku_users')
-        .select('*')
+        // Named columns, never *. The leaderboard has no use for anyone's
+        // email, and asking for it kept every player's address in the page's
+        // memory for any visitor holding the public anon key.
+        .select('uid, username, display_name, photo_url, elo, wins, losses, draws, streak')
         .order('elo', { ascending: false })
         .limit(topLimit);
 
@@ -25,7 +28,7 @@ export const fetchTopLeaderboard = async (topLimit = 20): Promise<UserProfile[]>
               username: row.username || row.display_name,
               displayName: row.display_name || row.username,
               photoURL: getAvatarPublicUrl(row.photo_url),
-              email: row.email || '',
+              email: '',
               elo: row.elo ?? 1200,
               wins: row.wins ?? 0,
               losses: row.losses ?? 0,

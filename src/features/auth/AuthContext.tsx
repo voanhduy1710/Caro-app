@@ -178,7 +178,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data, error } = await supabase
         .from('gomoku_users')
-        .select('*')
+        // Named columns, never *. The address comes from the session below, so
+        // the table's copy never has to be readable, and a select * would
+        // break the moment that column is locked down.
+        .select('uid, username, display_name, photo_url, elo, wins, losses, draws, streak')
         .eq('uid', authUser.id)
         .maybeSingle();
 
@@ -192,7 +195,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           username: data.username || authUser.user_metadata?.username,
           displayName: data.display_name || authUser.user_metadata?.full_name || 'Gomoku Master',
           photoURL: getAvatarPublicUrl(data.photo_url || authUser.user_metadata?.avatar_url),
-          email: data.email || authUser.email || '',
+          email: authUser.email || '',
           elo: data.elo ?? 1200,
           wins: data.wins ?? 0,
           losses: data.losses ?? 0,
