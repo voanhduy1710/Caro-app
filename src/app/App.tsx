@@ -628,8 +628,17 @@ export const App: React.FC = () => {
 
   // An opponent who left on purpose is gone. Drop every request that was
   // waiting on them so nothing is left spinning.
+  //
+  // Only the moment they leave counts. handleGameOver depends on the whole
+  // webrtc object, so it is rebuilt on every render and re-runs this effect;
+  // while peerLeft stayed true, the re-render from the notice timing out
+  // brought the notice straight back, every 3.2 seconds.
+  const prevPeerLeftRef = useRef(webrtc.peerLeft);
   useEffect(() => {
-    if (!webrtc.peerLeft) return;
+    const previous = prevPeerLeftRef.current;
+    prevPeerLeftRef.current = webrtc.peerLeft;
+
+    if (!webrtc.peerLeft || previous) return;
     setPeerReady(false);
     setUndoRequest('none');
     setUndoRequestOpen(false);

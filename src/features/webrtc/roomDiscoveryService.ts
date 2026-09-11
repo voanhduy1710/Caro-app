@@ -15,6 +15,53 @@ const BROADCAST_CHANNEL_NAME = 'caro_active_rooms_channel';
 const LOCAL_STORAGE_KEY = 'caro_active_rooms_registry';
 const REALTIME_ROOM_CHANNEL = 'caro_public_lobby';
 
+// Anyone can announce a room on the public lobby, and whatever is kept is
+// rendered on the home page and saved to localStorage across reloads. So an
+// announced room is only accepted in the shape this app itself sends.
+//
+// Mirrors ROOM_CODE_PATTERN in useWebRTC, so a listed room is always one that
+// Join accepts. It cannot be imported from there: useWebRTC imports this
+// module, and the manager below reads storage while this module is still
+// loading, before a circular import would have finished.
+const ROOM_CODE_PATTERN = /^[A-Z0-9]{4,12}$/;
+// The sizes the settings dialog offers.
+const BOARD_SIZES = [15, 19, 30, 50];
+// The longest display name signup accepts.
+const MAX_HOST_NAME_LENGTH = 40;
+const DEFAULT_HOST_NAME = 'Host Player';
+
+/**
+ * Turns an announced room into one the lobby can safely show and save, or null
+ * when it is not a room this app could have sent.
+ *
+ * One broadcast with an object for a name used to throw while the lobby
+ * rendered, and because that room had been saved, the home page stayed blank
+ * on every reload after.
+ */
+const parseAnnouncedRoom = (value: unknown, now: number): ActiveRoomInfo | null => {
+  if (typeof value !== 'object' || value === null) return null;
+  const { roomId, hostName, hostAvatar, boardSize, createdAt, lastHeartbeat } = value as Record<string, unknown>;
+
+  if (typeof roomId !== 'string' || !ROOM_CODE_PATTERN.test(roomId)) return null;
+  if (typeof hostName !== 'string') return null;
+  if (typeof boardSize !== 'number' || !BOARD_SIZES.includes(boardSize)) return null;
+  if (hostAvatar !== undefined && typeof hostAvatar !== 'string') return null;
+  if (typeof lastHeartbeat !== 'number' || !Number.isFinite(lastHeartbeat)) return null;
+
+  return {
+    roomId,
+    hostName: hostName.trim().slice(0, MAX_HOST_NAME_LENGTH) || DEFAULT_HOST_NAME,
+    hostAvatar,
+    boardSize,
+    // Another device's clock is not ours. A heartbeat stamped in the future
+    // kept its room listed until that moment came round, so neither time may
+    // be later than now. createdAt only orders the list, so a missing one just
+    // sorts the room as new.
+    createdAt: typeof createdAt === 'number' && Number.isFinite(createdAt) ? Math.min(createdAt, now) : now,
+    lastHeartbeat: Math.min(lastHeartbeat, now),
+  };
+};
+
 class RoomDiscoveryManager {
   private channel: BroadcastChannel | null = null;
   private supabaseChannel: any = null;
@@ -58,12 +105,8 @@ class RoomDiscoveryManager {
         });
 
         this.supabaseChannel
-          .on('broadcast', { event: 'ROOM_ANNOUNCE' }, ({ payload }: { payload: ActiveRoomInfo }) => {
-            if (payload && payload.roomId) {
-              this.activeRoomsMap.set(payload.roomId, payload);
-              this.saveToLocalStorage();
-              this.notifyListeners();
-            }
+          .on('broadcast', { event: 'ROOM_ANNOUNCE' }, ({ payload }: { payload: unknown }) => {
+            this.acceptAnnouncement(payload);
           })
           .on('broadcast', { event: 'ROOM_CLOSED' }, ({ payload }: { payload: { roomId: string } }) => {
             if (payload && payload.roomId) {
@@ -118,11 +161,18 @@ class RoomDiscoveryManager {
       const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
       const now = Date.now();
       const newMap = new Map<string, ActiveRoomInfo>();
+      let repaired = false;
 
       if (stored) {
-        const parsed: ActiveRoomInfo[] = JSON.parse(stored);
-        parsed.forEach((room) => {
-          if (now - room.lastHeartbeat < 6000) {
+        // Storage outlives the build that wrote it, and older builds saved
+        // announcements unchecked, so it gets the same checks as the network.
+        const parsed: unknown = JSON.parse(stored);
+        const entries = Array.isArray(parsed) ? parsed : [];
+        repaired = !Array.isArray(parsed);
+        entries.forEach((entry) => {
+          const room = parseAnnouncedRoom(entry, now);
+          if (!room || room.lastHeartbeat !== entry.lastHeartbeat) repaired = true;
+          if (room && now - room.lastHeartbeat < 6000) {
             newMap.set(room.roomId, room);
           }
         });
@@ -132,7 +182,7 @@ class RoomDiscoveryManager {
       if (this.currentHostedRoomId) {
         const existing = newMap.get(this.currentHostedRoomId) || {
           roomId: this.currentHostedRoomId,
-          hostName: this.currentHostUser?.displayName || 'Host Player',
+          hostName: this.currentHostUser?.displayName || DEFAULT_HOST_NAME,
           hostAvatar: this.currentHostUser?.photoURL,
           boardSize: this.currentBoardSize,
           createdAt: Date.now(),
@@ -143,6 +193,10 @@ class RoomDiscoveryManager {
       }
 
       this.activeRoomsMap = newMap;
+      // Write back anything rejected or clamped. A heartbeat clamped only in
+      // memory would come back from the future on the next poll and keep its
+      // room listed forever.
+      if (repaired) this.saveToLocalStorage();
       this.notifyListeners();
     } catch (e) {
       console.warn('Failed to sync active rooms:', e);
@@ -158,14 +212,27 @@ class RoomDiscoveryManager {
     }
   }
 
+  // Every ROOM_ANNOUNCE comes through here, whichever channel carried it.
+  private acceptAnnouncement(payload: unknown) {
+    const now = Date.now();
+    const room = parseAnnouncedRoom(payload, now);
+    if (!room) return;
+
+    // An announcement proves the host was alive when it reached us, so it is
+    // timed on our clock. The sender's clock kept a host that runs fast listed
+    // long after it had gone, and made one that runs slow flicker in and out
+    // of the list as stale.
+    room.lastHeartbeat = now;
+    this.activeRoomsMap.set(room.roomId, room);
+    this.saveToLocalStorage();
+    this.notifyListeners();
+  }
+
   private handleMessage(data: any) {
     if (!data || !data.type) return;
 
     if (data.type === 'ROOM_ANNOUNCE') {
-      const room: ActiveRoomInfo = data.payload;
-      this.activeRoomsMap.set(room.roomId, room);
-      this.saveToLocalStorage();
-      this.notifyListeners();
+      this.acceptAnnouncement(data.payload);
     } else if (data.type === 'ROOM_CLOSED') {
       const { roomId } = data.payload;
       this.activeRoomsMap.delete(roomId);
@@ -179,7 +246,7 @@ class RoomDiscoveryManager {
 
     const roomInfo: ActiveRoomInfo = {
       roomId: this.currentHostedRoomId,
-      hostName: this.currentHostUser?.displayName || 'Host Player',
+      hostName: this.currentHostUser?.displayName || DEFAULT_HOST_NAME,
       hostAvatar: this.currentHostUser?.photoURL,
       boardSize: this.currentBoardSize,
       createdAt: Date.now(),
@@ -302,6 +369,18 @@ class RoomDiscoveryManager {
 }
 
 export const roomDiscoveryManager = new RoomDiscoveryManager();
+
+/**
+ * Forgets every room this browser has cached. The error screen offers it for
+ * when a bad saved room would crash the page again on every load.
+ */
+export const clearSavedRooms = () => {
+  try {
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+  } catch (e) {
+    console.warn('Failed to clear saved rooms:', e);
+  }
+};
 
 export const useAvailableRooms = () => {
   const [rooms, setRooms] = useState<ActiveRoomInfo[]>([]);
