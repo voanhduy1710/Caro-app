@@ -194,11 +194,6 @@ const CHAMPION_DATA: Array<{ id: string; name: string }> = [
 /** Default champion shown when no avatar is set. */
 const DEFAULT_CHAMPION_ID = 'Teemo';
 
-export const AVATAR_BUCKET_NAME = 'avatar';
-
-/** Kept for backwards compatibility. Not used for fetching anymore. */
-export const RAW_AVATAR_FILES: string[] = CHAMPION_DATA.map((c) => `${c.id}.png`);
-
 export const AVATAR_ITEMS: AvatarItem[] = CHAMPION_DATA.map((c) => ({
   id: c.id.toLowerCase(),
   name: c.name,
@@ -237,8 +232,4 @@ export const getAvatarPublicUrl = (filenameOrUrl?: string | null): string => {
   );
   const champId = match ? match.id : DEFAULT_CHAMPION_ID;
   return `${DDRAGON_CDN}/${champId}.png`;
-};
-
-export const getAvatarLocalUrl = (filenameOrUrl?: string | null): string => {
-  return getAvatarPublicUrl(filenameOrUrl);
 };

@@ -3,7 +3,7 @@ import { X, Check, AlertTriangle, Lock } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
 import { getRankTitle } from '../../shared/utils/eloCalculator';
-import { AVATAR_ITEMS, getAvatarPublicUrl, getAvatarLocalUrl } from '../avatar/avatarService';
+import { AVATAR_ITEMS, getAvatarPublicUrl } from '../avatar/avatarService';
 
 export const ProfileModal: React.FC = () => {
   const { user, showProfileModal, setShowProfileModal, updateUserProfile, changePassword } = useAuth();
@@ -40,7 +40,7 @@ export const ProfileModal: React.FC = () => {
 
   // Active preview avatar URL (Hover preview overrides active selection)
   const activeAvatarPreviewUrl = hoveredAvatarFilename
-    ? getAvatarLocalUrl(hoveredAvatarFilename)
+    ? getAvatarPublicUrl(hoveredAvatarFilename)
     : getAvatarPublicUrl(selectedPhotoURL);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -87,7 +87,7 @@ export const ProfileModal: React.FC = () => {
     >
       <div className="modal-panel max-w-xl relative p-4 sm:p-5 space-y-3 overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between border-b-2 border-line pb-2 shrink-0">
+        <div className="flex items-center justify-between border-b border-line pb-2 shrink-0">
           <div>
             <h2 id="profile-modal-title" className="text-lg font-semibold text-ink tracking-tight">
               Player Profile & Avatar Settings
@@ -204,8 +204,14 @@ export const ProfileModal: React.FC = () => {
                         }`}
                       >
                         <img
-                          src={getAvatarLocalUrl(av.filename)}
+                          src={fullUrl}
                           alt={av.name}
+                          loading="lazy"
+                          decoding="async"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = getAvatarPublicUrl();
+                          }}
                           className="w-8 h-8 rounded-sm object-cover"
                         />
                         <span className="text-[9px] font-mono text-muted font-semibold truncate w-full text-center mt-0.5 group-hover:text-accent-text">
@@ -231,7 +237,7 @@ export const ProfileModal: React.FC = () => {
 
           {/* CHANGE PASSWORD SECTION */}
           {!user.isGuest && (
-            <div className="pt-2.5 border-t-2 border-line space-y-2">
+            <div className="pt-2.5 border-t border-line space-y-2">
               <div className="flex items-center justify-between">
                 <h4 className="flex items-center gap-1.5 text-xs font-semibold text-ink">
                   <Lock size={13} strokeWidth={2.25} aria-hidden="true" />
