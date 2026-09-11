@@ -51,14 +51,23 @@ const formatClock = (seconds: number) => {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
+/** One shape for every clock on a seat, lit only on the seat whose move it is. */
+const clockPill = (lit: boolean, urgent = false) =>
+  `rounded-sm px-1 py-0.5 text-center text-xs font-semibold leading-4 transition-colors lg:px-2.5 lg:py-1 lg:text-sm lg:leading-tight ${
+    lit ? (urgent ? 'bg-danger-solid text-danger-fg' : 'bg-accent text-accent-fg') : 'bg-surface-3 text-muted'
+  }`;
+
 interface SeatProps {
   name: string;
   photoURL?: string;
   piece: 'X' | 'O';
   color: string;
   clock: number;
+  /** Seconds left for the move in hand. Only the seat on turn is given one. */
+  moveClock: number;
   isTurn: boolean;
-  isUrgent: boolean;
+  /** Set on the right-hand seat, which a phone lays out from its outer edge in. */
+  mirrored?: boolean;
   tag?: string;
   onClick?: () => void;
   disabled?: boolean;
@@ -66,9 +75,15 @@ interface SeatProps {
 }
 
 /**
- * One player. The two seats sit one above the other in the side column with the
- * score between them, so each is centred on its own axis and the pair reads as
- * a single facing-off block rather than as two list rows.
+ * One player. From lg up the two seats sit one above the other in the side
+ * column with the score between them, so each is centred on its own axis and
+ * the pair reads as a single facing-off block rather than as two list rows.
+ *
+ * Below lg that column lands above the board, where a 96px portrait per seat
+ * pushed the board off the first screen and then scrolled your own clock away
+ * once you reached it. There the seats face each other across the score in one
+ * short row instead, the right-hand one mirrored so both names sit against
+ * their own portraits.
  */
 const Seat: React.FC<SeatProps> = ({
   name,
@@ -76,23 +91,35 @@ const Seat: React.FC<SeatProps> = ({
   piece,
   color,
   clock,
+  moveClock,
   isTurn,
-  isUrgent,
+  mirrored = false,
   tag,
   onClick,
   disabled,
   title,
 }) => {
+  /* The move clock ends the match when it runs out, so it has to be on screen
+     rather than inferred. It sits beside the total clock, not in place of it,
+     and it takes the warning colour itself: the total clock turning red at five
+     seconds said the whole bank was nearly spent when only the move was. */
+  const hasMoveClock = moveClock > 0;
+  const isUrgent = hasMoveClock && moveClock <= 5;
+
   /* The ring is the player's actual piece colour, so a seat and the marks it
      is putting on the board are visibly the same player. It thickens on turn
      rather than switching to a shared accent, which would have made both
-     seats look alike at the one moment they must not. */
+     seats look alike at the one moment they must not. The glow goes through a
+     variable because an inline shadow cannot follow a breakpoint, and the
+     rail's 6px would swamp a 40px portrait. */
   const avatar = (
     <span
-      className={`relative grid h-24 w-24 shrink-0 place-items-center rounded-full bg-surface transition-all ${
-        isTurn ? 'animate-turn-bob border-[6px]' : 'border-4 border-line'
+      className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface transition-all lg:h-24 lg:w-24 ${
+        isTurn
+          ? 'animate-turn-bob border-[3px] shadow-[0_0_0_3px_var(--seat-glow)] lg:border-[6px] lg:shadow-[0_0_0_6px_var(--seat-glow)]'
+          : 'border-2 border-line lg:border-4'
       }`}
-      style={isTurn ? { borderColor: color, boxShadow: `0 0 0 6px ${color}33` } : undefined}
+      style={isTurn ? ({ borderColor: color, '--seat-glow': `${color}33` } as React.CSSProperties) : undefined}
     >
       <img
         src={getAvatarPublicUrl(photoURL)}
@@ -102,12 +129,12 @@ const Seat: React.FC<SeatProps> = ({
           e.currentTarget.onerror = null;
           e.currentTarget.src = getAvatarPublicUrl();
         }}
-        className="h-full w-full rounded-full object-contain p-1.5"
+        className="h-full w-full rounded-full object-contain p-0.5 lg:p-1.5"
       />
       {/* The piece rides on the portrait instead of sitting under the name:
           one glance answers "which one am I" without reading anything. */}
       <span
-        className="absolute -bottom-1 -right-1 grid h-9 w-9 place-items-center rounded-full border-4 border-surface font-display text-lg font-extrabold leading-none"
+        className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full border-2 border-surface font-display text-xs font-extrabold leading-none lg:h-9 lg:w-9 lg:border-4 lg:text-lg"
         style={{ backgroundColor: color, color: readableInk(color) }}
       >
         {piece}
@@ -116,28 +143,49 @@ const Seat: React.FC<SeatProps> = ({
   );
 
   const details = (
-    <span className="mt-3 flex min-w-0 flex-col items-center gap-2 text-center">
-      <span className="flex flex-col items-center gap-1.5">
-        <span className="max-w-[11rem] truncate font-display text-lg font-bold leading-tight text-ink">
+    <span
+      className={`flex min-w-0 flex-1 flex-col gap-0.5 lg:flex-none lg:items-center lg:gap-2 lg:text-center ${
+        mirrored ? 'items-end text-right' : 'items-start text-left'
+      }`}
+    >
+      <span
+        className={`flex min-w-0 max-w-full items-center gap-1 lg:flex-col lg:gap-1.5 ${
+          mirrored ? 'flex-row-reverse' : ''
+        }`}
+      >
+        <span className="min-w-0 truncate font-display text-sm font-bold leading-tight text-ink lg:max-w-[11rem] lg:text-lg">
           {name}
         </span>
-        {tag && <span className="chip chip-accent shrink-0">{tag}</span>}
+        {/* The chip keeps its own size in the rail and only tightens on a
+            phone, where it shares one line with the name. */}
+        {tag && (
+          <span className="chip chip-accent shrink-0 max-lg:px-1.5 max-lg:py-0 max-lg:text-[11px] max-lg:leading-4">
+            {tag}
+          </span>
+        )}
       </span>
-      {(clock > 0 || isTurn) && (
-        <span
-          className={`min-w-[4.5rem] rounded-sm px-2.5 py-1 text-center text-sm font-semibold leading-tight transition-colors ${
-            clock > 0 ? 'font-mono tabular-nums' : ''
-          } ${
-            isTurn
-              ? isUrgent
-                ? 'bg-danger-solid text-danger-fg'
-                : 'bg-accent text-accent-fg'
-              : 'bg-surface-3 text-muted'
-          }`}
-        >
-          {clock > 0 ? formatClock(clock) : 'Turn'}
-        </span>
-      )}
+      {/* Always laid out on a phone, even empty, so the name does not jump each
+          time the turn passes. The rail still drops it when there is nothing
+          to show, as it always has. */}
+      <span
+        className={`flex h-5 items-center gap-1 lg:h-auto lg:gap-1.5 ${
+          mirrored ? 'flex-row-reverse lg:flex-row' : ''
+        } ${clock > 0 || isTurn ? '' : 'lg:hidden'}`}
+      >
+        {clock > 0 && (
+          <span className={`${clockPill(isTurn)} font-mono tabular-nums lg:min-w-[4.5rem]`}>
+            {formatClock(clock)}
+          </span>
+        )}
+        {hasMoveClock && (
+          <span className={`${clockPill(true, isUrgent)} font-mono tabular-nums`}>
+            {moveClock}s<span className="sr-only"> left for this move</span>
+          </span>
+        )}
+        {clock <= 0 && isTurn && !hasMoveClock && (
+          <span className={`${clockPill(true)} lg:min-w-[4.5rem]`}>Turn</span>
+        )}
+      </span>
     </span>
   );
 
@@ -147,9 +195,9 @@ const Seat: React.FC<SeatProps> = ({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`flex w-full flex-col items-center rounded-md p-3 transition-colors ${
-        disabled ? 'cursor-default' : 'hover:bg-surface-3'
-      }`}
+      className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-md p-1 transition-colors lg:w-full lg:flex-none lg:flex-col lg:gap-3 lg:p-3 ${
+        mirrored ? 'flex-row-reverse' : ''
+      } ${disabled ? 'cursor-default' : 'hover:bg-surface-3'}`}
     >
       {avatar}
       {details}
@@ -176,19 +224,21 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({
   const isPlaying = gameStatus === 'playing';
   const isMyTurn = isPlaying && currentTurn === myPiece;
   const isTheirTurn = isPlaying && currentTurn !== myPiece;
-  const isUrgent = turnTimeLeft > 0 && turnTimeLeft <= 5;
   const opponentPiece: 'X' | 'O' = myPiece === 'X' ? 'O' : 'X';
 
+  /* The phone gutters are sized for a 320px screen, where a seat showing both
+     clocks is the widest thing in the row: any more padding and those clocks
+     run into the score. */
   return (
-    <div className="flex w-full flex-col items-center gap-6 px-4 py-8">
+    <div className="flex w-full items-center gap-2 p-2 lg:flex-col lg:gap-6 lg:px-4 lg:py-8">
       <Seat
         name={myUser?.displayName || 'You'}
         photoURL={myUser?.photoURL}
         piece={myPiece}
         color={myPiece === 'X' ? theme.xColor : theme.oColor}
         clock={myTotalTimeLeft}
+        moveClock={isMyTurn ? turnTimeLeft : 0}
         isTurn={isMyTurn}
-        isUrgent={isUrgent}
         tag="You"
         onClick={onViewMyProfile}
         title="View and edit your profile"
@@ -196,11 +246,11 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({
 
       {/* Rounds won in this sitting. It is the only number both players watch
           between games, so it belongs between them rather than in a panel. */}
-      <div className="flex flex-col items-center">
-        <div className="mb-2 rounded-sm bg-accent px-4 py-1 font-display text-base font-extrabold tracking-wider text-accent-fg shadow-[0_3px_0_var(--ui-accent-shadow)]">
+      <div className="flex shrink-0 flex-col items-center">
+        <div className="mb-1 rounded-sm bg-accent px-2 py-0.5 font-display text-xs font-extrabold tracking-wider text-accent-fg shadow-[0_2px_0_var(--ui-accent-shadow)] lg:mb-2 lg:px-4 lg:py-1 lg:text-base lg:shadow-[0_3px_0_var(--ui-accent-shadow)]">
           VS
         </div>
-        <div className="flex shrink-0 items-center gap-2.5 font-mono text-2xl font-bold tabular-nums text-subtle">
+        <div className="flex shrink-0 items-center gap-1 font-mono text-base font-bold tabular-nums text-subtle lg:gap-2.5 lg:text-2xl">
           <span className="text-ink">{myScore}</span>
           <span aria-hidden="true">-</span>
           <span className="text-ink">{opponentScore}</span>
@@ -216,8 +266,9 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({
         piece={opponentPiece}
         color={opponentPiece === 'X' ? theme.xColor : theme.oColor}
         clock={opponentTotalTimeLeft}
+        moveClock={isTheirTurn ? turnTimeLeft : 0}
         isTurn={isTheirTurn}
-        isUrgent={isUrgent}
+        mirrored
         tag={opponentThinking ? 'Thinking' : undefined}
         onClick={opponent ? () => onViewOpponentProfile?.(opponent) : undefined}
         disabled={!opponent}
