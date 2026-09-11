@@ -1,29 +1,49 @@
 import { useEffect, useState } from 'react';
-import type { UserProfile } from '../auth/AuthContext';
 import { supabase } from '../../config/supabase';
 import { ROOM_CODE_PATTERN } from './roomCode';
+import { sanitizeAvatar } from '../room/protocol';
 
+export type AnnouncedStatus = 'waiting' | 'playing' | 'paused' | 'ended';
+
+/** A public room as the lobby lists it. Only rooms from this version of the app are kept. */
 export interface ActiveRoomInfo {
+  v: 2;
   roomId: string;
   hostName: string;
   hostAvatar?: string;
   boardSize: number;
   createdAt: number;
   lastHeartbeat: number;
+  seatsFilled: 0 | 1 | 2;
+  viewers: number;
+  members: number;
+  capacity: number;
+  status: AnnouncedStatus;
+  /** A seat is empty and a newcomer could take it: the row says Join rather than Watch. */
+  openSeat: boolean;
 }
+
+/** What the hosting tab says about its room; the rest is stamped on the way out. */
+export type HostedRoomInfo = Omit<ActiveRoomInfo, 'v' | 'roomId' | 'lastHeartbeat'>;
 
 const BROADCAST_CHANNEL_NAME = 'caro_active_rooms_channel';
 const LOCAL_STORAGE_KEY = 'caro_active_rooms_registry';
 const REALTIME_ROOM_CHANNEL = 'caro_public_lobby';
+/** A room not heard from for this long has gone. */
+const STALE_AFTER_MS = 6000;
+const HEARTBEAT_MS = 2000;
 
 // Anyone can announce a room on the public lobby, and whatever is kept is
 // rendered on the home page and saved to localStorage across reloads. So an
 // announced room is only accepted in the shape this app itself sends.
 // The sizes the settings dialog offers.
 const BOARD_SIZES = [15, 19, 30, 50];
+const STATUSES: readonly string[] = ['waiting', 'playing', 'paused', 'ended'];
 // The longest display name signup accepts.
 const MAX_HOST_NAME_LENGTH = 40;
 const DEFAULT_HOST_NAME = 'Host Player';
+/** The room size the app enforces. A larger claim is not a room this app sent. */
+const MAX_CAPACITY = 8;
 
 /**
  * The one rule for a host's name, applied to rooms read from the network and to
@@ -33,6 +53,9 @@ const DEFAULT_HOST_NAME = 'Host Player';
  */
 const normaliseHostName = (name: string) =>
   Array.from(name.trim()).slice(0, MAX_HOST_NAME_LENGTH).join('') || DEFAULT_HOST_NAME;
+
+const isCount = (value: unknown, max: number): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= max;
 
 /**
  * Turns an announced room into one the lobby can safely show and save, or null
@@ -44,18 +67,44 @@ const normaliseHostName = (name: string) =>
  */
 const parseAnnouncedRoom = (value: unknown, now: number): ActiveRoomInfo | null => {
   if (typeof value !== 'object' || value === null) return null;
-  const { roomId, hostName, hostAvatar, boardSize, createdAt, lastHeartbeat } = value as Record<string, unknown>;
+  const {
+    v,
+    roomId,
+    hostName,
+    hostAvatar,
+    boardSize,
+    createdAt,
+    lastHeartbeat,
+    seatsFilled,
+    viewers,
+    members,
+    capacity,
+    status,
+    openSeat,
+  } = value as Record<string, unknown>;
 
+  // Rooms from the previous version seat two people and nobody else; joining
+  // one from here would only be turned away, so they are not listed.
+  if (v !== 2) return null;
   if (typeof roomId !== 'string' || !ROOM_CODE_PATTERN.test(roomId)) return null;
   if (typeof hostName !== 'string') return null;
   if (typeof boardSize !== 'number' || !BOARD_SIZES.includes(boardSize)) return null;
   if (hostAvatar !== undefined && typeof hostAvatar !== 'string') return null;
   if (typeof lastHeartbeat !== 'number' || !Number.isFinite(lastHeartbeat)) return null;
+  if (!isCount(capacity, MAX_CAPACITY) || capacity < 2) return null;
+  if (!isCount(members, capacity) || members < 1) return null;
+  if (seatsFilled !== 0 && seatsFilled !== 1 && seatsFilled !== 2) return null;
+  if (!isCount(viewers, capacity) || seatsFilled + viewers !== members) return null;
+  if (typeof status !== 'string' || !STATUSES.includes(status)) return null;
+  if (typeof openSeat !== 'boolean') return null;
 
   return {
+    v: 2,
     roomId,
     hostName: normaliseHostName(hostName),
-    hostAvatar,
+    // Every lobby would fetch an arbitrary image URL and hand its server the
+    // viewer's address, so only our own avatars and Google photos survive.
+    hostAvatar: sanitizeAvatar(hostAvatar) ?? undefined,
     boardSize,
     // Another device's clock is not ours. A heartbeat stamped in the future
     // kept its room listed until that moment came round, so neither time may
@@ -63,6 +112,12 @@ const parseAnnouncedRoom = (value: unknown, now: number): ActiveRoomInfo | null 
     // sorts the room as new.
     createdAt: typeof createdAt === 'number' && Number.isFinite(createdAt) ? Math.min(createdAt, now) : now,
     lastHeartbeat: Math.min(lastHeartbeat, now),
+    seatsFilled,
+    viewers,
+    members,
+    capacity,
+    status: status as AnnouncedStatus,
+    openSeat,
   };
 };
 
@@ -76,8 +131,9 @@ class RoomDiscoveryManager {
   private currentList: ActiveRoomInfo[] = [];
   private listSignature = '';
   private currentHostedRoomId: string | null = null;
-  private currentHostUser: UserProfile | null = null;
-  private currentBoardSize: number = 50;
+  private currentHostedInfo: HostedRoomInfo | null = null;
+  /** What the last announcement said, so an unchanged room is not re-sent early. */
+  private announcedSignature = '';
 
   constructor() {
     // 1. Local BroadcastChannel
@@ -160,6 +216,20 @@ class RoomDiscoveryManager {
     this.pollInterval = null;
   }
 
+  /** This tab's own room, stamped as alive now. */
+  private hostedEntry(now: number): ActiveRoomInfo | null {
+    if (!this.currentHostedRoomId || !this.currentHostedInfo) return null;
+    const info = this.currentHostedInfo;
+    return {
+      ...info,
+      v: 2,
+      roomId: this.currentHostedRoomId,
+      hostName: normaliseHostName(info.hostName),
+      hostAvatar: sanitizeAvatar(info.hostAvatar) ?? undefined,
+      lastHeartbeat: now,
+    };
+  }
+
   private syncFromLocalStorage() {
     try {
       const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -176,25 +246,15 @@ class RoomDiscoveryManager {
         entries.forEach((entry) => {
           const room = parseAnnouncedRoom(entry, now);
           if (!room || room.lastHeartbeat !== entry.lastHeartbeat) repaired = true;
-          if (room && now - room.lastHeartbeat < 6000) {
+          if (room && now - room.lastHeartbeat < STALE_AFTER_MS) {
             newMap.set(room.roomId, room);
           }
         });
       }
 
       // Keep current tab's hosted room alive
-      if (this.currentHostedRoomId) {
-        const existing = newMap.get(this.currentHostedRoomId) || {
-          roomId: this.currentHostedRoomId,
-          hostName: normaliseHostName(this.currentHostUser?.displayName ?? ''),
-          hostAvatar: this.currentHostUser?.photoURL,
-          boardSize: this.currentBoardSize,
-          createdAt: Date.now(),
-          lastHeartbeat: Date.now(),
-        };
-        existing.lastHeartbeat = Date.now();
-        newMap.set(this.currentHostedRoomId, existing);
-      }
+      const own = this.hostedEntry(now);
+      if (own) newMap.set(own.roomId, own);
 
       this.activeRoomsMap = newMap;
       // Write back anything rejected or clamped. A heartbeat clamped only in
@@ -246,18 +306,10 @@ class RoomDiscoveryManager {
   }
 
   private sendRoomAnnounce() {
-    if (!this.currentHostedRoomId) return;
+    const roomInfo = this.hostedEntry(Date.now());
+    if (!roomInfo) return;
 
-    const roomInfo: ActiveRoomInfo = {
-      roomId: this.currentHostedRoomId,
-      hostName: normaliseHostName(this.currentHostUser?.displayName ?? ''),
-      hostAvatar: this.currentHostUser?.photoURL,
-      boardSize: this.currentBoardSize,
-      createdAt: Date.now(),
-      lastHeartbeat: Date.now(),
-    };
-
-    this.activeRoomsMap.set(this.currentHostedRoomId, roomInfo);
+    this.activeRoomsMap.set(roomInfo.roomId, roomInfo);
     this.saveToLocalStorage();
     this.notifyListeners();
 
@@ -281,15 +333,20 @@ class RoomDiscoveryManager {
   }
 
   private notifyListeners() {
+    // A room someone can sit down in is what most visitors are looking for, so
+    // those come first; within each group the newest room leads.
     const activeList = Array.from(this.activeRoomsMap.values()).sort(
-      (a, b) => b.createdAt - a.createdAt
+      (a, b) => Number(b.openSeat) - Number(a.openSeat) || b.createdAt - a.createdAt
     );
 
     // Heartbeats rewrite lastHeartbeat every couple of seconds without the
     // lobby actually changing. Compare only what the UI shows, so subscribers
-    // re-render when a room really appears, disappears or is renamed.
+    // re-render when a room really appears, disappears or changes.
     const signature = activeList
-      .map((room) => `${room.roomId}|${room.hostName}|${room.hostAvatar || ''}|${room.boardSize}`)
+      .map(
+        (room) =>
+          `${room.roomId}|${room.hostName}|${room.hostAvatar || ''}|${room.boardSize}|${room.seatsFilled}|${room.viewers}|${room.status}|${room.openSeat}`
+      )
       .join('~');
 
     this.currentList = activeList;
@@ -321,21 +378,34 @@ class RoomDiscoveryManager {
     };
   }
 
-  // Host starts broadcasting heartbeats for an open room
-  public startHostingRoom(roomId: string, user: UserProfile | null, boardSize: number) {
-    if (this.currentHostedRoomId) this.stopHostingRoom(this.currentHostedRoomId);
-
+  /**
+   * Announces this tab's room, or updates what is announced about it. The
+   * heartbeat keeps going for as long as the room is listed, games included,
+   * so people can come and watch; a change is sent at once rather than on the
+   * next beat.
+   */
+  public hostRoom(roomId: string, info: HostedRoomInfo) {
+    if (this.currentHostedRoomId && this.currentHostedRoomId !== roomId) {
+      this.stopHostingRoom(this.currentHostedRoomId);
+    }
+    this.currentHostedInfo = info;
+    const signature = JSON.stringify(info);
+    if (this.currentHostedRoomId === roomId && this.heartbeatInterval) {
+      if (signature !== this.announcedSignature) {
+        this.announcedSignature = signature;
+        this.sendRoomAnnounce();
+      }
+      return;
+    }
     this.currentHostedRoomId = roomId;
-    this.currentHostUser = user;
-    this.currentBoardSize = boardSize;
-
+    this.announcedSignature = signature;
     this.sendRoomAnnounce();
     this.heartbeatInterval = setInterval(() => {
       this.sendRoomAnnounce();
-    }, 2000);
+    }, HEARTBEAT_MS);
   }
 
-  // Host stops room (game started or room left)
+  /** Takes the room off the list. Only the hosting tab ever calls this. */
   public stopHostingRoom(roomId: string) {
     // Only the room that owns the heartbeat may stop it, otherwise closing an
     // unrelated room silently killed the live room's announcements.
@@ -345,7 +415,8 @@ class RoomDiscoveryManager {
         this.heartbeatInterval = null;
       }
       this.currentHostedRoomId = null;
-      this.currentHostUser = null;
+      this.currentHostedInfo = null;
+      this.announcedSignature = '';
     }
 
     if (roomId) {

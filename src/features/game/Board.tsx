@@ -34,6 +34,13 @@ interface BoardProps {
   resultActions?: React.ReactNode;
   /** Seconds left before the first move, or null when play is already open. */
   countdown?: number | null;
+  /** Replaces the player-centred result, for a viewer or anyone the room words it for. */
+  resultView?: { headline: string; tone: string; winnerPiece: 'X' | 'O' | null } | null;
+  /** The count-in's title and small print, when the room knows better than "you" and "your opponent". */
+  countdownTitle?: string;
+  countdownCaption?: string;
+  /** A paused game. The clocks are stopped, and the board says why and what can be done. */
+  paused?: { title: string; body?: string; actions?: React.ReactNode } | null;
 }
 
 interface PieceGlyphProps {
@@ -251,15 +258,22 @@ export const Board: React.FC<BoardProps> = ({
   ratingNote,
   resultActions,
   countdown = null,
+  resultView = null,
+  countdownTitle,
+  countdownCaption,
+  paused = null,
 }) => {
   const { theme } = useTheme();
   const prefs = useDisplayPrefs();
 
   const isWin = gameResult?.winner === 'Victory!';
   const isLoss = gameResult?.winner === 'Defeat!';
-  const winnerPiece: 'X' | 'O' | null = isWin ? myPiece : isLoss ? (myPiece === 'X' ? 'O' : 'X') : null;
+  const playerWinnerPiece: 'X' | 'O' | null = isWin ? myPiece : isLoss ? (myPiece === 'X' ? 'O' : 'X') : null;
+  const winnerPiece = resultView ? resultView.winnerPiece : playerWinnerPiece;
   const winnerColor = winnerPiece === 'X' ? theme.xColor : theme.oColor;
-  const outcome = isWin
+  const outcome = resultView
+    ? { headline: resultView.headline, tone: resultView.tone }
+    : isWin
     ? { headline: 'You win!', tone: 'text-accent-text' }
     : isLoss
     ? { headline: 'You lose', tone: 'text-danger' }
@@ -609,7 +623,7 @@ export const Board: React.FC<BoardProps> = ({
         {/* RESULT. Centred over the board and led by the winning piece: the
             first question is always "who won", and a coloured word alone was
             answering it too quietly. */}
-        {gameStatus === 'ended' && gameResult && (
+        {gameStatus === 'ended' && (gameResult || resultView) && (
           <div className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-[var(--ui-scrim)] p-4 backdrop-blur-[3px]">
             <div role="status" aria-live="polite" className="modal-panel w-[min(24rem,100%)] p-6 text-center">
               <span
@@ -632,6 +646,18 @@ export const Board: React.FC<BoardProps> = ({
           </div>
         )}
 
+        {/* PAUSED. Between the result and the count-in: a seat is empty or its
+            player is reconnecting, and the clocks wait for them. */}
+        {paused && countdown === null && (
+          <div className="absolute inset-0 z-[25] flex items-center justify-center rounded-lg bg-[var(--ui-scrim)] p-4 backdrop-blur-[2px]">
+            <div role="status" aria-live="polite" className="modal-panel w-[min(24rem,100%)] p-6 text-center">
+              <p className="display text-2xl text-ink">{paused.title}</p>
+              {paused.body && <p className="mt-2 text-sm text-muted">{paused.body}</p>}
+              {paused.actions && <div className="mt-5 flex flex-col gap-2">{paused.actions}</div>}
+            </div>
+          </div>
+        )}
+
         {countdown !== null && (
           <div
             role="status"
@@ -640,15 +666,16 @@ export const Board: React.FC<BoardProps> = ({
           >
             <div className="rounded-lg border border-line-strong bg-surface px-8 py-6 text-center shadow-2xl">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">
-                Get ready
+                {countdownTitle ?? 'Get ready'}
               </p>
               <p className="mt-1 font-mono text-5xl font-semibold tabular-nums text-ink">
                 {countdown}
               </p>
               <p className="mt-2 text-xs text-muted">
-                {isMyTurn
-                  ? `You move first, as ${myPiece}`
-                  : `${opponent?.displayName || 'Your opponent'} moves first`}
+                {countdownCaption ??
+                  (isMyTurn
+                    ? `You move first, as ${myPiece}`
+                    : `${opponent?.displayName || 'Your opponent'} moves first`)}
               </p>
             </div>
           </div>

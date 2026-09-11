@@ -1,24 +1,41 @@
 import React from 'react';
-import type { UserProfile } from '../auth/AuthContext';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { useTheme } from '../theme/ThemeContext';
 
+/**
+ * One seat as the header draws it. The header does not know whether it is a
+ * practice game or a room, or whether "you" are in it at all: the caller says
+ * who sits where, and a viewer simply gets two seats that are not theirs.
+ */
+export interface SeatView {
+  name: string;
+  photoURL?: string | null;
+  piece: 'X' | 'O';
+  /** Total time left in seconds; 0 when the game has no total clock. */
+  clock: number;
+  /** Seconds left for the move in hand. Only the seat on turn is given one. */
+  moveClock: number;
+  isTurn: boolean;
+  tag?: string;
+  onClick?: () => void;
+  title: string;
+  /** Nobody sits here: drawn as an open seat. */
+  empty?: boolean;
+  /** Seconds before a dropped player's seat opens, while they reconnect. */
+  reconnectingSeconds?: number | null;
+  /** The one thing to do with this seat: take it, or give it up. */
+  action?: { label: string; onClick: () => void; tone?: 'primary' | 'secondary' };
+}
+
 interface MatchHeaderProps {
-  myUser?: UserProfile | null;
-  opponent?: UserProfile | null;
-  myPiece: 'X' | 'O';
-  currentTurn: 'X' | 'O';
-  myTotalTimeLeft: number;
-  opponentTotalTimeLeft: number;
-  turnTimeLeft: number;
-  gameStatus: 'lobby' | 'playing' | 'ended';
-  /** Rounds won so far in this session, kept per seat rather than per name. */
-  myScore: number;
-  opponentScore: number;
-  /** True while the bot is searching, so the wait reads as deliberate. */
-  opponentThinking?: boolean;
-  onViewMyProfile?: () => void;
-  onViewOpponentProfile?: (opponent: UserProfile) => void;
+  /** Drawn left to right on a phone and top to bottom in the rail. */
+  seats: [SeatView, SeatView];
+  /** Rounds won in this sitting, in the same order as the seats. */
+  score: [number, number];
+  /** Said once to screen readers whenever it changes. */
+  announcement: string;
+  /** The score in words, for screen readers. */
+  scoreLabel: string;
 }
 
 /**
@@ -57,21 +74,10 @@ const clockPill = (lit: boolean, urgent = false) =>
     lit ? (urgent ? 'bg-danger-solid text-danger-fg' : 'bg-accent text-accent-fg') : 'bg-surface-3 text-muted'
   }`;
 
-interface SeatProps {
-  name: string;
-  photoURL?: string;
-  piece: 'X' | 'O';
+interface SeatProps extends SeatView {
   color: string;
-  clock: number;
-  /** Seconds left for the move in hand. Only the seat on turn is given one. */
-  moveClock: number;
-  isTurn: boolean;
   /** Set on the right-hand seat, which a phone lays out from its outer edge in. */
   mirrored?: boolean;
-  tag?: string;
-  onClick?: () => void;
-  disabled?: boolean;
-  title: string;
 }
 
 /**
@@ -96,8 +102,10 @@ const Seat: React.FC<SeatProps> = ({
   mirrored = false,
   tag,
   onClick,
-  disabled,
   title,
+  empty = false,
+  reconnectingSeconds = null,
+  action,
 }) => {
   /* The move clock ends the match when it runs out, so it has to be on screen
      rather than inferred. It sits beside the total clock, not in place of it,
@@ -105,32 +113,38 @@ const Seat: React.FC<SeatProps> = ({
      seconds said the whole bank was nearly spent when only the move was. */
   const hasMoveClock = moveClock > 0;
   const isUrgent = hasMoveClock && moveClock <= 5;
+  const away = reconnectingSeconds !== null;
 
   /* The ring is the player's actual piece colour, so a seat and the marks it
      is putting on the board are visibly the same player. It thickens on turn
      rather than switching to a shared accent, which would have made both
      seats look alike at the one moment they must not. The glow goes through a
      variable because an inline shadow cannot follow a breakpoint, and the
-     rail's 6px would swamp a 36px portrait. */
+     rail's 6px would swamp a 36px portrait. An open seat is a dashed outline
+     with nobody in it. */
   const avatar = (
     <span
       className={`relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface transition-all lg:h-24 lg:w-24 ${
-        isTurn
+        empty
+          ? 'border-2 border-dashed border-line-strong bg-surface-2 lg:border-4'
+          : isTurn
           ? 'animate-turn-bob border-[3px] shadow-[0_0_0_3px_var(--seat-glow)] lg:border-[6px] lg:shadow-[0_0_0_6px_var(--seat-glow)]'
           : 'border-2 border-line lg:border-4'
       }`}
-      style={isTurn ? ({ borderColor: color, '--seat-glow': `${color}33` } as React.CSSProperties) : undefined}
+      style={isTurn && !empty ? ({ borderColor: color, '--seat-glow': `${color}33` } as React.CSSProperties) : undefined}
     >
-      <img
-        src={getAvatarPublicUrl(photoURL)}
-        alt=""
-        aria-hidden="true"
-        onError={(e) => {
-          e.currentTarget.onerror = null;
-          e.currentTarget.src = getAvatarPublicUrl();
-        }}
-        className="h-full w-full rounded-full object-contain p-0.5 lg:p-1.5"
-      />
+      {!empty && (
+        <img
+          src={getAvatarPublicUrl(photoURL)}
+          alt=""
+          aria-hidden="true"
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = getAvatarPublicUrl();
+          }}
+          className={`h-full w-full rounded-full object-contain p-0.5 lg:p-1.5 ${away ? 'opacity-40 grayscale' : ''}`}
+        />
+      )}
       {/* The piece rides on the portrait instead of sitting under the name:
           one glance answers "which one am I" without reading anything. */}
       <span
@@ -153,7 +167,11 @@ const Seat: React.FC<SeatProps> = ({
           mirrored ? 'flex-row-reverse' : ''
         }`}
       >
-        <span className="min-w-0 truncate font-display text-sm font-bold leading-tight text-ink lg:max-w-[11rem] lg:text-lg">
+        <span
+          className={`min-w-0 truncate font-display text-sm font-bold leading-tight lg:max-w-[11rem] lg:text-lg ${
+            empty ? 'text-subtle' : 'text-ink'
+          }`}
+        >
           {name}
         </span>
         {/* The chip keeps its own size in the rail and only tightens on a
@@ -177,22 +195,27 @@ const Seat: React.FC<SeatProps> = ({
       <span
         className={`flex h-5 items-center gap-0.5 lg:h-auto lg:gap-1.5 ${
           mirrored ? 'flex-row-reverse lg:flex-row' : ''
-        } ${clock > 0 || isTurn ? '' : 'lg:hidden'}`}
+        } ${clock > 0 || isTurn || away ? '' : 'lg:hidden'}`}
       >
+        {away && (
+          <span className="chip shrink-0 px-1.5 py-0 text-[11px] leading-4 text-warning">
+            Reconnecting {reconnectingSeconds}s
+          </span>
+        )}
         {tag === 'Thinking' && (
           <span className="chip chip-accent shrink-0 px-1.5 py-0 text-[11px] leading-4 lg:hidden">{tag}</span>
         )}
-        {clock > 0 && (
+        {!away && clock > 0 && (
           <span className={`${clockPill(isTurn)} font-mono tabular-nums lg:min-w-[4.5rem]`}>
             {formatClock(clock)}
           </span>
         )}
-        {hasMoveClock && (
+        {!away && hasMoveClock && (
           <span className={`${clockPill(true, isUrgent)} font-mono tabular-nums`}>
             {moveClock}s<span className="sr-only"> left for this move</span>
           </span>
         )}
-        {clock <= 0 && isTurn && !hasMoveClock && (
+        {!away && clock <= 0 && isTurn && !hasMoveClock && (
           <span className={`${clockPill(true)} lg:min-w-[4.5rem]`}>Turn</span>
         )}
       </span>
@@ -200,41 +223,42 @@ const Seat: React.FC<SeatProps> = ({
   );
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-md p-1 transition-colors lg:w-full lg:flex-none lg:flex-col lg:gap-3 lg:p-3 ${
-        mirrored ? 'flex-row-reverse' : ''
-      } ${disabled ? 'cursor-default' : 'hover:bg-surface-3'}`}
-    >
-      {avatar}
-      {details}
-    </button>
+    <div className="flex min-w-0 flex-1 flex-col lg:w-full lg:flex-none">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={!onClick}
+        title={title}
+        className={`flex min-w-0 items-center gap-1.5 rounded-md p-1 transition-colors lg:w-full lg:flex-col lg:gap-3 lg:p-3 ${
+          mirrored ? 'flex-row-reverse' : ''
+        } ${onClick ? 'hover:bg-surface-3' : 'cursor-default'}`}
+      >
+        {avatar}
+        {details}
+      </button>
+      {/* A sibling rather than a child: a button inside a button is not a
+          button anyone can press reliably. */}
+      {action && (
+        <div className={`flex px-1 pb-1 lg:justify-center ${mirrored ? 'justify-end' : 'justify-start'}`}>
+          <button
+            type="button"
+            onClick={action.onClick}
+            className={`btn btn-sm h-7 px-2.5 text-[11px] lg:h-8 lg:text-xs ${
+              action.tone === 'primary' ? 'btn-primary' : 'btn-secondary'
+            }`}
+          >
+            {action.label}
+          </button>
+        </div>
+      )}
+    </div>
   );
 };
 
-export const MatchHeader: React.FC<MatchHeaderProps> = ({
-  myUser,
-  opponent,
-  myPiece,
-  currentTurn,
-  myTotalTimeLeft,
-  opponentTotalTimeLeft,
-  turnTimeLeft,
-  gameStatus,
-  myScore,
-  opponentScore,
-  opponentThinking = false,
-  onViewMyProfile,
-  onViewOpponentProfile,
-}) => {
+export const MatchHeader: React.FC<MatchHeaderProps> = ({ seats, score, announcement, scoreLabel }) => {
   const { theme } = useTheme();
-  const isPlaying = gameStatus === 'playing';
-  const isMyTurn = isPlaying && currentTurn === myPiece;
-  const isTheirTurn = isPlaying && currentTurn !== myPiece;
-  const opponentPiece: 'X' | 'O' = myPiece === 'X' ? 'O' : 'X';
+  const colorOf = (piece: 'X' | 'O') => (piece === 'X' ? theme.xColor : theme.oColor);
+  const [first, second] = seats;
 
   /* The phone row is sized for a 320px screen, where a seat showing both
      clocks beside a two-digit score is as wide as it gets: any larger and
@@ -242,18 +266,7 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({
      the rail is untouched. */
   return (
     <div className="flex w-full items-center gap-1.5 p-2 lg:flex-col lg:gap-6 lg:px-4 lg:py-8">
-      <Seat
-        name={myUser?.displayName || 'You'}
-        photoURL={myUser?.photoURL}
-        piece={myPiece}
-        color={myPiece === 'X' ? theme.xColor : theme.oColor}
-        clock={myTotalTimeLeft}
-        moveClock={isMyTurn ? turnTimeLeft : 0}
-        isTurn={isMyTurn}
-        tag="You"
-        onClick={onViewMyProfile}
-        title="View and edit your profile"
-      />
+      <Seat {...first} color={colorOf(first.piece)} />
 
       {/* Rounds won in this sitting. It is the only number both players watch
           between games, so it belongs between them rather than in a panel. */}
@@ -262,34 +275,19 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({
           VS
         </div>
         <div className="flex shrink-0 items-center gap-1 font-mono text-sm font-bold tabular-nums text-subtle lg:gap-2.5 lg:text-2xl">
-          <span className="text-ink">{myScore}</span>
+          <span className="text-ink">{score[0]}</span>
           <span aria-hidden="true">-</span>
-          <span className="text-ink">{opponentScore}</span>
-          <span className="sr-only">
-            Score: you {myScore}, opponent {opponentScore}
-          </span>
+          <span className="text-ink">{score[1]}</span>
+          <span className="sr-only">{scoreLabel}</span>
         </div>
       </div>
 
-      <Seat
-        name={opponent?.displayName || 'Waiting…'}
-        photoURL={opponent?.photoURL}
-        piece={opponentPiece}
-        color={opponentPiece === 'X' ? theme.xColor : theme.oColor}
-        clock={opponentTotalTimeLeft}
-        moveClock={isTheirTurn ? turnTimeLeft : 0}
-        isTurn={isTheirTurn}
-        mirrored
-        tag={opponentThinking ? 'Thinking' : undefined}
-        onClick={opponent ? () => onViewOpponentProfile?.(opponent) : undefined}
-        disabled={!opponent}
-        title={opponent ? "View opponent's profile and stats" : 'Waiting for an opponent'}
-      />
+      <Seat {...second} color={colorOf(second.piece)} mirrored />
 
       {/* Announced rather than drawn: the ring and the lit clock already carry
           this visually, and a screen reader needs it said once. */}
       <p aria-live="polite" className="sr-only">
-        {isPlaying ? (isMyTurn ? 'Your turn' : 'Your opponent’s turn') : 'Match ended'}
+        {announcement}
       </p>
     </div>
   );

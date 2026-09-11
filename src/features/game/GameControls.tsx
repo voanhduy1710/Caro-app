@@ -12,6 +12,8 @@ import {
   RefreshCw,
   Flag,
   Loader2,
+  Armchair,
+  Eye,
 } from 'lucide-react';
 import { setDisplayPref, useDisplayPrefs } from './displayPrefs';
 import type { DisplayPrefs } from './displayPrefs';
@@ -23,16 +25,10 @@ import { useIsDesktop } from '../../shared/hooks/useMediaQuery';
 interface GameControlsProps {
   headerNode?: React.ReactNode;
   boardNode?: React.ReactNode;
-  currentTurn: 'X' | 'O';
-  turnTimeLeft: number;
-  myTotalTimeLeft: number;
-  opponentTotalTimeLeft: number;
   opponent: UserProfile | null;
   myUser: UserProfile | null;
   chatMessages: ChatMessage[];
-  lastReaction: { emoji: string; sender: string } | null;
   onSendChat: (text: string, image?: string) => void;
-  onSendReaction: (emoji: string) => void;
   onSendBuzz?: () => void;
   onProposeUndo: () => void;
   onProposeRematch: () => void;
@@ -51,6 +47,22 @@ interface GameControlsProps {
   undoPending: boolean;
   /** A rematch has been offered and the opponent has not answered. */
   rematchPending: boolean;
+  /** A viewer watches and chats; only a player gets the game's actions. */
+  role?: 'player' | 'viewer';
+  /** Everyone in the room, shown under the seats. */
+  rosterNode?: React.ReactNode;
+  /** The id this client's own chat lines carry. Defaults to the signed-in uid. */
+  myChatId?: string | null;
+  /** A chat author's current avatar, when the room still knows them. */
+  avatarFor?: (message: ChatMessage) => string | null | undefined;
+  /** The seat a viewer could take right now, if any. */
+  openSeat?: 'X' | 'O' | null;
+  onTakeSeat?: () => void;
+  /** Gives up the seat and stays in the room to watch. */
+  onBecomeViewer?: () => void;
+  /** Overrides when Resign is available: in a room, only while both seats are filled. */
+  canResign?: boolean;
+  chatEmptyText?: string;
 }
 
 const REACTION_ICONS = [
@@ -209,6 +221,15 @@ export const GameControls: React.FC<GameControlsProps> = ({
   canUndo,
   undoPending,
   rematchPending,
+  role = 'player',
+  rosterNode,
+  myChatId,
+  avatarFor,
+  openSeat = null,
+  onTakeSeat,
+  onBecomeViewer,
+  canResign,
+  chatEmptyText,
 }) => {
   const isDesktop = useIsDesktop();
   const prefs = useDisplayPrefs();
@@ -250,11 +271,13 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
   const isOwnMessage = useCallback(
     (message: ChatMessage) => {
+      // In a room, lines are keyed by member: one account can be in the room twice.
+      if (myChatId !== undefined) return Boolean(myChatId) && message.senderId === myChatId;
       if (!myUser) return false;
       if (message.senderId) return message.senderId === myUser.uid;
       return message.sender === myUser.displayName;
     },
-    [myUser]
+    [myUser, myChatId]
   );
 
   const lastMessage = chatMessages[chatMessages.length - 1];
@@ -543,6 +566,17 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
       <span aria-hidden="true" className="mx-1 h-6 w-px bg-line" />
 
+      {role === 'viewer' ? (
+        <RailButton
+          icon={<Armchair size={17} strokeWidth={2.25} aria-hidden="true" />}
+          label={openSeat ? `Take seat ${openSeat}` : 'Take seat'}
+          title={openSeat ? 'sit down and play from this position' : 'Both seats are taken'}
+          onClick={() => onTakeSeat?.()}
+          disabled={!openSeat || !onTakeSeat}
+          tone={openSeat ? 'primary' : 'default'}
+        />
+      ) : (
+      <>
       <RailButton
         icon={<Undo2 size={17} strokeWidth={2.25} aria-hidden="true" />}
         label="Take back"
@@ -578,9 +612,20 @@ export const GameControls: React.FC<GameControlsProps> = ({
           label="Resign"
           title="give up this match and record it as a loss"
           onClick={onResign}
-          disabled={gameStatus !== 'playing'}
+          disabled={canResign === undefined ? gameStatus !== 'playing' : !canResign}
           tone="danger"
         />
+      )}
+
+      {onBecomeViewer && (
+        <RailButton
+          icon={<Eye size={17} strokeWidth={2.25} aria-hidden="true" />}
+          label="Become viewer"
+          title="give your seat to someone else and keep watching"
+          onClick={onBecomeViewer}
+        />
+      )}
+      </>
       )}
 
       {/* What this browser draws and plays, kept apart from the Settings
@@ -667,7 +712,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
       >
         {chatMessages.length === 0 ? (
           <p className="py-10 text-center text-[13px] text-subtle">
-            No messages yet. Say hello to your opponent.
+            {chatEmptyText ?? 'No messages yet. Say hello to your opponent.'}
           </p>
         ) : (
           chatMessages.map((m) => {
@@ -687,7 +732,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
               <div key={m.id} className={`flex items-end gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
                 {!isMe && (
                   <img
-                    src={getAvatarPublicUrl(opponent?.photoURL)}
+                    src={getAvatarPublicUrl(avatarFor?.(m) ?? m.senderAvatar ?? opponent?.photoURL)}
                     alt=""
                     aria-hidden="true"
                     onError={(e) => {
@@ -809,16 +854,18 @@ export const GameControls: React.FC<GameControlsProps> = ({
         >
           Send
         </button>
-        <button
-          type="button"
-          onClick={handleBuzzClick}
-          disabled={isBuzzCooldown}
-          title="Nudge your opponent with a sound"
-          aria-label="Buzz opponent"
-          className="btn btn-secondary btn-icon h-9 w-9 shrink-0"
-        >
-          <Bell size={16} strokeWidth={2.25} aria-hidden="true" />
-        </button>
+        {role === 'player' && (
+          <button
+            type="button"
+            onClick={handleBuzzClick}
+            disabled={isBuzzCooldown}
+            title="Nudge the other player with a sound"
+            aria-label="Buzz the other player"
+            className="btn btn-secondary btn-icon h-9 w-9 shrink-0"
+          >
+            <Bell size={16} strokeWidth={2.25} aria-hidden="true" />
+          </button>
+        )}
       </form>
     </div>
   );
@@ -889,6 +936,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
       <div className="match-stage match-stage--solo">
         <div className="area-left">
           {headerNode}
+          {rosterNode}
           <div className="flex-1 min-h-0" />
           {actionsCell()}
         </div>
@@ -905,6 +953,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
       <div className="match-stage">
         <div className="area-left">
           {headerNode}
+          {rosterNode}
           <div className="flex-1 min-h-0" />
           {actionsCell()}
         </div>
@@ -938,6 +987,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
     <div className="match-stage">
       <div className="area-left">
         {headerNode}
+        {rosterNode}
       </div>
 
       <div className="area-board pt-2">

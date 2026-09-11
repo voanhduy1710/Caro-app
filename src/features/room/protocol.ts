@@ -118,6 +118,9 @@ const cleanAvatar = (value: unknown): string | null => {
   return url.href;
 };
 
+/** The same avatar rule for anything else that shows a picture it was sent, such as the public room list. */
+export const sanitizeAvatar = (value: unknown): string | null => cleanAvatar(value);
+
 const clampStat = (value: unknown): number | undefined => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
   return Math.min(STAT_MAX, Math.max(0, value));

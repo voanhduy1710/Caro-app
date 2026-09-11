@@ -180,7 +180,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
   if (!isOpen) return null;
 
   const canEditRules = isHost && gameStatus !== 'playing';
-  const lockNote = gameStatus === 'playing' ? 'Locked mid-match' : 'Host only';
+  const lockNote = gameStatus === 'playing' ? 'Locked during a game' : 'Host only';
 
   /* xColor always paints the X glyph and oColor always paints the O glyph,
      whichever seat the player is in. The host plays X, so for a guest a row
