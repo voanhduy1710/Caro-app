@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { UserProfile } from '../auth/AuthContext';
 import { supabase } from '../../config/supabase';
+import { ROOM_CODE_PATTERN } from './roomCode';
 
 export interface ActiveRoomInfo {
   roomId: string;
@@ -18,17 +19,20 @@ const REALTIME_ROOM_CHANNEL = 'caro_public_lobby';
 // Anyone can announce a room on the public lobby, and whatever is kept is
 // rendered on the home page and saved to localStorage across reloads. So an
 // announced room is only accepted in the shape this app itself sends.
-//
-// Mirrors ROOM_CODE_PATTERN in useWebRTC, so a listed room is always one that
-// Join accepts. It cannot be imported from there: useWebRTC imports this
-// module, and the manager below reads storage while this module is still
-// loading, before a circular import would have finished.
-const ROOM_CODE_PATTERN = /^[A-Z0-9]{4,12}$/;
 // The sizes the settings dialog offers.
 const BOARD_SIZES = [15, 19, 30, 50];
 // The longest display name signup accepts.
 const MAX_HOST_NAME_LENGTH = 40;
 const DEFAULT_HOST_NAME = 'Host Player';
+
+/**
+ * The one rule for a host's name, applied to rooms read from the network and to
+ * the room this tab announces itself, so the two never disagree. It cuts by code
+ * point rather than by UTF-16 unit, so a long name is never cut through the
+ * middle of an emoji and left ending in a broken glyph.
+ */
+const normaliseHostName = (name: string) =>
+  Array.from(name.trim()).slice(0, MAX_HOST_NAME_LENGTH).join('') || DEFAULT_HOST_NAME;
 
 /**
  * Turns an announced room into one the lobby can safely show and save, or null
@@ -50,7 +54,7 @@ const parseAnnouncedRoom = (value: unknown, now: number): ActiveRoomInfo | null 
 
   return {
     roomId,
-    hostName: hostName.trim().slice(0, MAX_HOST_NAME_LENGTH) || DEFAULT_HOST_NAME,
+    hostName: normaliseHostName(hostName),
     hostAvatar,
     boardSize,
     // Another device's clock is not ours. A heartbeat stamped in the future
@@ -182,7 +186,7 @@ class RoomDiscoveryManager {
       if (this.currentHostedRoomId) {
         const existing = newMap.get(this.currentHostedRoomId) || {
           roomId: this.currentHostedRoomId,
-          hostName: this.currentHostUser?.displayName || DEFAULT_HOST_NAME,
+          hostName: normaliseHostName(this.currentHostUser?.displayName ?? ''),
           hostAvatar: this.currentHostUser?.photoURL,
           boardSize: this.currentBoardSize,
           createdAt: Date.now(),
@@ -246,7 +250,7 @@ class RoomDiscoveryManager {
 
     const roomInfo: ActiveRoomInfo = {
       roomId: this.currentHostedRoomId,
-      hostName: this.currentHostUser?.displayName || DEFAULT_HOST_NAME,
+      hostName: normaliseHostName(this.currentHostUser?.displayName ?? ''),
       hostAvatar: this.currentHostUser?.photoURL,
       boardSize: this.currentBoardSize,
       createdAt: Date.now(),

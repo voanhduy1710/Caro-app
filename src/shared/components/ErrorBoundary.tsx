@@ -45,10 +45,13 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
     return (
       <div className="grid min-h-dvh place-items-center p-4">
-        <div role="alert" className="panel w-[min(24rem,100%)] p-6 text-center">
-          <p className="font-semibold text-ink">Something went wrong while showing this page.</p>
+        <div className="panel w-[min(24rem,100%)] p-6 text-center">
+          {/* Only the sentence is the alert, so a screen reader does not read
+              the button labels out as part of it. Focus goes to Reload, since
+              the tree that held it has just been unmounted. */}
+          <p role="alert" className="font-semibold text-ink">Something went wrong while showing this page.</p>
           <div className="mt-5 flex flex-col gap-2">
-            <button type="button" onClick={this.reload} className="btn btn-primary">
+            <button type="button" onClick={this.reload} className="btn btn-primary" autoFocus>
               Reload
             </button>
             <button type="button" onClick={this.clearSavedDataAndReload} className="btn btn-secondary">
