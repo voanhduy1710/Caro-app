@@ -121,6 +121,13 @@
     --btn-lift: 2px;
   }
 
+  /* A button that is out of action but must keep focus, such as the one the
+     player has just pressed, looks disabled without being :disabled. */
+  .btn[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   .btn-sm {
     padding: 6px 14px;
     font-size: 14px;

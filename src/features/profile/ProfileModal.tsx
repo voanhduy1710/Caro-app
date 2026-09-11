@@ -7,7 +7,12 @@ import { AVATAR_ITEMS, getAvatarPublicUrl, getChampionId } from '../avatar/avata
 
 export const ProfileModal: React.FC = () => {
   const { user, showProfileModal, setShowProfileModal, updateUserProfile, changePassword } = useAuth();
-  const closeProfile = useCallback(() => setShowProfileModal(false), [setShowProfileModal]);
+  // While a save is in flight the dialog stays open. Closed early, a failure
+  // had nowhere to be shown, and the navbar quietly rolled back on its own.
+  const savingRef = useRef(false);
+  const closeProfile = useCallback(() => {
+    if (!savingRef.current) setShowProfileModal(false);
+  }, [setShowProfileModal]);
   const dialogProps = useModalChrome(showProfileModal, closeProfile, 'profile-modal-title');
 
   const [displayName, setDisplayName] = useState('');
@@ -59,20 +64,26 @@ export const ProfileModal: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = displayName.trim();
-    if (!name || isSaving) return;
+    if (!name || savingRef.current) return;
 
     setSaveError(null);
     setIsSavedSuccess(false);
     setIsSaving(true);
-    const saved = await updateUserProfile({
+    savingRef.current = true;
+    const result = await updateUserProfile({
       displayName: name,
       photoURL: selectedPhotoURL,
     });
+    savingRef.current = false;
     setIsSaving(false);
 
     // "Saved" only when it was. On a failure the form keeps what the player
     // chose, so trying again is one click.
-    if (!saved) {
+    if (result === 'signed-out') {
+      setSaveError('You are signed out. Sign in again to save your profile.');
+      return;
+    }
+    if (result !== 'saved') {
       setSaveError('Your profile was not saved. Please try again.');
       return;
     }
@@ -119,7 +130,7 @@ export const ProfileModal: React.FC = () => {
             </h2>
           </div>
           <button
-            onClick={() => setShowProfileModal(false)}
+            onClick={closeProfile}
             className="btn btn-ghost btn-icon"
             aria-label="Close"
           >
@@ -258,9 +269,12 @@ export const ProfileModal: React.FC = () => {
               </div>
             )}
             <div className="flex items-center gap-2 pt-1">
+              {/* aria-disabled rather than disabled: the player has just
+                  pressed this button, and disabling a focused button drops
+                  focus to the page body. handleSave ignores a second press. */}
               <button
                 type="submit"
-                disabled={isSaving}
+                aria-disabled={isSaving}
                 className="btn btn-primary btn-sm flex-1"
               >
                 {isSaving
@@ -269,6 +283,9 @@ export const ProfileModal: React.FC = () => {
                     ? (<><Check size={14} strokeWidth={2} aria-hidden="true" />Saved</>)
                     : ('Save changes')}
               </button>
+              <span role="status" className="sr-only">
+                {isSaving ? 'Saving your profile' : isSavedSuccess ? 'Profile saved' : ''}
+              </span>
             </div>
           </form>
 

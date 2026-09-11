@@ -38,7 +38,7 @@ interface AuthContextType {
   setShowProfileModal: (show: boolean) => void;
   openProfileModal: () => void;
   /** Resolves false when the server refused the change, which is then taken back out. */
-  updateUserProfile: (updates: { displayName?: string; photoURL?: string }) => Promise<boolean>;
+  updateUserProfile: (updates: { displayName?: string; photoURL?: string }) => Promise<ProfileSaveResult>;
   /** Re-reads ratings from the server after a match, so the ELO shown is current. */
   refreshUserProfile: () => Promise<void>;
   changePassword: (newPassword: string) => Promise<{ success: boolean; message?: string }>;
@@ -90,6 +90,9 @@ const guestNameFor = (uid: string): string => {
   const suffix = Number.isFinite(value) ? value % 10000 : 0;
   return `Guest ${String(suffix).padStart(4, '0')}`;
 };
+
+/** How a profile save ended, so the dialog can say something true about it. */
+export type ProfileSaveResult = 'saved' | 'signed-out' | 'refused';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -223,7 +226,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         photo_url: newProfile.photoURL,
         email: newProfile.email,
         updated_at: new Date().toISOString(),
-      });
+      }, { onConflict: 'uid', ignoreDuplicates: true });
 
       return newProfile;
     } catch (err) {
@@ -383,7 +386,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email: profile.email,
               updated_at: new Date().toISOString(),
             },
-            { onConflict: 'uid' }
+            // Insert only. The on_auth_user_created trigger has normally made
+            // this row already, and an upsert that updates sets uid, which
+            // players may not update, so it was refused on every signup.
+            { onConflict: 'uid', ignoreDuplicates: true }
           );
 
           // Usernames map to <username>@gomoku.app, which receives no mail, so
@@ -521,8 +527,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(guestUser);
   };
 
-  const updateUserProfile = async (updates: { displayName?: string; photoURL?: string }): Promise<boolean> => {
-    if (!user) return false;
+  const updateUserProfile = async (updates: { displayName?: string; photoURL?: string }): Promise<ProfileSaveResult> => {
+    if (!user) return 'signed-out';
     const previous = user;
     const updated: UserProfile = {
       ...user,
@@ -539,6 +545,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // every column it sends, uid included, so the upsert this replaces was
       // refused on every save. supabase-js returns that as { error } instead
       // of throwing, which is why the modal said "Saved" all the same.
+      // Take back the two fields this save changed, and only while the same
+      // player is signed in. Anything else that moved in the meantime, such as
+      // a rating refresh, is left as it is.
+      const rollback = () =>
+        setUser((current) => (current?.uid === previous.uid
+          ? { ...current, displayName: previous.displayName, photoURL: previous.photoURL }
+          : current));
+
+      // A cached profile can outlive its session: after a refresh token expires
+      // the player still looks signed in, but the save runs as anon and cannot
+      // update anything, so asking them to try again only goes round in circles.
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        rollback();
+        return 'signed-out';
+      }
+
       let saved = false;
       try {
         const { data, error } = await supabase
@@ -564,13 +587,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (!saved) {
-        // Take back the two fields this save changed, and only while the same
-        // player is signed in. Anything else that moved in the meantime, such
-        // as a rating refresh, is left as it is.
-        setUser((current) => (current?.uid === previous.uid
-          ? { ...current, displayName: previous.displayName, photoURL: previous.photoURL }
-          : current));
-        return false;
+        rollback();
+        return 'refused';
       }
     }
 
@@ -594,7 +612,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       saveLocalAccounts(accounts);
     }
 
-    return true;
+    return 'saved';
   };
 
   const refreshUserProfile = async () => {
