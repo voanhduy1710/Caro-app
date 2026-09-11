@@ -23,18 +23,26 @@ interface MatchHeaderProps {
 
 /**
  * Piece colours are picked by the player in Settings, so no fixed ink is safe
- * on top of them. This is the WCAG relative-luminance test, which is the same
- * rule the token file's contrast budget was measured with.
+ * on top of them. Relative luminance decides, and the crossover is the point
+ * where white and INK_DARK are equally readable on the same colour - not the
+ * midpoint of the range. Solving the WCAG ratio for those two inks puts it at
+ * 0.2258; at the 0.42 this used to carry, a mid-bright colour took white when
+ * dark ink was the readable choice, e.g. #10b981 at 2.54:1 instead of 5.71:1
+ * and #f97316 at 2.80:1 instead of 5.17:1, both under the 3:1 floor.
  */
+const INK_DARK = '#0d2b45';
+const INK_LIGHT = '#ffffff';
+const INK_CROSSOVER = 0.2258;
+
 const readableInk = (hex: string) => {
   const c = hex.replace('#', '');
-  if (c.length !== 6) return '#ffffff';
+  if (c.length !== 6) return INK_LIGHT;
   const channel = (i: number) => {
     const v = parseInt(c.slice(i, i + 2), 16) / 255;
     return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
   };
   const L = 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
-  return L > 0.42 ? '#0d2b45' : '#ffffff';
+  return L > INK_CROSSOVER ? INK_DARK : INK_LIGHT;
 };
 
 const formatClock = (seconds: number) => {
