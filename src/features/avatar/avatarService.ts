@@ -210,36 +210,84 @@ export const AVATAR_ITEMS: AvatarItem[] = CHAMPION_DATA.map((c) => ({
  */
 const DEAD_AVATAR_HOSTS = ['api.dicebear.com', '.supabase.co/storage/'];
 
+/** The path segment every Data Dragon champion icon URL carries. */
+const DDRAGON_CHAMPION_PATH = '/img/champion/';
+
+/** The champion id in a ddragon icon URL, whatever patch it names. */
+const ddragonIdOf = (value: string): string | null => {
+  if (!value.includes('ddragon.leagueoflegends.com')) return null;
+  const at = value.indexOf(DDRAGON_CHAMPION_PATH);
+  if (at === -1) return null;
+  const rest = value.slice(at + DDRAGON_CHAMPION_PATH.length);
+  const dot = rest.lastIndexOf('.');
+  return (dot > 0 ? rest.slice(0, dot) : rest) || null;
+};
+
+/**
+ * The champion a stored value names, or null when it names something that is
+ * not one of ours.
+ *
+ * A ddragon URL counts however old the patch baked into it: the icon is still
+ * a champion, so the id comes back out and callers rebuild the URL on the
+ * current patch. That is what stops an avatar freezing on the patch it was
+ * picked under - the value in the database never has to be rewritten.
+ */
+export const getChampionId = (value?: string | null): string | null => {
+  if (!value) return null;
+
+  let clean = value;
+
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    const id = ddragonIdOf(value);
+    if (!id) return null;
+    clean = id;
+  } else {
+    // Legacy path prefixes: "/Avatar/Foo.gif", "Avatar/Foo.gif".
+    if (clean.startsWith('/')) clean = clean.slice(1);
+    if (clean.toLowerCase().startsWith('avatar/')) clean = clean.slice('avatar/'.length);
+  }
+
+  // Both the old .gif and the new .png.
+  const dot = clean.lastIndexOf('.');
+  if (dot > 0 && ['.gif', '.png'].includes(clean.slice(dot).toLowerCase())) {
+    clean = clean.slice(0, dot);
+  }
+
+  const match = CHAMPION_DATA.find((c) => c.id.toLowerCase() === clean.toLowerCase());
+  return match ? match.id : null;
+};
+
 /**
  * Resolve whatever is stored as a player's avatar into something renderable.
  * Accepts a champion ID ("Ahri"), a filename ("Ahri.png"), a legacy
- * Ragnarok-style path, or a full URL. A URL is kept as-is unless its host is
- * known dead; anything else that matches no champion falls back to the default.
+ * Ragnarok-style path, or a full URL.
  */
 export const getAvatarPublicUrl = (filenameOrUrl?: string | null): string => {
-  if (!filenameOrUrl) {
-    return `${DDRAGON_CDN}/${DEFAULT_CHAMPION_ID}.png`;
+  // One of ours: always rebuilt on the current patch, whatever was stored.
+  const champion = getChampionId(filenameOrUrl);
+  if (champion) {
+    return `${DDRAGON_CDN}/${champion}.png`;
   }
 
-  // A full URL is either a champion icon this module built earlier or the
-  // player's own picture - most often the Google photo Supabase seeds from
-  // user_metadata. Both pass through; only the dead hosts are swapped out,
-  // because replacing every URL would throw away real profile photos.
-  if (filenameOrUrl.startsWith('http://') || filenameOrUrl.startsWith('https://')) {
-    return DEAD_AVATAR_HOSTS.some((host) => filenameOrUrl.includes(host))
-      ? `${DDRAGON_CDN}/${DEFAULT_CHAMPION_ID}.png`
-      : filenameOrUrl;
+  // A ddragon icon for an id the table does not list - most likely a champion
+  // newer than the table. Passing it through would keep it on the patch it was
+  // saved under, so it is rebuilt on the current one too; if the id no longer
+  // exists, every avatar image falls back to the default in its onError.
+  const unlistedId = filenameOrUrl ? ddragonIdOf(filenameOrUrl) : null;
+  if (unlistedId) {
+    return `${DDRAGON_CDN}/${unlistedId}.png`;
   }
 
-  // Strip legacy path prefixes ("/Avatar/", "Avatar/", etc.)
-  let clean = filenameOrUrl.replace(/^\/?(Avatar|avatar)\//i, '');
-  // Strip the extension: both old .gif and new .png
-  clean = clean.replace(/\.(gif|png)$/i, '');
+  // Somebody else's picture - most often the Google photo Supabase seeds from
+  // user_metadata. It passes through, unless its host is one that no longer
+  // resolves and would render as a broken image.
+  if (
+    filenameOrUrl &&
+    (filenameOrUrl.startsWith('http://') || filenameOrUrl.startsWith('https://')) &&
+    !DEAD_AVATAR_HOSTS.some((host) => filenameOrUrl.includes(host))
+  ) {
+    return filenameOrUrl;
+  }
 
-  // Exact match against known champion IDs (case-insensitive)
-  const match = CHAMPION_DATA.find(
-    (c) => c.id.toLowerCase() === clean.toLowerCase()
-  );
-  const champId = match ? match.id : DEFAULT_CHAMPION_ID;
-  return `${DDRAGON_CDN}/${champId}.png`;
+  return `${DDRAGON_CDN}/${DEFAULT_CHAMPION_ID}.png`;
 };

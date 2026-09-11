@@ -3,7 +3,7 @@ import { X, Check, AlertTriangle, Lock } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
 import { getRankTitle } from '../../shared/utils/eloCalculator';
-import { AVATAR_ITEMS, getAvatarPublicUrl } from '../avatar/avatarService';
+import { AVATAR_ITEMS, getAvatarPublicUrl, getChampionId } from '../avatar/avatarService';
 
 export const ProfileModal: React.FC = () => {
   const { user, showProfileModal, setShowProfileModal, updateUserProfile, changePassword } = useAuth();
@@ -26,7 +26,7 @@ export const ProfileModal: React.FC = () => {
   useEffect(() => {
     if (user) {
       setDisplayName(user.displayName || '');
-      setSelectedPhotoURL(user.photoURL || getAvatarPublicUrl());
+      setSelectedPhotoURL(getChampionId(user.photoURL) ?? (user.photoURL || getAvatarPublicUrl()));
     }
   }, [user, showProfileModal]);
 
@@ -37,6 +37,7 @@ export const ProfileModal: React.FC = () => {
   const winRate = totalGames > 0 ? Math.round((user.wins / totalGames) * 100) : 0;
 
   const filteredAvatars = AVATAR_ITEMS;
+  const selectedChampion = getChampionId(selectedPhotoURL);
 
   // Active preview avatar URL (Hover preview overrides active selection)
   const activeAvatarPreviewUrl = hoveredAvatarFilename
@@ -187,14 +188,15 @@ export const ProfileModal: React.FC = () => {
                   </div>
                 ) : (
                   filteredAvatars.map((av) => {
-                    const fullUrl = getAvatarPublicUrl(av.filename);
-                    const isSelected = selectedPhotoURL === fullUrl || selectedPhotoURL.includes(encodeURIComponent(av.filename));
+                    const tileId = av.filename.slice(0, -'.png'.length);
+                    const fullUrl = getAvatarPublicUrl(tileId);
+                    const isSelected = selectedChampion === tileId;
 
                     return (
                       <button
                         key={av.id}
                         type="button"
-                        onClick={() => setSelectedPhotoURL(fullUrl)}
+                        onClick={() => setSelectedPhotoURL(tileId)}
                         onMouseEnter={() => setHoveredAvatarFilename(av.filename)}
                         onMouseLeave={() => setHoveredAvatarFilename(null)}
                         title={av.name}
