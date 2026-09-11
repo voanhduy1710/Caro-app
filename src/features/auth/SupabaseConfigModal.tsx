@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
+import { supabaseProjectRef } from '../../config/supabase';
 
 export const SupabaseConfigModal: React.FC = () => {
   const { showConfigGuide, setShowConfigGuide, authError, setAuthError, loginAsGuest } = useAuth();
@@ -47,7 +48,14 @@ export const SupabaseConfigModal: React.FC = () => {
               <AlertTriangle size={13} strokeWidth={2.25} className="shrink-0" aria-hidden="true" />{authError}
             </div>
             <p className="text-[11px]">
-              Google Provider is not toggled ON in your Supabase Dashboard for project <code className="font-mono bg-warning-soft px-1 rounded-sm">deuuuibkqletkkbrsmxd</code>.
+              Google Provider is not toggled ON in your Supabase Dashboard{' '}
+              {supabaseProjectRef && (
+                <>
+                  for project{' '}
+                  <code className="font-mono bg-warning-soft px-1 rounded-sm">{supabaseProjectRef}</code>
+                </>
+              )}
+              .
             </p>
           </div>
         )}
@@ -85,12 +93,12 @@ export const SupabaseConfigModal: React.FC = () => {
             <li>
               Open{' '}
               <a
-                href="https://supabase.com/dashboard/project/deuuuibkqletkkbrsmxd/auth/providers"
+                href={`https://supabase.com/dashboard/project/${supabaseProjectRef}/auth/providers`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-accent-text underline font-medium hover:text-accent-text"
               >
-                Supabase Auth Providers Dashboard (deuuuibkqletkkbrsmxd)
+                Supabase Auth Providers Dashboard{supabaseProjectRef && ` (${supabaseProjectRef})`}
               </a>.
             </li>
             <li>
