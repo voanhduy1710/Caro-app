@@ -26,3 +26,8 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Local secrets. Tokens that were committed before this line must be rotated:
+# untracking a file does not remove it from history.
+.env
+.mcp.json

@@ -1,0 +1,8 @@
+# `vercel --prod` uploads from this folder, and uses this list instead of
+# .gitignore. .env is deliberately NOT listed: git no longer tracks it, but the
+# Vite build on Vercel still needs the VITE_ variables in it.
+.git
+node_modules
+dist
+.claude
+*.log

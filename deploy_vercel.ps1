@@ -15,7 +15,8 @@ $nodeVersion = node -v
 Write-Host "   ✅ Node.js Version: $nodeVersion" -ForegroundColor Green
 
 # 2. Extract Vercel Access Token from .mcp.json
-$vercelToken = "REDACTED_VERCEL_TOKEN"
+# The token comes from the environment or from .mcp.json, never from this file.
+$vercelToken = $env:VERCEL_TOKEN
 if (Test-Path ".mcp.json") {
     try {
         $mcpContent = Get-Content ".mcp.json" -Raw | ConvertFrom-Json
@@ -23,8 +24,13 @@ if (Test-Path ".mcp.json") {
             $vercelToken = $mcpContent.mcpServers.vercel.env.VERCEL_TOKEN
         }
     } catch {
-        # Fallback to hardcoded token
+        # Unreadable .mcp.json: keep whatever VERCEL_TOKEN already held
     }
+}
+
+if (-not $vercelToken) {
+    Write-Host "No Vercel token found. Set VERCEL_TOKEN or add it to .mcp.json." -ForegroundColor Red
+    Exit 1
 }
 
 $env:VERCEL_TOKEN = $vercelToken
