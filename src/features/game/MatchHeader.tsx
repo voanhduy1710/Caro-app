@@ -53,7 +53,7 @@ const formatClock = (seconds: number) => {
 
 /** One shape for every clock on a seat, lit only on the seat whose move it is. */
 const clockPill = (lit: boolean, urgent = false) =>
-  `rounded-sm px-1 py-0.5 text-center text-xs font-semibold leading-4 transition-colors lg:px-2.5 lg:py-1 lg:text-sm lg:leading-tight ${
+  `rounded-sm px-1 py-0.5 text-center text-[11px] font-semibold leading-4 transition-colors lg:px-2.5 lg:py-1 lg:text-sm lg:leading-tight ${
     lit ? (urgent ? 'bg-danger-solid text-danger-fg' : 'bg-accent text-accent-fg') : 'bg-surface-3 text-muted'
   }`;
 
@@ -111,10 +111,10 @@ const Seat: React.FC<SeatProps> = ({
      rather than switching to a shared accent, which would have made both
      seats look alike at the one moment they must not. The glow goes through a
      variable because an inline shadow cannot follow a breakpoint, and the
-     rail's 6px would swamp a 40px portrait. */
+     rail's 6px would swamp a 36px portrait. */
   const avatar = (
     <span
-      className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface transition-all lg:h-24 lg:w-24 ${
+      className={`relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface transition-all lg:h-24 lg:w-24 ${
         isTurn
           ? 'animate-turn-bob border-[3px] shadow-[0_0_0_3px_var(--seat-glow)] lg:border-[6px] lg:shadow-[0_0_0_6px_var(--seat-glow)]'
           : 'border-2 border-line lg:border-4'
@@ -157,9 +157,16 @@ const Seat: React.FC<SeatProps> = ({
           {name}
         </span>
         {/* The chip keeps its own size in the rail and only tightens on a
-            phone, where it shares one line with the name. */}
+            phone, where it shares one line with the name. "Thinking" comes
+            and goes with every bot move, so on a phone it sits on the clock
+            row instead: on the name line it squeezed the bot's name to
+            nothing at 320px, and the name flickered back after each move. */}
         {tag && (
-          <span className="chip chip-accent shrink-0 max-lg:px-1.5 max-lg:py-0 max-lg:text-[11px] max-lg:leading-4">
+          <span
+            className={`chip chip-accent shrink-0 max-lg:px-1.5 max-lg:py-0 max-lg:text-[11px] max-lg:leading-4 ${
+              tag === 'Thinking' ? 'max-lg:hidden' : ''
+            }`}
+          >
             {tag}
           </span>
         )}
@@ -168,10 +175,13 @@ const Seat: React.FC<SeatProps> = ({
           time the turn passes. The rail still drops it when there is nothing
           to show, as it always has. */}
       <span
-        className={`flex h-5 items-center gap-1 lg:h-auto lg:gap-1.5 ${
+        className={`flex h-5 items-center gap-0.5 lg:h-auto lg:gap-1.5 ${
           mirrored ? 'flex-row-reverse lg:flex-row' : ''
         } ${clock > 0 || isTurn ? '' : 'lg:hidden'}`}
       >
+        {tag === 'Thinking' && (
+          <span className="chip chip-accent shrink-0 px-1.5 py-0 text-[11px] leading-4 lg:hidden">{tag}</span>
+        )}
         {clock > 0 && (
           <span className={`${clockPill(isTurn)} font-mono tabular-nums lg:min-w-[4.5rem]`}>
             {formatClock(clock)}
@@ -226,11 +236,12 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({
   const isTheirTurn = isPlaying && currentTurn !== myPiece;
   const opponentPiece: 'X' | 'O' = myPiece === 'X' ? 'O' : 'X';
 
-  /* The phone gutters are sized for a 320px screen, where a seat showing both
-     clocks is the widest thing in the row: any more padding and those clocks
-     run into the score. */
+  /* The phone row is sized for a 320px screen, where a seat showing both
+     clocks beside a two-digit score is as wide as it gets: any larger and
+     those clocks run over the score. Every size here has an lg: override, so
+     the rail is untouched. */
   return (
-    <div className="flex w-full items-center gap-2 p-2 lg:flex-col lg:gap-6 lg:px-4 lg:py-8">
+    <div className="flex w-full items-center gap-1.5 p-2 lg:flex-col lg:gap-6 lg:px-4 lg:py-8">
       <Seat
         name={myUser?.displayName || 'You'}
         photoURL={myUser?.photoURL}
@@ -250,7 +261,7 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({
         <div className="mb-1 rounded-sm bg-accent px-2 py-0.5 font-display text-xs font-extrabold tracking-wider text-accent-fg shadow-[0_2px_0_var(--ui-accent-shadow)] lg:mb-2 lg:px-4 lg:py-1 lg:text-base lg:shadow-[0_3px_0_var(--ui-accent-shadow)]">
           VS
         </div>
-        <div className="flex shrink-0 items-center gap-1 font-mono text-base font-bold tabular-nums text-subtle lg:gap-2.5 lg:text-2xl">
+        <div className="flex shrink-0 items-center gap-1 font-mono text-sm font-bold tabular-nums text-subtle lg:gap-2.5 lg:text-2xl">
           <span className="text-ink">{myScore}</span>
           <span aria-hidden="true">-</span>
           <span className="text-ink">{opponentScore}</span>
