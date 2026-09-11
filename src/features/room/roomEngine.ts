@@ -66,6 +66,11 @@ export const TEASE_SENDER_COOLDOWN_MS = 3_000;
 /** How long a seat must stay empty before the remaining player may end the game. */
 export const DISCARD_GUARD_MS = 15_000;
 export const RESULTS_KEPT = 5;
+/**
+ * The most results kept even when they are pending. A loser who never reports
+ * would otherwise grow every ROOM_STATE by one result per game for ever.
+ */
+export const RESULTS_CEILING = 2 * RESULTS_KEPT;
 export const SEAT_LOG_CAP = 64;
 export const CHAT_TEXT_MAX = 500;
 export const CHAT_IMAGE_MAX = 250_000;
@@ -161,7 +166,7 @@ export interface Game {
   seatLog: SeatChange[];
   /** Entries removed from the middle of seatLog to keep it at SEAT_LOG_CAP. */
   seatLogDropped: number;
-  /** uids that stood, left or were removed during this game and may not sit in it again. */
+  /** uids that stood up or left during this game and may not sit in it again. */
   gaveUp: string[];
   /** When each seat was last vacated during this game, for the discard guard. */
   vacatedAt: { X: number | null; O: number | null };
@@ -184,7 +189,10 @@ export interface RoomState {
   countdown: { msLeft: number; resuming: boolean } | null;
   autoStartArmed: boolean;
   game: Game | null;
-  /** The last results, oldest first. A pending result is never evicted. */
+  /**
+   * The last results, oldest first. The newest is never evicted, and a pending
+   * one only when RESULTS_CEILING results are all waiting on their submitters.
+   */
   results: GameResult[];
   /** Games that reached a result; numbers the next game even after a discard. */
   gamesPlayed: number;
@@ -392,6 +400,7 @@ export const checkInvariants = (state: EngineState | RoomState): string[] => {
   }
   if (room.game && room.game.moveBy.length !== room.game.moves.length) problems.push('moveBy out of step with moves');
   if (room.game && room.game.seatLog.length > SEAT_LOG_CAP) problems.push('seatLog over its cap');
+  if (room.results.length > RESULTS_CEILING) problems.push('results over their ceiling');
   if ('host' in state) {
     if ((state.host.runningSince !== null) !== (room.game?.clocks.running === true)) {
       problems.push('runningSince out of step with the clocks');
@@ -734,8 +743,12 @@ const vacate = (d: EngineState, seat: Seat, reason: SeatChange['reason'], ctx: C
       });
       game.vacatedAt[seat] = ctx.now;
       // Standing up freezes both clocks. Without this, a player short of time
-      // could stand, think for free, and sit again with the same clocks.
-      if (reason !== 'dropped' && !game.gaveUp.includes(member.profile.uid)) game.gaveUp.push(member.profile.uid);
+      // could stand, think for free, and sit again with the same clocks. Only
+      // the player's own choice bars them: a drop is not a choice, and neither
+      // is the host's Remove, which is mostly used on someone still stuck
+      // reconnecting who should be free to sit again once they are back.
+      const choseToGo = reason === 'stood' || reason === 'left';
+      if (choseToGo && !game.gaveUp.includes(member.profile.uid)) game.gaveUp.push(member.profile.uid);
     }
   }
   if (room.phase === 'waiting' || room.phase === 'ended') room.autoStartArmed = true;
@@ -862,12 +875,20 @@ const endGame = (
     rating,
     endedAt: ctx.now,
   });
-  // Evict the oldest settled results first. A pending one is never dropped:
-  // its submitter may still be working on it, and a quick rematch must not
-  // make the rating report bounce.
+  // Evict the oldest settled results first. A pending one is kept: its
+  // submitter may still be working on it, and a quick rematch must not make
+  // the rating report bounce. The result just pushed is never a candidate,
+  // because the result card shows the newest entry and it must be this game.
+  // Past the ceiling the oldest pending result goes too; only a submitter who
+  // has not reported for that many games gets there, and the server still
+  // holds whatever they did send, so the room merely stops showing it.
   while (room.results.length > RESULTS_KEPT) {
-    const i = room.results.findIndex((r) => r.rating.status !== 'pending');
-    if (i === -1) break;
+    const newest = room.results.length - 1;
+    let i = room.results.findIndex((r, k) => k < newest && r.rating.status !== 'pending');
+    if (i === -1) {
+      if (room.results.length <= RESULTS_CEILING) break;
+      i = 0;
+    }
     room.results.splice(i, 1);
   }
   room.gamesPlayed += 1;
@@ -960,6 +981,14 @@ export const dedupeName = (name: string, taken: string[]): string => {
 const sameAccountInOtherSeat = (d: EngineState, seat: Seat, uid: string): boolean =>
   occupant(d, otherSeat(seat))?.profile.uid === uid;
 
+/**
+ * Where to bank the clocks when the side to move turns out to have been
+ * silent since `seen`: a second after that last sign of life, so the silence
+ * is given back, but never before the clocks last started running.
+ */
+const refundedBankAt = (d: EngineState, seen: number, now: number): number =>
+  Math.max(d.host.runningSince ?? now, Math.min(now, seen + REFUND_AFTER_LAST_SEEN_MS));
+
 // ---------------------------------------------------------------------------
 // Intent handlers
 // ---------------------------------------------------------------------------
@@ -1042,7 +1071,14 @@ const handleTakeSeat = (d: EngineState, m: Member, seat: Seat, ctx: Ctx): void =
   }
 };
 
-const handleMove = (d: EngineState, m: Member, p: IntentPayloads['MOVE'], ctx: Ctx): void => {
+/** `prevSeen` is when the mover was last heard from before this MOVE arrived. */
+const handleMove = (
+  d: EngineState,
+  m: Member,
+  p: IntentPayloads['MOVE'],
+  prevSeen: number | undefined,
+  ctx: Ctx,
+): void => {
   const { room } = d;
   const game = room.game;
   if (room.phase !== 'playing' || !game) return reject(ctx, m.id, 'MOVE', 'not_playing');
@@ -1059,6 +1095,16 @@ const handleMove = (d: EngineState, m: Member, p: IntentPayloads['MOVE'], ctx: C
   // watchdog only looks four times a second, and the gap must not save anyone.
   const expired = expiredClock(d, ctx.now);
   if (expired) {
+    // The watchdog would not have timed out a mover who had been silent for
+    // longer than STALE_MOVER_MS; it pauses with a refund instead. A late MOVE
+    // is judged the same way, or the outcome would hang on where the 250 ms
+    // tick (longer in a throttled background tab) happened to fall. The link
+    // has just proved itself alive, so unlike the watchdog this keeps the
+    // connection, and the resuming count-in starts straight away.
+    if (!m.isHost && prevSeen !== undefined && ctx.now - prevSeen > STALE_MOVER_MS) {
+      pause(d, ctx, refundedBankAt(d, prevSeen, ctx.now));
+      return reject(ctx, m.id, 'MOVE', 'not_playing');
+    }
     endGame(d, otherSeat(seat), expired, null, ctx);
     return reject(ctx, m.id, 'MOVE', 'time_out');
   }
@@ -1363,6 +1409,9 @@ export const applyIntent = (
     reject(ctx, fromMemberId, intent.type, 'not_member');
     return { state, events: [], replies: ctx.replies };
   }
+  // Read before this message counts as a sign of life: a late MOVE is judged
+  // on the silence that came before it, exactly as the watchdog would have.
+  const prevSeen = d.host.lastSeenAt[m.id];
   if (!m.isHost) d.host.lastSeenAt[m.id] = now;
   if (!m.connected) {
     reject(ctx, m.id, intent.type, 'not_connected');
@@ -1379,7 +1428,7 @@ export const applyIntent = (
       break;
     }
     case 'MOVE':
-      handleMove(d, m, intent.payload, ctx);
+      handleMove(d, m, intent.payload, prevSeen, ctx);
       break;
     case 'UNDO_REQUEST':
       handleUndoRequest(d, m, intent.payload, ctx);
@@ -1442,11 +1491,8 @@ const loseConnection = (d: EngineState, memberId: string, ctx: Ctx): void => {
     // Loss is noticed seconds late. Time the side to move spent after its last
     // sign of life (plus a second of slack) is given back, so a drop pauses
     // the game instead of quietly running the dropped player's clock down.
-    let bankAt = ctx.now;
-    if (room.game.turn === seat) {
-      const seen = d.host.lastSeenAt[m.id] ?? ctx.now;
-      bankAt = Math.max(d.host.runningSince ?? ctx.now, Math.min(ctx.now, seen + REFUND_AFTER_LAST_SEEN_MS));
-    }
+    const bankAt =
+      room.game.turn === seat ? refundedBankAt(d, d.host.lastSeenAt[m.id] ?? ctx.now, ctx.now) : ctx.now;
     pause(d, ctx, bankAt);
   } else if (room.phase === 'countdown') {
     abortCountdown(d);

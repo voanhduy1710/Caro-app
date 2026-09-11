@@ -22,6 +22,7 @@ import {
   MAX_MEMBERS,
   OFFER_TTL_MS,
   REFUND_AFTER_LAST_SEEN_MS,
+  RESULTS_CEILING,
   SEAT_LOG_CAP,
   STALE_MOVER_MS,
   applyIntent,
@@ -641,6 +642,56 @@ describe('seats (4.4, 4.5)', () => {
     ]);
   });
 
+  // The A1 rule is "resume exactly", and the tests above resume with plenty
+  // of move time left. These pause with 3 s on the move timer, below any floor
+  // a resume might be tempted to apply, on each of the three paths to a pause.
+  it('resumes a per-move timer below 10 s exactly after a player stands (A1)', () => {
+    const { room, A, B } = playing(TIMED);
+    room.move(A, 7, 7);
+    room.advance(27_000);
+    const C = room.hello(registered('Cara', UID.C));
+    room.act(B, 'LEAVE_SEAT', {});
+    const frozen = room.clocks();
+    expect(frozen).toEqual({ X: 300_000, O: 273_000, turn: 3_000, elapsed: 27_000, running: false });
+    room.advance(20_000);
+    room.act(C, 'TAKE_SEAT', { seat: 'O' });
+    room.countIn();
+    expect(room.room.phase).toBe('playing');
+    expect(room.clocks()).toEqual({ ...frozen, running: true });
+  });
+
+  it('resumes a per-move timer below 10 s exactly after a disconnect (A1)', () => {
+    const { room, A, B } = playing(TIMED);
+    room.move(A, 7, 7);
+    room.advance(26_500);
+    room.pong(B);
+    room.advance(500);
+    room.lost(B);
+    const frozen = room.clocks();
+    expect(frozen).toEqual({ X: 300_000, O: 273_000, turn: 3_000, elapsed: 27_000, running: false });
+    room.advance(10_000);
+    room.resume(B);
+    room.countIn();
+    expect(room.room.phase).toBe('playing');
+    expect(room.clocks()).toEqual({ ...frozen, running: true });
+  });
+
+  it('resumes a per-move timer below 10 s exactly after a host restore (A1)', () => {
+    const { room, A, B } = playing(TIMED);
+    room.move(A, 7, 7);
+    room.advance(27_000);
+    room.pong(B);
+    const before = room.clocks();
+    expect(before).toEqual({ X: 300_000, O: 273_000, turn: 3_000, elapsed: 27_000, running: true });
+    const saved = JSON.parse(JSON.stringify(snapshot(room.s, room.now)));
+    room.advance(5_000);
+    room.s = restore(saved, room.now);
+    room.resume(B);
+    room.countIn();
+    expect(room.room.phase).toBe('playing');
+    expect(room.clocks()).toEqual(before);
+  });
+
   it('two viewers racing for one seat in the same tick: the second gets seat_taken', () => {
     const { room, B } = playing();
     const C = room.hello(registered('Cara', UID.C));
@@ -955,11 +1006,46 @@ describe('moves and clocks (4.11, 6)', () => {
   it('a move that arrives after the mover’s time ran out loses on time', () => {
     const { room, A, B } = playing({ ...OPEN, turnTimeSeconds: 10 });
     room.move(A, 7, 7);
-    room.advance(10_050);
+    room.advance(9_000);
+    room.pong(B); // B is present, so being late is B's own doing
+    room.advance(1_050);
     room.move(B, 0, 0);
     expect(rejections(room.last)).toEqual(['time_out']);
     expect(latestResult(room.s)).toMatchObject({ winner: 'X', reason: 'turn_timeout' });
     expect(room.game.moves).toHaveLength(1);
+  });
+
+  it('a late move from a mover silent past the watchdog’s tolerance pauses with the watchdog’s refund', () => {
+    const lateBy = (via: 'move' | 'tick') => {
+      const { room, A, B } = playing({ ...OPEN, turnTimeSeconds: 10 });
+      room.move(A, 7, 7);
+      room.advance(5_000);
+      room.pong(B);
+      // B's clock ran out 50 ms ago, five seconds into a silence, and no tick
+      // has looked yet. The MOVE and the next tick must agree on what that is.
+      room.advance(5_050);
+      if (via === 'move') room.move(B, 0, 0);
+      else room.tick();
+      return { room, B };
+    };
+    const byMove = lateBy('move');
+    const byTick = lateBy('tick');
+    expect(rejections(byMove.room.last)).toEqual(['not_playing']);
+    for (const { room } of [byMove, byTick]) {
+      expect(room.room.results).toEqual([]);
+      expect(room.game.moves).toHaveLength(1);
+      expect(room.game.clocks.turn).toBe(10_000 - 5_000 - REFUND_AFTER_LAST_SEEN_MS);
+    }
+    expect(byMove.room.game.clocks).toEqual(byTick.room.game.clocks);
+    // The MOVE proved B's link alive, so B stays connected and the count-in
+    // starts at once instead of waiting for a reconnect.
+    expect(byMove.room.room.members.find((m) => m.id === byMove.B)?.connected).toBe(true);
+    expect(byMove.room.room.phase).toBe('countdown');
+    expect(byMove.room.room.countdown?.resuming).toBe(true);
+    byMove.room.countIn();
+    byMove.room.move(byMove.B, 0, 0);
+    expect(rejections(byMove.room.last)).toEqual([]);
+    expect(byMove.room.game.moves).toHaveLength(2);
   });
 
   it('CLOCK_SYNC carries live clocks while playing only', () => {
@@ -1176,6 +1262,65 @@ describe('rematch (4.7)', () => {
   });
 });
 
+describe('stale gameIds (resolution 4)', () => {
+  /** Game 1 is over and the same pair is playing game 2. */
+  const secondGame = () => {
+    const { room, A, B } = playing();
+    scriptedWin(room, A, B);
+    const game1 = room.game.id;
+    room.act(A, 'REMATCH_OFFER', { gameId: game1 });
+    room.act(B, 'REMATCH_ANSWER', { gameId: game1, accept: true });
+    room.countIn();
+    expect(room.game.number).toBe(2);
+    expect(room.room.phase).toBe('playing');
+    return { room, A, B, game1 };
+  };
+
+  /** Sends an intent naming an earlier game and checks it is refused with nothing changed. */
+  const refusedAsStale = <K extends IntentType>(room: Room, from: string, type: K, payload: IntentPayloads[K]) => {
+    const before = structuredClone(room.room);
+    const r = room.act(from, type, payload);
+    expect(rejections(r)).toEqual(['wrong_game']);
+    expect(room.room).toEqual(before);
+    expect(hasRoomState(r)).toBe(false);
+  };
+
+  it('a delayed accept for game 1 does not accept the pending offer for game 2', () => {
+    const { room, A, B, game1 } = secondGame();
+    scriptedWin(room, A, B);
+    room.act(A, 'REMATCH_OFFER', { gameId: room.game.id });
+    refusedAsStale(room, B, 'REMATCH_ANSWER', { gameId: game1, accept: true });
+    expect(room.room.phase).toBe('ended');
+    expect(room.game.rematch?.from).toBe('X');
+  });
+
+  it('a rematch offer naming game 1 is refused once game 2 has ended', () => {
+    const { room, A, B, game1 } = secondGame();
+    scriptedWin(room, A, B);
+    refusedAsStale(room, A, 'REMATCH_OFFER', { gameId: game1 });
+    expect(room.game.rematch).toBeNull();
+  });
+
+  it('take-back intents naming game 1 are refused during game 2', () => {
+    const { room, A, B, game1 } = secondGame();
+    room.move(A, 7, 7);
+    refusedAsStale(room, A, 'UNDO_REQUEST', { gameId: game1 });
+    room.advance(INSTANT_UNDO_MS + 1);
+    room.act(A, 'UNDO_REQUEST', { gameId: room.game.id });
+    expect(room.game.undo?.from).toBe('X');
+    refusedAsStale(room, B, 'UNDO_ANSWER', { gameId: game1, accept: true });
+    expect(room.game.undo?.from).toBe('X');
+    expect(room.game.moves).toHaveLength(1);
+  });
+
+  it('a resignation naming game 1 does not end game 2', () => {
+    const { room, B, game1 } = secondGame();
+    refusedAsStale(room, B, 'RESIGN', { gameId: game1 });
+    expect(room.room.phase).toBe('playing');
+    expect(room.room.results).toHaveLength(1);
+  });
+});
+
 describe('resign (4.13)', () => {
   it('gives the game to the other seat and is refused to viewers and while paused', () => {
     const { room, A, B } = playing();
@@ -1276,6 +1421,46 @@ describe('results and ratings (4.14, 7)', () => {
     expect(room.room.results[0].rating.status).toBe('pending');
     expect(room.room.results.map((r) => r.number)).toEqual([1, 4, 5, 6, 7]);
   });
+
+  it('never evicts the result that just ended, even when every older one is pending', () => {
+    const { room, A, B } = playing();
+    for (let i = 1; i <= 5; i += 1) {
+      room.act(B, 'RESIGN', { gameId: room.game.id });
+      if (i < 5) {
+        room.act(A, 'REMATCH_OFFER', { gameId: room.game.id });
+        room.act(B, 'REMATCH_ANSWER', { gameId: room.game.id, accept: true });
+        room.countIn();
+      }
+    }
+    expect(room.room.results.map((r) => r.rating.status)).toEqual(Array(5).fill('pending'));
+    // Game 6 is unrated, so it is settled the moment it ends.
+    const G = room.hello(guest('Guest 4821', 'guest_4821'));
+    room.act(B, 'LEAVE_SEAT', {});
+    room.act(G, 'TAKE_SEAT', { seat: 'O' });
+    room.countIn();
+    const sixth = room.game.id;
+    room.act(G, 'RESIGN', { gameId: sixth });
+    expect(latestResult(room.s)?.gameId).toBe(sixth);
+    expect(latestResult(room.s)?.rating.status).toBe('unrated');
+    expect(room.room.results.map((r) => r.number)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('drops the oldest pending result once pending results reach the ceiling', () => {
+    const { room, A, B } = playing();
+    const ids: string[] = [];
+    for (let i = 0; i < RESULTS_CEILING + 2; i += 1) {
+      ids.push(room.game.id);
+      room.act(B, 'RESIGN', { gameId: room.game.id });
+      expect(latestResult(room.s)?.gameId).toBe(ids[i]);
+      room.act(A, 'REMATCH_OFFER', { gameId: room.game.id });
+      room.act(B, 'REMATCH_ANSWER', { gameId: room.game.id, accept: true });
+      room.countIn();
+    }
+    expect(room.room.results).toHaveLength(RESULTS_CEILING);
+    expect(room.room.results.map((r) => r.number)).toEqual(Array.from({ length: RESULTS_CEILING }, (_, k) => k + 3));
+    room.act(B, 'RATING_REPORT', { gameId: ids[0], status: 'saved' });
+    expect(rejections(room.last)).toEqual(['no_result']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1319,6 +1504,54 @@ describe('DISCARD_GAME (4.10, A2)', () => {
     expect(second.room.room.phase).toBe('waiting');
   });
 
+  it('the guard runs from when the seat emptied, not from when the game paused', () => {
+    const { room, A, B } = playing();
+    const C = room.hello(registered('Cara', UID.C));
+    room.act(A, 'LEAVE_SEAT', {});
+    room.act(C, 'TAKE_SEAT', { seat: 'X' });
+    room.countIn();
+    expect(room.room.phase).toBe('playing');
+    room.lost(C);
+    expect(room.room.phase).toBe('paused');
+    // Thirty seconds into the pause the seat empties; viewers still get their 15 s.
+    room.advance(GRACE_MS);
+    room.graceOut(C);
+    expect(room.room.seats.X).toBeNull();
+    const emptiedAt = room.now;
+    room.advance(1);
+    room.act(B, 'DISCARD_GAME', { gameId: room.game.id });
+    expect(room.last.replies).toContainEqual({
+      to: B,
+      message: { type: 'REJECTED', payload: { type: 'DISCARD_GAME', reason: 'too_soon', retryInMs: DISCARD_GUARD_MS - 1 } },
+    });
+    room.now = emptiedAt + DISCARD_GUARD_MS;
+    room.act(B, 'DISCARD_GAME', { gameId: room.game.id });
+    expect(rejections(room.last)).toEqual([]);
+    expect(room.room.phase).toBe('waiting');
+  });
+
+  it('the guard starts again when a viewer sits and stands again', () => {
+    const { room, A, B } = playing();
+    const D = room.hello(registered('Dan', UID.D));
+    room.act(A, 'LEAVE_SEAT', {});
+    room.advance(10_000);
+    room.act(D, 'TAKE_SEAT', { seat: 'X' });
+    expect(room.room.phase).toBe('countdown');
+    room.act(D, 'LEAVE_SEAT', {});
+    expect(room.room.phase).toBe('paused');
+    // Twenty seconds after the seat first emptied, but only ten since it emptied again.
+    room.advance(10_000);
+    room.act(B, 'DISCARD_GAME', { gameId: room.game.id });
+    expect(room.last.replies).toContainEqual({
+      to: B,
+      message: { type: 'REJECTED', payload: { type: 'DISCARD_GAME', reason: 'too_soon', retryInMs: 5_000 } },
+    });
+    room.advance(5_000);
+    room.act(B, 'DISCARD_GAME', { gameId: room.game.id });
+    expect(rejections(room.last)).toEqual([]);
+    expect(room.room.phase).toBe('waiting');
+  });
+
   it('is refused unless paused with an empty seat', () => {
     const { room, A, B } = playing();
     room.act(A, 'DISCARD_GAME', { gameId: room.game.id });
@@ -1343,10 +1576,14 @@ describe('CLEAR_SEAT (resolution 13)', () => {
     expect(room.room.seats.O).toBeNull();
     expect(room.room.members.some((m) => m.id === B)).toBe(true);
     expect(room.game.seatLog.at(-1)).toMatchObject({ seat: 'O', reason: 'removed' });
-    room.act(B, 'TAKE_SEAT', { seat: 'O' });
-    expect(rejections(room.last)).toEqual(['gave_up_seat']);
     room.act(A, 'CLEAR_SEAT', { seat: 'O' });
     expect(rejections(room.last)).toEqual(['seat_empty']);
+    // Removal was the host's choice, not B's, so B has not given up the seat
+    // (resolution 12 bars only a player who stood up or left).
+    expect(room.game.gaveUp).not.toContain(UID.B);
+    room.act(B, 'TAKE_SEAT', { seat: 'O' });
+    expect(rejections(room.last)).toEqual([]);
+    expect(room.room.phase).toBe('countdown');
   });
 
   it('clearing a seat in a waiting room re-arms auto-start', () => {
