@@ -1,5 +1,4 @@
 import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
-import { Timer, Minus, Plus, Crosshair } from 'lucide-react';
 import type { BoardMatrix, CellValue } from '../../shared/utils/gomokuLogic';
 import { useTheme } from '../theme/ThemeContext';
 import type { PieceTheme } from '../theme/types';
@@ -15,6 +14,8 @@ export interface SimulatedMove {
 interface BoardProps {
   board: BoardMatrix;
   size: number;
+  /** Changes for every online rematch, resetting board-local presentation state. */
+  gameId?: string;
   onCellClick: (row: number, col: number) => void;
   lastMove: [number, number] | null;
   winningLine: Array<[number, number]> | null;
@@ -25,13 +26,10 @@ interface BoardProps {
   opponent?: UserProfile | null;
   gameStatus?: 'lobby' | 'playing' | 'ended';
   gameResult?: { winner: string; reason: string } | null;
-  elapsedGameTime?: number;
   /** Plain-language explanation of how the match ended. */
   resultReason?: string;
   /** Only shown once a rating change is known, never as a guess. */
   ratingNote?: string | null;
-  /** The next steps, rendered beside the result rather than in another panel. */
-  resultActions?: React.ReactNode;
   /** Seconds left before the first move, or null when play is already open. */
   countdown?: number | null;
   /** Replaces the player-centred result, for a viewer or anyone the room words it for. */
@@ -244,6 +242,7 @@ BoardCell.displayName = 'BoardCell';
 export const Board: React.FC<BoardProps> = ({
   board,
   size,
+  gameId,
   onCellClick,
   lastMove,
   winningLine,
@@ -253,10 +252,8 @@ export const Board: React.FC<BoardProps> = ({
   opponent,
   gameStatus = 'playing',
   gameResult,
-  elapsedGameTime = 0,
   resultReason,
   ratingNote,
-  resultActions,
   countdown = null,
   resultView = null,
   countdownTitle,
@@ -278,9 +275,14 @@ export const Board: React.FC<BoardProps> = ({
     : isLoss
     ? { headline: 'You lose', tone: 'text-danger' }
     : { headline: 'Draw', tone: 'text-warning' };
+  const [isResultToastVisible, setIsResultToastVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   // Full-width wrapper, used only as the width source for the cell measurement.
   const columnRef = useRef<HTMLDivElement>(null);
+  // Online clock ticks can recreate the last-move tuple without a new move.
+  // Remember the coordinate already brought into view so those renders never
+  // pull a player away from a manually scrolled part of the board.
+  const lastAutoScrolledMoveRef = useRef<string | null>(null);
   // Mirror of the board so the memoised cell callbacks stay identity-stable.
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -288,6 +290,15 @@ export const Board: React.FC<BoardProps> = ({
   // Private local right-click simulated moves state
   const [simulatedMoves, setSimulatedMoves] = useState<SimulatedMove[]>([]);
   const [hoveredCell, setHoveredCell] = useState<[number, number] | null>(null);
+
+  // A room rematch keeps this component mounted while replacing the game. Its
+  // grid is empty, but a hover preview or locally simulated stone from the old
+  // game otherwise remains visible until the pointer happens to leave a cell.
+  useEffect(() => {
+    setSimulatedMoves([]);
+    setHoveredCell(null);
+    lastAutoScrolledMoveRef.current = null;
+  }, [gameId]);
 
   // Middle mouse click & drag pan state
   const [isPanning, setIsPanning] = useState(false);
@@ -304,15 +315,25 @@ export const Board: React.FC<BoardProps> = ({
   const MIN_CELL = 26;
   const MAX_CELL = 64;
   const FRAME_PADDING = 48;
-  const ZOOM_STEP = 6;
+  // Start two zoom steps larger than the fitted board: large boards feel like
+  // a playing surface rather than a thumbnail, while the viewport still lets
+  // people pan naturally around the position.
+  const DEFAULT_ZOOM_OFFSET = 12;
   /** Fitted size for this frame, and the player's offset from it. */
   const [fittedCell, setFittedCell] = useState(() =>
     Math.min(MAX_CELL, Math.max(MIN_CELL, Math.round(560 / size)))
   );
-  const [zoomOffset, setZoomOffset] = useState(0);
-  const cellSize = Math.min(MAX_CELL, Math.max(MIN_CELL, fittedCell + zoomOffset));
-  const canZoomIn = cellSize < MAX_CELL;
-  const canZoomOut = cellSize > MIN_CELL;
+  const cellSize = Math.min(MAX_CELL, Math.max(MIN_CELL, fittedCell + DEFAULT_ZOOM_OFFSET));
+
+  useEffect(() => {
+    if (gameStatus !== 'ended' || (!gameResult && !resultView)) {
+      setIsResultToastVisible(false);
+      return;
+    }
+    setIsResultToastVisible(true);
+    const timer = window.setTimeout(() => setIsResultToastVisible(false), 4500);
+    return () => window.clearTimeout(timer);
+  }, [gameStatus, gameResult?.winner, resultView?.headline]);
 
   useEffect(() => {
     const frame = containerRef.current;
@@ -356,9 +377,17 @@ export const Board: React.FC<BoardProps> = ({
   // into view, but only when it is actually outside.
   useEffect(() => {
     const el = containerRef.current;
-    if (!el || !lastMove) return;
+    if (!lastMove) {
+      lastAutoScrolledMoveRef.current = null;
+      return;
+    }
+    if (!el) return;
 
     const [row, col] = lastMove;
+    const moveKey = `${row}:${col}`;
+    if (lastAutoScrolledMoveRef.current === moveKey) return;
+    lastAutoScrolledMoveRef.current = moveKey;
+
     const x = col * cellSize;
     const y = row * cellSize;
     const margin = cellSize * 2;
@@ -381,6 +410,22 @@ export const Board: React.FC<BoardProps> = ({
       return next.length === prev.length ? prev : next;
     });
   }, [board]);
+
+  // The match action rail owns the buttons; the board owns their local state.
+  useEffect(() => {
+    const clearSimulations = () => setSimulatedMoves([]);
+    const centre = () => centreOnBoard();
+    window.addEventListener('caro:clear-simulations', clearSimulations);
+    window.addEventListener('caro:center-board', centre);
+    return () => {
+      window.removeEventListener('caro:clear-simulations', clearSimulations);
+      window.removeEventListener('caro:center-board', centre);
+    };
+  }, [centreOnBoard]);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent<number>('caro:simulation-count', { detail: simulatedMoves.length }));
+  }, [simulatedMoves.length]);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button === 1 && containerRef.current) {
@@ -483,16 +528,6 @@ export const Board: React.FC<BoardProps> = ({
   const isWinningCell = (r: number, c: number) =>
     Boolean(winningLine?.some(([wr, wc]) => wr === r && wc === c));
 
-  const formatElapsed = (seconds: number) => {
-    // Past an hour, "109:00" reads as a broken clock rather than a long game.
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    const mm = m.toString().padStart(2, '0');
-    const ss = s.toString().padStart(2, '0');
-    return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
-  };
-
   const isMyTurn = myPiece === currentTurn;
 
   return (
@@ -500,9 +535,11 @@ export const Board: React.FC<BoardProps> = ({
     // the board's own size cannot feed back into. The inner stack is capped to
     // the board, so the toolbar, the match header and the frame share one edge.
     <div ref={columnRef} className="flex w-full justify-center select-none">
+      {/* Keep the viewport wide when zooming out. Coupling its width to the
+          shrunken grid made the whole board collapse into a small square. */}
       <div
-        style={{ maxWidth: cellSize * size + 40 }}
-        className="flex w-full max-w-5xl flex-col items-center justify-center space-y-3"
+        style={{ maxWidth: Math.max(fittedCell, MIN_CELL + DEFAULT_ZOOM_OFFSET) * size + 40 }}
+        className="flex w-full max-w-[1200px] flex-col items-center justify-center"
       >
       {/* BOARD CONTAINER. Wrapped so the count-in can cover exactly the board
           and nothing else. */}
@@ -573,76 +610,16 @@ export const Board: React.FC<BoardProps> = ({
           </div>
         </div>
 
-        {/* Board chrome floats over the grid instead of taking a row above it.
-            The frame is the tallest thing on the screen, so anything stacked
-            around it comes straight out of the playable area. */}
-        <div className="absolute bottom-3 left-3 flex items-center gap-0.5 rounded-full border border-line bg-surface/95 p-1 shadow-lg backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={() => setZoomOffset((z) => z - ZOOM_STEP)}
-            disabled={!canZoomOut}
-            className="btn btn-ghost btn-icon h-8 w-8 rounded-full"
-            title="Smaller squares"
-            aria-label="Zoom out"
-          >
-            <Minus size={15} strokeWidth={2.25} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={centreOnBoard}
-            className="btn btn-ghost btn-icon h-8 w-8 rounded-full"
-            title="Centre the board"
-            aria-label="Centre the board"
-          >
-            <Crosshair size={15} strokeWidth={2.25} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setZoomOffset((z) => z + ZOOM_STEP)}
-            disabled={!canZoomIn}
-            className="btn btn-ghost btn-icon h-8 w-8 rounded-full"
-            title="Bigger squares"
-            aria-label="Zoom in"
-          >
-            <Plus size={15} strokeWidth={2.25} aria-hidden="true" />
-          </button>
-        </div>
-
-        <div
-          className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-line bg-surface/95 px-2.5 py-1 font-mono text-xs text-muted tabular-nums shadow-sm backdrop-blur-sm"
-          title="Match elapsed time"
-        >
-          <Timer size={13} strokeWidth={2.25} aria-hidden="true" />
-          <span>{formatElapsed(elapsedGameTime)}</span>
-        </div>
-
-        <p className="pointer-events-none absolute bottom-3 right-3 hidden rounded-full border border-line bg-surface/80 px-2.5 py-1 text-[11px] text-subtle backdrop-blur-sm lg:block">
-          Drag to move the board · Scroll to zoom
-        </p>
-
-        {/* RESULT. Centred over the board and led by the winning piece: the
-            first question is always "who won", and a coloured word alone was
-            answering it too quietly. */}
-        {gameStatus === 'ended' && (gameResult || resultView) && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-[var(--ui-scrim)] p-4 backdrop-blur-[3px]">
-            <div role="status" aria-live="polite" className="modal-panel w-[min(24rem,100%)] p-6 text-center">
-              <span
-                className="mx-auto mb-4 grid h-24 w-24 place-items-center rounded-full border-[7px] font-display text-6xl font-extrabold leading-none"
-                style={
-                  winnerPiece
-                    ? { borderColor: winnerColor, color: winnerColor }
-                    : { borderColor: 'var(--ui-border-strong)', color: 'var(--ui-text-muted)' }
-                }
-              >
+        {isResultToastVisible && (
+          <div role="status" aria-live="polite" className="pointer-events-none absolute left-1/2 top-4 z-20 w-[min(24rem,calc(100%-2rem))] -translate-x-1/2 rounded-lg border border-line-strong bg-surface/95 px-4 py-3 text-center shadow-e2 backdrop-blur-sm">
+            <div className="flex items-center justify-center gap-2.5">
+              <span className="grid h-9 w-9 place-items-center rounded-full border-2 font-display text-xl font-extrabold leading-none" style={winnerPiece ? { borderColor: winnerColor, color: winnerColor } : undefined}>
                 {winnerPiece ?? '='}
               </span>
-
-              <p className={`display text-4xl ${outcome.tone}`}>{outcome.headline}</p>
-
-              {resultReason && <p className="mt-2 text-sm text-muted">{resultReason}</p>}
-              {ratingNote && <p className="mt-1 text-xs text-subtle">{ratingNote}</p>}
-              {resultActions && <div className="mt-5 flex flex-col gap-2">{resultActions}</div>}
+              <p className={`display text-xl ${outcome.tone}`}>{outcome.headline}</p>
             </div>
+            {resultReason && <p className="mt-1 text-xs text-muted">{resultReason}</p>}
+            {ratingNote && <p className="mt-0.5 text-[11px] text-subtle">{ratingNote}</p>}
           </div>
         )}
 

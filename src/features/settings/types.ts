@@ -6,11 +6,11 @@ export interface RoomSettings {
 }
 
 /**
- * 15x15 is the size a new player can actually read on a phone. The larger
- * boards stay one tap away in Match rules for people who want them.
+ * A generous 30x30 board is the standard starting point. The smaller and
+ * larger boards remain available in Match rules.
  */
 export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
-  boardSize: 15,
+  boardSize: 30,
   totalTimeMinutes: 0,
   turnTimeSeconds: 0,
   allowUndo: true,

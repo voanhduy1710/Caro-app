@@ -3,7 +3,8 @@ import { X, Check, AlertTriangle, Lock } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
 import { getRankTitle } from '../../shared/utils/eloCalculator';
-import { AVATAR_ITEMS, getAvatarPublicUrl, getChampionId } from '../avatar/avatarService';
+import { AVATAR_ITEMS, getAvatarPublicUrl, getChampionId, isRagnarokAvatar, listRagnarokAvatars } from '../avatar/avatarService';
+import type { AvatarItem } from '../avatar/avatarService';
 
 export const ProfileModal: React.FC = () => {
   const { user, showProfileModal, setShowProfileModal, updateUserProfile, changePassword } = useAuth();
@@ -18,6 +19,9 @@ export const ProfileModal: React.FC = () => {
   const [displayName, setDisplayName] = useState('');
   const [selectedPhotoURL, setSelectedPhotoURL] = useState('');
   const [hoveredAvatarFilename, setHoveredAvatarFilename] = useState<string | null>(null);
+  const [avatarSource, setAvatarSource] = useState<'lol' | 'ragnarok'>('lol');
+  const [ragnarokAvatars, setRagnarokAvatars] = useState<AvatarItem[]>([]);
+  const [isLoadingRagnarok, setIsLoadingRagnarok] = useState(false);
   const [isSavedSuccess, setIsSavedSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -44,8 +48,23 @@ export const ProfileModal: React.FC = () => {
     filledFor.current = user.uid;
     setDisplayName(user.displayName || '');
     setSelectedPhotoURL(getChampionId(user.photoURL) ?? (user.photoURL || getAvatarPublicUrl()));
+    setAvatarSource(isRagnarokAvatar(user.photoURL) ? 'ragnarok' : 'lol');
     setSaveError(null);
   }, [user, showProfileModal]);
+
+  useEffect(() => {
+    if (!showProfileModal || avatarSource !== 'ragnarok' || ragnarokAvatars.length > 0) return;
+    let active = true;
+    setIsLoadingRagnarok(true);
+    listRagnarokAvatars()
+      .then((avatars) => {
+        if (active) setRagnarokAvatars(avatars);
+      })
+      .finally(() => {
+        if (active) setIsLoadingRagnarok(false);
+      });
+    return () => { active = false; };
+  }, [showProfileModal, avatarSource, ragnarokAvatars.length]);
 
   if (!showProfileModal || !user) return null;
 
@@ -53,7 +72,7 @@ export const ProfileModal: React.FC = () => {
   const totalGames = user.wins + user.losses + user.draws;
   const winRate = totalGames > 0 ? Math.round((user.wins / totalGames) * 100) : 0;
 
-  const filteredAvatars = AVATAR_ITEMS;
+  const filteredAvatars = avatarSource === 'lol' ? AVATAR_ITEMS : ragnarokAvatars;
   const selectedChampion = getChampionId(selectedPhotoURL);
 
   // Active preview avatar URL (Hover preview overrides active selection)
@@ -114,6 +133,16 @@ export const ProfileModal: React.FC = () => {
     } else {
       setPasswordError(res.message || 'Failed to update password.');
     }
+  };
+
+  const handlePasswordReset = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(null);
+    setIsChangingPassword(true);
+    const res = await changePassword('123456');
+    setIsChangingPassword(false);
+    if (res.success) setPasswordSuccess('Password reset to 123456. Change it again when you are ready.');
+    else setPasswordError(res.message || 'Failed to reset password.');
   };
 
   return (
@@ -215,23 +244,36 @@ export const ProfileModal: React.FC = () => {
 
             {/* Animated Avatars Gallery Picker */}
             <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="field-label">Avatar collection</span>
+                <div className="flex rounded-md bg-surface-3 p-1">
+                  <button type="button" onClick={() => setAvatarSource('lol')} aria-pressed={avatarSource === 'lol'} className={`rounded-sm px-2 py-1 text-[11px] font-semibold ${avatarSource === 'lol' ? 'bg-surface text-accent-text shadow-sm' : 'text-muted'}`}>LoL</button>
+                  <button type="button" onClick={() => setAvatarSource('ragnarok')} aria-pressed={avatarSource === 'ragnarok'} className={`rounded-sm px-2 py-1 text-[11px] font-semibold ${avatarSource === 'ragnarok' ? 'bg-surface text-accent-text shadow-sm' : 'text-muted'}`}>Ragnarok</button>
+                </div>
+              </div>
               {/* Scrollable 6-Column Avatar Grid */}
               <div className="max-h-48 overflow-y-auto grid grid-cols-4 sm:grid-cols-6 gap-1.5 p-1.5 bg-surface-2 rounded-md border border-line">
-                {filteredAvatars.length === 0 ? (
+                {isLoadingRagnarok ? (
+                  <div className="col-span-full py-6 text-center text-xs font-mono text-subtle">Loading Ragnarok avatars…</div>
+                ) : filteredAvatars.length === 0 ? (
                   <div className="col-span-full py-6 text-center text-xs font-mono text-subtle">
                     No avatars available
                   </div>
                 ) : (
                   filteredAvatars.map((av) => {
-                    const tileId = av.filename.slice(0, -'.png'.length);
-                    const fullUrl = getAvatarPublicUrl(tileId);
-                    const isSelected = selectedChampion === tileId;
+                    const fullUrl = getAvatarPublicUrl(av.filename);
+                    // Ragnarok keys are not champions. Comparing two null champion
+                    // ids marked every GIF as selected; only apply that legacy LoL
+                    // URL fallback within the LoL collection.
+                    const isSelected =
+                      selectedPhotoURL === av.filename ||
+                      (avatarSource === 'lol' && selectedChampion === getChampionId(av.filename));
 
                     return (
                       <button
                         key={av.id}
                         type="button"
-                        onClick={() => setSelectedPhotoURL(tileId)}
+                        onClick={() => setSelectedPhotoURL(av.filename)}
                         onMouseEnter={() => setHoveredAvatarFilename(av.filename)}
                         onMouseLeave={() => setHoveredAvatarFilename(null)}
                         title={av.name}
@@ -297,7 +339,7 @@ export const ProfileModal: React.FC = () => {
                   <Lock size={13} strokeWidth={2.25} aria-hidden="true" />
                   Change password
                 </h4>
-                <span className="text-[10px] text-subtle font-mono">Min 8 characters</span>
+                <span className="text-[10px] text-subtle font-mono">Min 6 characters</span>
               </div>
 
               {passwordError && (
@@ -324,7 +366,7 @@ export const ProfileModal: React.FC = () => {
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="New password..."
                       required
-                      minLength={8}
+                      minLength={6}
                       className="w-full bg-surface-2 border border-line-strong rounded-md px-2.5 py-1.5 text-xs font-medium text-ink focus:outline-none focus:border-accent"
                     />
                   </div>
@@ -339,7 +381,7 @@ export const ProfileModal: React.FC = () => {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Confirm password..."
                       required
-                      minLength={8}
+                      minLength={6}
                       className="w-full bg-surface-2 border border-line-strong rounded-md px-2.5 py-1.5 text-xs font-medium text-ink focus:outline-none focus:border-accent"
                     />
                   </div>
@@ -356,13 +398,23 @@ export const ProfileModal: React.FC = () => {
                     <span>Show Password</span>
                   </label>
 
-                  <button
-                    type="submit"
-                    disabled={isChangingPassword || !newPassword || !confirmPassword}
-                    className="btn btn-inverse btn-sm"
-                  >
-                    {isChangingPassword ? 'Updating...' : 'Update Password'}
-                  </button>
+                  <div className="ml-auto flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={handlePasswordReset}
+                      disabled={isChangingPassword}
+                      className="btn btn-secondary btn-sm whitespace-nowrap"
+                    >
+                      Reset to 123456
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isChangingPassword || !newPassword || !confirmPassword}
+                      className="btn btn-inverse btn-sm whitespace-nowrap"
+                    >
+                      {isChangingPassword ? 'Updating...' : 'Update Password'}
+                    </button>
+                  </div>
                 </div>
               </form>
             </div>

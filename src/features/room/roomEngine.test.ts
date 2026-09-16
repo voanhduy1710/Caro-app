@@ -1206,6 +1206,30 @@ describe('rematch (4.7)', () => {
     expect(room.room.phase).toBe('countdown');
     expect(room.game.number).toBe(2);
     expect(room.game.id).not.toBe(first);
+    expect(room.game.turn).toBe('O');
+    expect(room.game.openingSeat).toBe('O');
+    room.countIn();
+    room.move(B, 7, 7);
+    expect(boardFromMoves(room.game.moves, 15, room.game.openingSeat)[7][7]).toBe('O');
+    expect(room.game.turn).toBe('X');
+  });
+
+  it('alternates the opening seat every completed game', () => {
+    const { room, A, B } = playing();
+    expect(room.game.turn).toBe('X');
+
+    scriptedWin(room, A, B);
+    const game1 = room.game.id;
+    room.act(A, 'REMATCH_OFFER', { gameId: game1 });
+    room.act(B, 'REMATCH_ANSWER', { gameId: game1, accept: true });
+    expect(room.game.turn).toBe('O');
+
+    room.countIn();
+    room.act(A, 'RESIGN', { gameId: room.game.id });
+    const game2 = room.game.id;
+    room.act(B, 'REMATCH_OFFER', { gameId: game2 });
+    room.act(A, 'REMATCH_ANSWER', { gameId: game2, accept: true });
+    expect(room.game.turn).toBe('X');
   });
 
   it('a decline and an expiry notify the offerer', () => {

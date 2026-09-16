@@ -20,7 +20,7 @@ function readStoredTheme(): UiTheme {
   } catch {
     // Private windows and blocked site data both throw on access.
   }
-  return 'system';
+  return 'light';
 }
 
 function applyTheme(theme: UiTheme) {

@@ -1,9 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Link2, UserMinus } from 'lucide-react';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
-import { TEASE_PHRASE } from './protocol';
 import type { Seat } from './protocol';
-import { TEASE_PAIR_COOLDOWN_MS, TEASE_SENDER_COOLDOWN_MS } from './roomEngine';
 import type { Member } from './roomEngine';
 
 interface RoomRosterProps {
@@ -12,7 +10,8 @@ interface RoomRosterProps {
   myMemberId: string | null;
   capacity: number;
   graceSecondsLeft: (memberId: string) => number | null;
-  onTease: (memberId: string) => void;
+  /** A seated player gives their seat to the people already watching. */
+  onPassBaton?: () => void;
   /** The host's way to free a seat held by someone who is not coming back. */
   onClearSeat?: (seat: Seat) => void;
   onViewProfile?: (member: Member) => void;
@@ -22,9 +21,8 @@ interface RoomRosterProps {
 }
 
 /**
- * Everyone in the room, seated or watching, with the quick tease under each
- * name. The tease is the owner's in-joke for a viewer who keeps giving advice:
- * "if you're so good, you play". It stays in Vietnamese on purpose.
+ * Everyone in the room, seated or watching. A seated player can explicitly
+ * pass their seat to the watching group from their own roster row.
  */
 export const RoomRoster: React.FC<RoomRosterProps> = ({
   members,
@@ -32,46 +30,18 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
   myMemberId,
   capacity,
   graceSecondsLeft,
-  onTease,
+  onPassBaton,
   onClearSeat,
   onViewProfile,
   onCopyInvite,
   collapsible = false,
 }) => {
   const [open, setOpen] = useState(!collapsible);
-  // The host has the final say on cooldowns; this only keeps the button from
-  // inviting a tap the host would refuse.
-  const [sentTo, setSentTo] = useState<Record<string, number>>({});
-  const [lastSentAt, setLastSentAt] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
-
-  const coolingDown = Object.values(sentTo).some((t) => now - t < TEASE_PAIR_COOLDOWN_MS);
-  useEffect(() => {
-    if (!coolingDown) return;
-    const timer = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(timer);
-  }, [coolingDown]);
-
   const me = members.find((m) => m.id === myMemberId);
   const iAmHost = Boolean(me?.isHost);
   const watching = members.filter((m) => m.id !== seats.X && m.id !== seats.O).length;
 
   const seatOfMember = (id: string): Seat | null => (seats.X === id ? 'X' : seats.O === id ? 'O' : null);
-
-  const waitFor = (id: string) => {
-    const pair = sentTo[id] ? TEASE_PAIR_COOLDOWN_MS - (now - sentTo[id]) : 0;
-    const sender = lastSentAt ? TEASE_SENDER_COOLDOWN_MS - (now - lastSentAt) : 0;
-    return Math.max(0, pair, sender);
-  };
-
-  const tease = (member: Member) => {
-    if (waitFor(member.id) > 0 || !member.connected) return;
-    const at = Date.now();
-    setSentTo((prev) => ({ ...prev, [member.id]: at }));
-    setLastSentAt(at);
-    setNow(at);
-    onTease(member.id);
-  };
 
   const header = (
     <div className="flex items-center justify-between gap-2 px-3 py-2">
@@ -114,8 +84,6 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
             const seat = seatOfMember(member.id);
             const isMe = member.id === myMemberId;
             const grace = graceSecondsLeft(member.id);
-            const wait = waitFor(member.id);
-            const teaseBlocked = wait > 0 || !member.connected;
             return (
               <li key={member.id} className="flex items-start gap-2 rounded-md px-1.5 py-1.5">
                 <button
@@ -162,22 +130,9 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
                   {grace !== null && (
                     <p className="mt-0.5 text-[11px] font-medium text-warning">Reconnecting {grace}s</p>
                   )}
-                  {!isMe && (
-                    <button
-                      type="button"
-                      onClick={() => tease(member)}
-                      aria-disabled={teaseBlocked}
-                      aria-label={`Tease ${member.profile.name}: ${TEASE_PHRASE}`}
-                      title={
-                        !member.connected
-                          ? `${member.profile.name} is reconnecting`
-                          : wait > 0
-                          ? `Wait ${Math.ceil(wait / 1000)}s`
-                          : `Tease ${member.profile.name}`
-                      }
-                      className="btn btn-tonal btn-sm mt-1 h-7 px-2 text-[11px]"
-                    >
-                      {TEASE_PHRASE} <span aria-hidden="true">😡</span>
+                  {isMe && seat && watching > 0 && onPassBaton && (
+                    <button type="button" onClick={onPassBaton} className="btn btn-secondary btn-sm mt-1 h-7 px-2 text-[11px]">
+                      Pass baton
                     </button>
                   )}
                 </div>

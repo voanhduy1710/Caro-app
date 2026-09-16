@@ -99,7 +99,7 @@ export const verifyResult = (
   const since = mySeatSince(game, memberId, seat);
   if (since === null) return 'contradicted';
   for (let i = since; i < game.moves.length; i += 1) {
-    if (pieceAt(i) !== seat) continue;
+    if (pieceAt(i, game.openingSeat) !== seat) continue;
     const [row, col] = game.moves[i];
     if (game.moveBy[i] !== memberId || !notes.requested.includes(`${i}:${row}:${col}`)) return 'contradicted';
   }
@@ -110,8 +110,8 @@ export const verifyResult = (
       if (!loser || game.moves.length === 0) return 'contradicted';
       const last = game.moves.length - 1;
       const [row, col] = game.moves[last];
-      const win = checkWin(boardFromMoves(game.moves, size), row, col, size);
-      return win && win.winner === result.winner && pieceAt(last) === result.winner ? 'confirmed' : 'contradicted';
+      const win = checkWin(boardFromMoves(game.moves, size, game.openingSeat), row, col, size);
+      return win && win.winner === result.winner && pieceAt(last, game.openingSeat) === result.winner ? 'confirmed' : 'contradicted';
     }
     case 'board_full':
       return result.winner === 'DRAW' && game.moves.length === size * size ? 'confirmed' : 'contradicted';

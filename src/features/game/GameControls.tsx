@@ -13,7 +13,9 @@ import {
   Flag,
   Loader2,
   Armchair,
-  Eye,
+  Eraser,
+  Crosshair,
+  Timer,
 } from 'lucide-react';
 import { setDisplayPref, useDisplayPrefs } from './displayPrefs';
 import type { DisplayPrefs } from './displayPrefs';
@@ -58,11 +60,11 @@ interface GameControlsProps {
   /** The seat a viewer could take right now, if any. */
   openSeat?: 'X' | 'O' | null;
   onTakeSeat?: () => void;
-  /** Gives up the seat and stays in the room to watch. */
-  onBecomeViewer?: () => void;
   /** Overrides when Resign is available: in a room, only while both seats are filled. */
   canResign?: boolean;
   chatEmptyText?: string;
+  /** Overall elapsed time, shown at the end of the action rail. */
+  elapsedGameTime?: number;
 }
 
 const REACTION_ICONS = [
@@ -165,7 +167,7 @@ interface RailButtonProps {
   disabled?: boolean;
   /** Asked for, and waiting on the opponent's answer. */
   pending?: boolean;
-  tone?: 'default' | 'primary' | 'danger';
+  tone?: 'default' | 'primary' | 'danger' | 'warning';
 }
 
 /**
@@ -191,8 +193,8 @@ const RailButton: React.FC<RailButtonProps> = ({
     title={title ? `${label} — ${title}` : label}
     aria-label={label}
     className={`btn btn-icon h-10 w-10 rounded-full ${
-      tone === 'primary' ? 'btn-primary' : 'btn-ghost'
-    } ${tone === 'danger' ? 'text-muted hover:text-danger' : ''}`}
+      tone === 'primary' ? 'btn-primary' : tone === 'warning' ? 'bg-warning-solid text-warning-fg hover:brightness-95' : 'btn-ghost'
+    } ${tone === 'danger' ? 'text-danger hover:text-danger disabled:text-muted' : ''}`}
   >
     {pending ? (
       <Loader2 size={17} strokeWidth={2.25} className="animate-spin" aria-hidden="true" />
@@ -227,9 +229,9 @@ export const GameControls: React.FC<GameControlsProps> = ({
   avatarFor,
   openSeat = null,
   onTakeSeat,
-  onBecomeViewer,
   canResign,
   chatEmptyText,
+  elapsedGameTime = 0,
 }) => {
   const isDesktop = useIsDesktop();
   const prefs = useDisplayPrefs();
@@ -257,11 +259,18 @@ export const GameControls: React.FC<GameControlsProps> = ({
   /** Reactions are a burst action, not a permanent band across the rail. */
   const [isReactionsOpen, setIsReactionsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [simulationCount, setSimulationCount] = useState(0);
 
   const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   /** The phone's chat bar, which opens the sheet and takes focus back from it. */
   const chatBarRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const onSimulationCount = (event: Event) => setSimulationCount((event as CustomEvent<number>).detail);
+    window.addEventListener('caro:simulation-count', onSimulationCount);
+    return () => window.removeEventListener('caro:simulation-count', onSimulationCount);
+  }, []);
   /** The phone's chat sheet, which takes focus when it opens and keeps Tab inside. */
   const sheetRef = useRef<HTMLDivElement>(null);
   const buzzCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -550,6 +559,14 @@ export const GameControls: React.FC<GameControlsProps> = ({
   // A rematch restarts the board, so it is only offered once the match is over.
   // Practice keeps a "New game" button, which asks before discarding a live game.
   const rematchDisabled = rematchPending || (!isAiMode && gameStatus !== 'ended');
+  const formatElapsed = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    const mm = m.toString().padStart(2, '0');
+    const ss = s.toString().padStart(2, '0');
+    return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+  };
 
   // One row of icons rather than a wrap of labelled buttons: every action here
   // is either rare or destructive, and none of them should out-shout the board.
@@ -565,6 +582,22 @@ export const GameControls: React.FC<GameControlsProps> = ({
       />
 
       <span aria-hidden="true" className="mx-1 h-6 w-px bg-line" />
+
+      <RailButton
+        icon={<Eraser size={17} strokeWidth={2.25} aria-hidden="true" />}
+        label="Clear simulations"
+        title="Clear your local simulated moves"
+        onClick={() => window.dispatchEvent(new Event('caro:clear-simulations'))}
+        disabled={simulationCount === 0}
+        tone={simulationCount > 0 ? 'warning' : 'default'}
+      />
+
+      <RailButton
+        icon={<Crosshair size={17} strokeWidth={2.25} aria-hidden="true" />}
+        label="Centre board"
+        title="Centre the board"
+        onClick={() => window.dispatchEvent(new Event('caro:center-board'))}
+      />
 
       {role === 'viewer' ? (
         <RailButton
@@ -584,6 +617,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
         onClick={onProposeUndo}
         disabled={!allowUndo || gameStatus !== 'playing' || !canUndo}
         pending={undoPending}
+        tone="danger"
       />
 
       {/* Starting over is only the obvious next step once the game is over.
@@ -617,14 +651,6 @@ export const GameControls: React.FC<GameControlsProps> = ({
         />
       )}
 
-      {onBecomeViewer && (
-        <RailButton
-          icon={<Eye size={17} strokeWidth={2.25} aria-hidden="true" />}
-          label="Become viewer"
-          title="give your seat to someone else and keep watching"
-          onClick={onBecomeViewer}
-        />
-      )}
       </>
       )}
 
@@ -649,7 +675,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
             ref={prefsRef}
             role="dialog"
             aria-label="Board display and sound"
-            className="absolute bottom-12 right-0 z-30 w-60 rounded-lg border border-line bg-surface p-2 shadow-2xl"
+            className="absolute right-0 top-12 z-30 w-60 rounded-lg border border-line bg-surface p-2 shadow-2xl"
           >
             <p className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.09em] text-muted">
               This device only
@@ -921,11 +947,18 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
   /* ------------------------------- layout -------------------------------- */
 
-  // The bar under the board. Everything that acts on the match lives here, so
-  // the frame itself keeps the height it needs.
+  // The board actions stay in one compact rail. On wide screens it sits above
+  // the board, where it is easy to find without making the roster column taller.
   const actionsCell = () => (
-    <div className="area-actions panel mx-3 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 p-2">
+    <div className="area-actions relative flex min-h-12 items-center justify-center p-1.5">
       {actionButtons}
+      <div
+        className="absolute right-2 flex items-center gap-2 px-2 py-1 font-mono text-sm font-semibold text-muted tabular-nums"
+        title="Match elapsed time"
+      >
+        <Timer size={16} strokeWidth={2.5} aria-hidden="true" />
+        <span>{formatElapsed(elapsedGameTime)}</span>
+      </div>
     </div>
   );
 
@@ -938,9 +971,11 @@ export const GameControls: React.FC<GameControlsProps> = ({
           {headerNode}
           {rosterNode}
           <div className="flex-1 min-h-0" />
-          {actionsCell()}
         </div>
-        <div className="area-board pt-4">{boardNode}</div>
+        <div className="area-board pt-2">
+          <div className="mx-auto mb-2 w-full max-w-[1200px]">{actionsCell()}</div>
+          {boardNode}
+        </div>
         {lightbox}
       </div>
     );
@@ -955,10 +990,10 @@ export const GameControls: React.FC<GameControlsProps> = ({
           {headerNode}
           {rosterNode}
           <div className="flex-1 min-h-0" />
-          {actionsCell()}
         </div>
 
-        <div className="area-board pt-4">
+        <div className="area-board pt-2">
+          <div className="mx-auto mb-2 w-full max-w-[1200px]">{actionsCell()}</div>
           {boardNode}
         </div>
 

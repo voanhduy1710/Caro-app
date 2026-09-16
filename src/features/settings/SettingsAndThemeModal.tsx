@@ -200,7 +200,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
 
   return (
     <div {...dialogProps} className="modal-scrim">
-      <div className="modal-panel relative flex max-h-[90vh] max-w-3xl flex-col overflow-hidden p-6">
+      <div className="modal-panel relative flex max-h-[99vh] max-w-3xl flex-col overflow-hidden p-6">
         <div className="mb-4 flex shrink-0 items-center justify-between border-b border-line pb-3">
           <h2 id="settings-modal-title" className="text-xl text-ink">
             Settings

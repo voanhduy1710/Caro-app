@@ -30,7 +30,8 @@ if (Test-Path ".mcp.json") {
 $env:VERCEL_TOKEN = $vercelToken
 
 # Verify Vercel User
-$whoami = npx vercel whoami --token $vercelToken 2>&1
+$whoamiRaw = npx -y vercel whoami --token $vercelToken 2>&1
+$whoami = ($whoamiRaw | Where-Object { $_ -notmatch 'telemetry' -and $_ -notmatch 'Worker' -and $_ -notmatch 'NOTE' } | Select-Object -Last 1).Trim()
 Write-Host "   ✅ Authenticated Vercel User: $whoami" -ForegroundColor Green
 
 # 3. Check & Install Dependencies and Test Production Build
@@ -56,8 +57,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "`n[4/4] Deploying to Production on Vercel account ($whoami)..." -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor Cyan
 
-$deployLog = npx vercel --prod --name caro-app --yes --token $vercelToken 2>&1
-$deployLog | Out-String | Write-Host
+npx -y vercel --prod --name caro-app --yes --token $vercelToken
 
 Write-Host "`n============================================================" -ForegroundColor Cyan
 Write-Host "🎉 Vercel Production Deployment Completed!" -ForegroundColor Green

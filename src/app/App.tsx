@@ -166,6 +166,10 @@ export const App: React.FC = () => {
 
   // A practice game is over once, however many paths reach the end.
   const matchOverRef = useRef<boolean>(false);
+  // Invalidates delayed or in-flight AI work when this practice game is reset.
+  // A rematch used to let an old search write its old board back over the new
+  // one, which could leave a completed five-in-a-row game playable.
+  const practiceGameGenerationRef = useRef(0);
 
   /** The room this player last left, offered back on the home screen for a while. */
   const [lastRoom, setLastRoom] = useState<LastRoom | null>(() => readLastRoom());
@@ -340,6 +344,8 @@ export const App: React.FC = () => {
 
   // Execute actual move undo on local state
   const executeUndoMove = useCallback((targetHistory: MoveHistoryItem[]) => {
+    practiceGameGenerationRef.current += 1;
+    cancelAiMove();
     const size = roomSettings.boardSize;
     const newBoard = createEmptyBoard(size);
 
@@ -359,10 +365,14 @@ export const App: React.FC = () => {
       setCurrentTurn('X');
     }
     setTurnTimeLeft(roomSettings.turnTimeSeconds);
-  }, [roomSettings.boardSize, roomSettings.turnTimeSeconds]);
+  }, [cancelAiMove, roomSettings.boardSize, roomSettings.turnTimeSeconds]);
 
   // AI Move Engine. The search runs on a worker so the board stays responsive.
-  const makeAiMove = useCallback(async (currentBoard: BoardMatrix, currentHistory: MoveHistoryItem[]) => {
+  const makeAiMove = useCallback(async (
+    currentBoard: BoardMatrix,
+    currentHistory: MoveHistoryItem[],
+    gameGeneration: number,
+  ) => {
     const size = roomSettings.boardSize;
     const aiPiece: 'X' | 'O' = myPiece === 'X' ? 'O' : 'X';
 
@@ -372,10 +382,11 @@ export const App: React.FC = () => {
     try {
       [aiRow, aiCol] = await requestAiMove(currentBoard, size, aiPiece);
     } finally {
-      setIsAiThinking(false);
+      if (practiceGameGenerationRef.current === gameGeneration) setIsAiThinking(false);
     }
 
     // A rematch, undo or return to the lobby may have landed while we waited.
+    if (practiceGameGenerationRef.current !== gameGeneration) return;
     if (currentBoard[aiRow][aiCol] !== null) return;
 
     const nextBoard = currentBoard.map((row) => [...row]);
@@ -422,7 +433,12 @@ export const App: React.FC = () => {
     } else if (isBoardFull(nextBoard)) {
       handleGameOver('DRAW', null, 'board_full');
     } else {
-      setTimeout(() => { void makeAiMove(nextBoard, updatedHistory); }, 400);
+      const gameGeneration = practiceGameGenerationRef.current;
+      setTimeout(() => {
+        if (practiceGameGenerationRef.current === gameGeneration) {
+          void makeAiMove(nextBoard, updatedHistory, gameGeneration);
+        }
+      }, 400);
     }
   };
 
@@ -445,6 +461,8 @@ export const App: React.FC = () => {
   // Wipe every trace of the previous match. Without this, the next game
   // inherited the old board, result and clocks.
   const resetMatchState = useCallback(() => {
+    practiceGameGenerationRef.current += 1;
+    cancelAiMove();
     setBoard(createEmptyBoard(roomSettings.boardSize));
     setLastMove(null);
     setMoveHistory([]);
@@ -457,11 +475,12 @@ export const App: React.FC = () => {
     setElapsedGameTime(0);
     setRatingNote(null);
     matchOverRef.current = false;
-  }, [roomSettings.boardSize, roomSettings.turnTimeSeconds, roomSettings.totalTimeMinutes]);
+  }, [cancelAiMove, roomSettings.boardSize, roomSettings.turnTimeSeconds, roomSettings.totalTimeMinutes]);
 
   // Start AI Practice Mode
   const handleStartAiMode = () => {
     if (roomActive) room.leaveRoom();
+    practiceGameGenerationRef.current += 1;
     matchOverRef.current = false;
     cancelAiMove();
     setIsAiThinking(false);
@@ -620,20 +639,25 @@ export const App: React.FC = () => {
         className={`flex-1 w-full mx-auto flex flex-col ${
           inMatch
             ? 'max-w-[1760px] p-0 lg:px-6 lg:py-4'
-            : 'max-w-7xl p-4 sm:p-6 items-center justify-center'
+            : 'max-w-7xl p-4 pt-8 sm:p-6 sm:pt-8 items-center justify-start'
         }`}
       >
         {/* HOME. The three ways to start a game come first; the public room
             list, which is empty most of the time, comes after them. */}
         {gameStatus === 'lobby' && !roomActive && (
-          <div className="w-full max-w-4xl space-y-5">
+          <div className="home-lobby w-full max-w-6xl">
             {/* The title sits on the page rather than inside a panel: on a
                 game's front screen the name is the composition, and boxing it
                 turns the loudest thing on screen into another list item. */}
-            <div className="flex flex-col items-center gap-3 pb-1 text-center">
-              <h1 className="display-brand animate-pop-in text-[56px] sm:text-[76px]" style={stagger(0)}>
-                CARO
-                <span className="sr-only"> - play Gomoku online</span>
+            <div className="home-lobby__intro flex flex-col items-center gap-3 pb-1 text-center">
+              <h1 className="animate-pop-in" style={stagger(0)}>
+                <img
+                  src="/caro-cyberpunk-sword-slash.png"
+                  alt=""
+                  aria-hidden="true"
+                  className="mx-auto w-[min(82vw,430px)]"
+                />
+                <span className="sr-only">CARO - play Gomoku online</span>
               </h1>
               <p className="animate-pop-in mx-auto max-w-md text-muted" style={stagger(1)}>
                 {WIN_RULE_TEXT}
@@ -648,7 +672,7 @@ export const App: React.FC = () => {
             {homeError && (
               <div
                 role="alert"
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-danger bg-danger-soft p-3 text-xs font-medium text-danger"
+                className="home-lobby__notice flex flex-wrap items-center justify-between gap-2 rounded-md border border-danger bg-danger-soft p-3 text-xs font-medium text-danger"
               >
                 <span>{homeError}</span>
                 <button type="button" onClick={room.reset} className="btn btn-secondary btn-sm">
@@ -661,7 +685,7 @@ export const App: React.FC = () => {
             {lastRoom && !homeError && (
               <div
                 role="status"
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line bg-surface p-3 text-sm"
+                className="home-lobby__notice flex flex-wrap items-center justify-between gap-2 rounded-md border border-line bg-surface p-3 text-sm"
               >
                 <span className="text-ink">
                   You left room <span className="font-mono font-semibold text-accent-text">{lastRoom.roomId}</span>
@@ -689,7 +713,7 @@ export const App: React.FC = () => {
                 button, the other carries a mode toggle, a create action and a
                 join form. Splitting 2/3 lets each be its own shape instead of
                 padding the smaller one out to match. */}
-            <div className="grid gap-4 text-left md:grid-cols-5">
+            <div className="home-lobby__play grid gap-4 text-left md:grid-cols-5">
               {/* Play alone. Listed first because it is the only option that
                   works with nobody else around. */}
               <div className="card animate-pop-in flex flex-col gap-4 p-5 md:col-span-2" style={stagger(3)}>
@@ -801,7 +825,7 @@ export const App: React.FC = () => {
             </div>
 
             {/* The rules a new room starts with, before anyone commits. */}
-            <div className="card animate-pop-in flex flex-wrap items-center justify-between gap-3 p-4 text-left" style={stagger(5)}>
+            <div className="home-lobby__rules card animate-pop-in flex flex-wrap items-center justify-between gap-3 p-4 text-left" style={stagger(5)}>
               <div className="flex flex-wrap items-center gap-2">
                 {summariseRoomSettings(roomSettings).map((fact) => (
                   // The chip is a flex row, so the label and value are separate
@@ -815,13 +839,13 @@ export const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setSettingsAndThemeOpen(true)}
-                className="btn btn-secondary btn-sm"
+                className="btn btn-secondary btn-sm ml-auto shrink-0"
               >
                 Change rules
               </button>
             </div>
 
-            <div className="card animate-pop-in text-left" style={stagger(6)}>
+            <div className="home-lobby__rooms card animate-pop-in text-left" style={stagger(6)}>
               <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
                 <h2 className="text-lg text-ink">Public rooms</h2>
                 <span className="chip font-mono tabular-nums">{availableRooms.length}</span>
@@ -948,15 +972,6 @@ export const App: React.FC = () => {
               }
               boardNode={
                 <div className="flex-1 flex flex-col items-center">
-                  {gameStatus !== 'ended' && (
-                    <p
-                      className={`display mb-4 text-2xl ${
-                        currentTurn === myPiece ? 'text-accent-text' : 'text-subtle'
-                      }`}
-                    >
-                      {currentTurn === myPiece ? 'Your turn' : 'Waiting for your opponent…'}
-                    </p>
-                  )}
                   <Board
                     board={board}
                     size={roomSettings.boardSize}
@@ -969,19 +984,8 @@ export const App: React.FC = () => {
                     opponent={BOT_USER}
                     gameStatus={gameStatus}
                     gameResult={gameResult}
-                    elapsedGameTime={elapsedGameTime}
                     resultReason={describeResultReason(gameResult?.reason)}
                     ratingNote={ratingNote}
-                    resultActions={
-                      <>
-                        <button onClick={handleRematchButtonClick} className="btn btn-primary">
-                          Play again
-                        </button>
-                        <button onClick={goHome} className="btn btn-ghost">
-                          Back to menu
-                        </button>
-                      </>
-                    }
                   />
                 </div>
               }
@@ -997,6 +1001,7 @@ export const App: React.FC = () => {
               gameStatus={gameStatus}
               allowUndo={roomSettings.allowUndo}
               isAiMode
+              elapsedGameTime={elapsedGameTime}
               canUndo={moveHistory.length > 0}
               undoPending={false}
               rematchPending={false}
@@ -1114,12 +1119,6 @@ export const App: React.FC = () => {
         onClose={() => setSelectedOpponentProfile(null)}
       />
 
-      {/* Footer */}
-      {!inMatch && (
-        <footer className="w-full border-t border-line bg-surface py-4 text-center text-xs text-muted">
-          Peer-to-peer Caro. No servers between you and your opponent.
-        </footer>
-      )}
     </div>
   );
 };

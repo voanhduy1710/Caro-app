@@ -292,7 +292,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       myMemberId={me}
       capacity={MAX_MEMBERS}
       graceSecondsLeft={room.graceSecondsLeft}
-      onTease={room.tease}
+      onPassBaton={mySeat ? requestBecomeViewer : undefined}
       onClearSeat={room.isHost ? room.clearSeat : undefined}
       onViewProfile={(member) => (member.id === me ? onViewMyProfile() : onViewProfile(memberProfile(member)))}
       onCopyInvite={copyRoomLink}
@@ -371,11 +371,6 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
               Take seat
             </button>
           )}
-          {isMine && (
-            <button onClick={() => room.becomeViewer()} className="btn btn-secondary btn-sm shrink-0">
-              Become viewer
-            </button>
-          )}
         </li>
       );
     };
@@ -447,7 +442,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
             {seatRow('X')}
             {seatRow('O')}
           </ul>
-          <p className="text-xs text-muted">The game starts by itself when both seats are filled. X moves first.</p>
+          <p className="text-xs text-muted">The game starts by itself when both seats are filled. The host opens game one; the opening turn alternates after that.</p>
 
           <div className="space-y-2 rounded-md border border-line bg-surface-2 p-3">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -482,7 +477,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
 
   const size = settings?.boardSize ?? 15;
   const moves = game?.moves ?? [];
-  const board = boardFromMoves(moves, size);
+  const board = boardFromMoves(moves, size, game?.openingSeat);
   if (room.pendingMove && mySeat) {
     const [row, col] = room.pendingMove;
     if (board[row]?.[col] === null) board[row][col] = mySeat;
@@ -541,17 +536,6 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       ? turn === mySeat
         ? 'Your turn'
         : `${moverName}'s turn`
-      : `${moverName} (${turn}) to move`;
-
-  const turnLine =
-    phase === 'paused'
-      ? 'Paused'
-      : phase === 'countdown'
-      ? 'Get ready'
-      : mySeat
-      ? turn === mySeat
-        ? 'Your turn'
-        : `Waiting for ${moverName}…`
       : `${moverName} (${turn}) to move`;
 
   // ---- the paused overlay
@@ -639,40 +623,11 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     ratingNote = describeRating(shownResult, mineInResult, room.ratingNotes[shownResult.gameId]);
   }
 
-  const resultActions = mySeat ? (
-    <>
-      <button
-        onClick={() => room.offerRematch()}
-        disabled={!bothSeated || game?.rematch?.from === mySeat}
-        className="btn btn-primary"
-      >
-        {!bothSeated ? 'Waiting for a player' : game?.rematch?.from === mySeat ? 'Waiting for them…' : 'Play again'}
-      </button>
-      <button onClick={requestBecomeViewer} className="btn btn-secondary">
-        Become viewer
-      </button>
-      <button onClick={requestExit} className="btn btn-ghost">
-        Leave the room
-      </button>
-    </>
-  ) : (
-    <>
-      {openSeat && (
-        <button onClick={() => room.takeSeat(openSeat)} className="btn btn-primary">
-          Take seat {openSeat}
-        </button>
-      )}
-      <button onClick={requestExit} className="btn btn-ghost">
-        Leave the room
-      </button>
-    </>
-  );
-
   const countdownCaption = s.countdown?.resuming
     ? `Resuming: ${moverName} (${turn}) to move`
-    : mySeat === 'X'
-    ? 'You move first, as X'
-    : `${occupantOf('X')?.profile.name ?? 'X'} moves first, as X`;
+    : mySeat === turn
+    ? `You move first, as ${turn}`
+    : `${occupantOf(turn)?.profile.name ?? turn} moves first, as ${turn}`;
 
   const undoFrom = phase === 'playing' ? game?.undo?.from ?? null : null;
   const rematchFrom = phase === 'ended' ? game?.rematch?.from ?? null : null;
@@ -692,18 +647,10 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         rosterNode={roster}
         boardNode={
           <div className="flex flex-1 flex-col items-center">
-            {phase !== 'ended' && (
-              <p
-                className={`display mb-4 text-2xl ${
-                  phase === 'playing' && mySeat === turn ? 'text-accent-text' : 'text-subtle'
-                }`}
-              >
-                {turnLine}
-              </p>
-            )}
             <Board
               board={board}
               size={size}
+              gameId={game?.id}
               onCellClick={(row, col) => {
                 if (board[row][col] === null) room.move(row, col);
               }}
@@ -713,11 +660,9 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
               disabled={phase !== 'playing' || !connected || !mySeat || mySeat !== turn || room.pendingMove !== null}
               myPiece={mySeat ?? undefined}
               gameStatus={phase === 'ended' ? 'ended' : 'playing'}
-              elapsedGameTime={Math.floor((clocks?.elapsed ?? 0) / 1000)}
               resultView={resultView}
               resultReason={shownResult ? RESULT_REASONS[shownResult.reason] : undefined}
               ratingNote={ratingNote}
-              resultActions={resultActions}
               countdown={phase === 'countdown' ? room.countdownSecondsLeft : null}
               countdownTitle={s.countdown?.resuming ? 'Resuming' : 'Get ready'}
               countdownCaption={countdownCaption}
@@ -738,7 +683,8 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         gameStatus={phase === 'ended' ? 'ended' : 'playing'}
         allowUndo={settings?.allowUndo ?? false}
         isAiMode={false}
-        canUndo={phase === 'playing' && Boolean(mySeat) && moves.some((_, i) => pieceAt(i) === mySeat)}
+        elapsedGameTime={Math.floor((clocks?.elapsed ?? 0) / 1000)}
+        canUndo={phase === 'playing' && Boolean(mySeat) && moves.some((_, i) => pieceAt(i, game?.openingSeat) === mySeat)}
         undoPending={undoFrom !== null && undoFrom === mySeat}
         rematchPending={rematchFrom !== null && rematchFrom === mySeat}
         role={isViewer ? 'viewer' : 'player'}
@@ -746,7 +692,6 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         avatarFor={(m) => members.find((member) => member.id === m.senderId)?.profile.avatar}
         openSeat={openSeat}
         onTakeSeat={() => openSeat && room.takeSeat(openSeat)}
-        onBecomeViewer={mySeat ? requestBecomeViewer : undefined}
         canResign={phase === 'playing' && bothSeated}
         chatEmptyText="No messages yet. Say hello to the room."
       />

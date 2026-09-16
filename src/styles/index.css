@@ -423,13 +423,43 @@
       "right";
   }
 
+  /* Home lobby: browse public rooms in the left column while the actions for
+     creating, joining and playing live together on the right. */
+  .home-lobby {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  @media (min-width: 1024px) {
+    .home-lobby {
+      display: grid;
+      grid-template-columns: minmax(300px, 0.9fr) minmax(440px, 1.1fr);
+      align-items: start;
+    }
+
+    .home-lobby__intro,
+    .home-lobby__notice { grid-column: 1 / -1; }
+    .home-lobby__rooms {
+      grid-column: 1;
+      grid-row: 3 / span 2;
+      align-self: stretch;
+    }
+    .home-lobby__play { grid-column: 2; grid-row: 3; }
+    .home-lobby__rules { grid-column: 2; grid-row: 4; }
+  }
+
   @media (min-width: 1024px) {
     .match-stage {
       grid-template-columns: 240px minmax(0, 1fr) 320px;
       grid-template-areas:
         "left board right";
-      /* Navbar (64) plus the shell's own vertical padding (32). */
-      min-height: calc(100dvh - 96px);
+      /* Navbar (64) plus the shell's own vertical padding (32). One extra
+         pixel avoids a redundant document scrollbar from fractional viewport
+         rounding on desktop browsers. */
+      height: calc(100dvh - 97px);
+      min-height: 0;
+      overflow: hidden;
       border-radius: var(--radius-lg);
       background-color: var(--ui-surface);
       /* One edge of its own, or the tinted side column dissolves into the
@@ -846,13 +876,15 @@ html, body {
 
 @media (min-width: 1024px) {
   .board-frame {
-    height: calc(100dvh - 184px);
+    /* Reserve only the compact action rail, so the board uses the rest of the stage. */
+    height: calc(100dvh - 165px);
   }
 }
 
 /* Keep the chat's scrollbar inside its fixed-height feed, never the game row. */
 .chat-message-list {
   scrollbar-gutter: stable;
+  max-height: 100%;
 }
 
 .board-scroll-container,

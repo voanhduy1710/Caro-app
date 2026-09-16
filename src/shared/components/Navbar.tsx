@@ -58,7 +58,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="h-8 w-8 rounded-sm"
           />
           <span className="hidden font-display text-[19px] font-extrabold leading-none tracking-[0.01em] text-ink sm:inline">
-            Not Pickleball
+            Caro League
           </span>
         </button>
 

@@ -645,8 +645,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const changePassword = async (newPassword: string): Promise<{ success: boolean; message?: string }> => {
-    if (!newPassword || newPassword.length < 8) {
-      return { success: false, message: 'Password must be at least 8 characters long.' };
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, message: 'Password must be at least 6 characters long.' };
     }
 
     if (!user || user.isGuest) {

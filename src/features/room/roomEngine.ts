@@ -157,7 +157,10 @@ export interface Game {
   number: number;
   /** The rules this game is played under, fixed at creation. Room settings may change later. */
   settings: RoomSettings;
-  moves: Array<[number, number]>; // piece = index % 2 === 0 ? 'X' : 'O'
+  /** The fixed symbol of the player who made the first move. */
+  openingSeat: Seat;
+  /** Alternates from openingSeat; players themselves always retain X or O. */
+  moves: Array<[number, number]>;
   /** The member who made each move, index for index with `moves`. */
   moveBy: string[];
   turn: Seat;
@@ -279,12 +282,17 @@ export const SEATS: readonly Seat[] = ['X', 'O'];
 
 export const otherSeat = (seat: Seat): Seat => (seat === 'X' ? 'O' : 'X');
 
-export const pieceAt = (index: number): Seat => (index % 2 === 0 ? 'X' : 'O');
+export const pieceAt = (index: number, openingSeat: Seat = 'X'): Seat =>
+  index % 2 === 0 ? openingSeat : otherSeat(openingSeat);
 
-export const boardFromMoves = (moves: ReadonlyArray<[number, number]>, size: number): BoardMatrix => {
+export const boardFromMoves = (
+  moves: ReadonlyArray<[number, number]>,
+  size: number,
+  openingSeat: Seat = 'X',
+): BoardMatrix => {
   const board = createEmptyBoard(size);
   moves.forEach(([row, col], i) => {
-    board[row][col] = pieceAt(i);
+    board[row][col] = pieceAt(i, openingSeat);
   });
   return board;
 };
@@ -671,13 +679,19 @@ const startNewGame = (d: EngineState, ctx: Ctx): void => {
   const o = occupant(d, 'O');
   if (!x || !o) return;
   const settings = { ...d.room.settings };
+  // The host occupies X in a fresh room, so X opens game one. Every completed
+  // game flips the opening seat: O opens game two, X game three, and so on.
+  // `gamesPlayed` only increments in endGame, so an aborted count-in does not
+  // accidentally consume a player's turn to open.
+  const openingSeat: Seat = d.room.gamesPlayed % 2 === 0 ? 'X' : 'O';
   d.room.game = {
     id: ctx.env.randomId(16),
     number: d.room.gamesPlayed + 1,
     settings,
     moves: [],
     moveBy: [],
-    turn: 'X',
+    turn: openingSeat,
+    openingSeat,
     clocks: fullClocks(settings),
     startedWith: { X: playerRef(x), O: playerRef(o) },
     seatLog: [],
@@ -1089,7 +1103,7 @@ const handleMove = (
   if (p.n !== game.moves.length) return reject(ctx, m.id, 'MOVE', 'stale_move');
   const size = game.settings.boardSize;
   if (p.row >= size || p.col >= size) return reject(ctx, m.id, 'MOVE', 'out_of_bounds');
-  const board = boardFromMoves(game.moves, size);
+  const board = boardFromMoves(game.moves, size, game.openingSeat);
   if (board[p.row][p.col] !== null) return reject(ctx, m.id, 'MOVE', 'occupied');
   // A move that arrives after the mover's clock ran out is too late: the
   // watchdog only looks four times a second, and the gap must not save anyone.
@@ -1127,7 +1141,7 @@ const takeBack = (d: EngineState, seat: Seat, ctx: Ctx): void => {
   if (!game) return;
   bankClocks(d, ctx.now);
   while (game.moves.length > 0) {
-    const piece = pieceAt(game.moves.length - 1);
+    const piece = pieceAt(game.moves.length - 1, game.openingSeat);
     game.moves.pop();
     game.moveBy.pop();
     if (piece === seat) break;
@@ -1146,13 +1160,13 @@ const handleUndoRequest = (d: EngineState, m: Member, p: IntentPayloads['UNDO_RE
   if (!game.settings.allowUndo) return reject(ctx, m.id, 'UNDO_REQUEST', 'undo_off');
   const seat = seatOf(d, m.id);
   if (!seat) return reject(ctx, m.id, 'UNDO_REQUEST', 'not_seated');
-  if (!game.moves.some((_, i) => pieceAt(i) === seat)) return reject(ctx, m.id, 'UNDO_REQUEST', 'no_move_to_undo');
+  if (!game.moves.some((_, i) => pieceAt(i, game.openingSeat) === seat)) return reject(ctx, m.id, 'UNDO_REQUEST', 'no_move_to_undo');
   if (game.undo) return reject(ctx, m.id, 'UNDO_REQUEST', 'undo_pending');
   const last = game.moves.length - 1;
   // Instant only for the member who actually made that move: someone who has
   // just sat down must not quietly erase the previous occupant's stone.
   const instant =
-    pieceAt(last) === seat &&
+    pieceAt(last, game.openingSeat) === seat &&
     game.moveBy[last] === m.id &&
     game.lastMove !== null &&
     ctx.now - game.lastMove.at <= INSTANT_UNDO_MS;

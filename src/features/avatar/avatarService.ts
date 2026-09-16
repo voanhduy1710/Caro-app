@@ -1,3 +1,5 @@
+import { supabase } from '../../config/supabase';
+
 export interface AvatarItem {
   id: string;
   name: string;
@@ -209,6 +211,29 @@ export const AVATAR_ITEMS: AvatarItem[] = CHAMPION_DATA.map((c) => ({
  * actually have.
  */
 const DEAD_AVATAR_HOSTS = ['api.dicebear.com', '.supabase.co/storage/'];
+const RAGNAROK_PREFIX = 'ragnarok:' as const;
+const RAGNAROK_BUCKET = 'avatar';
+type RagnarokAvatarKey = `${typeof RAGNAROK_PREFIX}${string}`;
+
+export const isRagnarokAvatar = (value?: string | null): value is RagnarokAvatarKey =>
+  typeof value === 'string' && value.startsWith(RAGNAROK_PREFIX);
+
+/** Lists animated avatars from the project's public Supabase Storage bucket. */
+export const listRagnarokAvatars = async (): Promise<AvatarItem[]> => {
+  if (!supabase) return [];
+  const { data, error } = await supabase.storage.from(RAGNAROK_BUCKET).list('', {
+    limit: 500,
+    sortBy: { column: 'name', order: 'asc' },
+  });
+  if (error || !data) return [];
+  return data
+    .filter((item) => item.name.toLowerCase().endsWith('.gif'))
+    .map((item) => ({
+      id: `${RAGNAROK_PREFIX}${item.name}`,
+      name: item.name.replace(/\.gif$/i, ''),
+      filename: `${RAGNAROK_PREFIX}${item.name}`,
+    }));
+};
 
 /** The path segment every Data Dragon champion icon URL carries. */
 const DDRAGON_CHAMPION_PATH = '/img/champion/';
@@ -287,6 +312,12 @@ export const getAvatarPublicUrl = (filenameOrUrl?: string | null): string => {
   // It resolves like a missing avatar instead of throwing mid-render, which
   // would blank the whole app.
   const value = typeof filenameOrUrl === 'string' ? filenameOrUrl : null;
+
+  if (isRagnarokAvatar(value)) {
+    const filename = value.slice(RAGNAROK_PREFIX.length);
+    if (supabase && filename) return supabase.storage.from(RAGNAROK_BUCKET).getPublicUrl(filename).data.publicUrl;
+    return `/Avatar/${filename}`;
+  }
 
   // One of ours: always rebuilt on the current patch, whatever was stored.
   const champion = getChampionId(value);

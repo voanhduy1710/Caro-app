@@ -770,7 +770,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
         sendIntent({ type: 'STATE_REQUEST', payload: {} });
         return;
       }
-      const by = cur.seats[pieceAt(p.n)] ?? '';
+      const by = cur.seats[pieceAt(p.n, game.openingSeat)] ?? '';
       setMirror({
         ...cur,
         rev: p.rev,
