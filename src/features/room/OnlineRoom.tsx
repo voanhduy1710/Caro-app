@@ -13,6 +13,8 @@ import { useIsDesktop } from '../../shared/hooks/useMediaQuery';
 import { useSound } from '../../shared/hooks/useSound';
 import { RoomRoster } from './RoomRoster';
 import { TeaseToast } from './TeaseToast';
+import { CoinTossModal } from '../minigames/CoinTossModal';
+import { RockPaperScissorsModal } from '../minigames/RockPaperScissorsModal';
 import type { RoomApi } from './useRoom';
 import type { Seat } from './protocol';
 import { DISCARD_GUARD_MS, MAX_MEMBERS, SEATS, activeSeats, boardFromMoves, latestResult, otherSeat, pieceAt } from './roomEngine';
@@ -25,6 +27,7 @@ const RESULT_REASONS: Record<GameResult['reason'], string> = {
   turn_timeout: 'The clock for that move ran out.',
   total_time_out: 'A player used up their total time.',
   resigned: 'A player resigned.',
+  disconnected: 'A player did not return before the reconnect time expired.',
 };
 
 /** How the last person to leave a seat left it, for the paused overlay. */
@@ -135,7 +138,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       });
       return;
     }
-    if (mySeat && (phase === 'playing' || phase === 'paused' || phase === 'countdown')) {
+    if (mySeat && (phase === 'opening' || phase === 'playing' || phase === 'paused' || phase === 'countdown')) {
       setConfirmSpec({
         title: 'Leave the room?',
         body: 'The game pauses and your seat opens for someone else. You can come back as a viewer.',
@@ -157,7 +160,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   }, [exitRef, requestExit]);
 
   const requestBecomeViewer = () => {
-    if (phase === 'playing' || phase === 'paused' || phase === 'countdown') {
+    if (phase === 'opening' || phase === 'playing' || phase === 'paused' || phase === 'countdown') {
       setConfirmSpec({
         title: 'Give up your seat?',
         body: 'The game pauses until someone takes your seat and carries on from this position. You cannot sit back down in this game.',
@@ -652,6 +655,27 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     ? `You move first, as ${turn}`
     : `${occupantOf(turn)?.profile.name ?? turn} moves first, as ${turn}`;
 
+  const rps = game?.firstMove.method === 'rockPaperScissors' ? game.firstMove : null;
+  const myRpsChoice = mySeat === 'X' || mySeat === 'O' ? rps?.choices?.[mySeat] : null;
+  const preGame = game?.firstMove.method === 'rockPaperScissors' && (phase === 'opening' || phase === 'countdown') && rps
+    ? <RockPaperScissorsModal
+        myChoice={myRpsChoice ?? null}
+        choices={rps.choices ?? { X: null, O: null }}
+        isPlayer={mySeat === 'X' || mySeat === 'O'}
+        winnerName={rps.winner ? occupantOf(rps.winner)?.profile.name : undefined}
+        onChoose={(choice) => room.chooseFirstMove(choice)}
+      />
+    : game?.firstMove.method === 'coinFlip' && (phase === 'opening' || phase === 'countdown')
+    ? <CoinTossModal
+        hostName={s.members.find((member) => member.isHost)?.profile.name ?? 'Host'}
+        isHost={room.isHost}
+        call={game.firstMove.call ?? null}
+        face={game.firstMove.face ?? null}
+        winnerName={game.firstMove.winner ? occupantOf(game.firstMove.winner)?.profile.name : undefined}
+        onCall={(face) => room.callCoin(face)}
+      />
+    : null;
+
   const undoFrom = phase === 'playing' ? game?.undo?.from ?? null : null;
   const rematchFrom = phase === 'ended' ? game?.rematch?.from ?? null : null;
   const opponent = mySeat ? occupantOf(otherSeat(mySeat)) : null;
@@ -690,8 +714,17 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
               resultReason={shownResult ? RESULT_REASONS[shownResult.reason] : undefined}
               ratingNote={ratingNote}
               countdown={phase === 'countdown' ? room.countdownSecondsLeft : null}
-              countdownTitle={s.countdown?.resuming ? 'Resuming' : 'Get ready'}
-              countdownCaption={countdownCaption}
+              countdownTitle={s.countdown?.resuming ? 'Resuming' : game?.firstMove.method === 'coinFlip' ? 'Golden coin flip' : 'Get ready'}
+              countdownCaption={game?.firstMove.method === 'coinFlip' && game.firstMove.winner
+                ? `The coin chose ${game.firstMove.winner}.`
+                : countdownCaption}
+              coinFlip={phase === 'countdown' && !preGame && game?.firstMove.method === 'coinFlip' && game.firstMove.winner
+                ? { winner: game.firstMove.winner }
+                : null}
+              rpsReveal={phase === 'countdown' && !preGame && game?.firstMove.method === 'rockPaperScissors' && game.firstMove.winner && game.firstMove.choices?.X && game.firstMove.choices.O
+                ? { X: game.firstMove.choices.X, O: game.firstMove.choices.O, winner: game.firstMove.winner as 'X' | 'O' }
+                : null}
+              preGame={preGame}
               paused={paused}
             />
           </div>

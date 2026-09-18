@@ -64,6 +64,12 @@ interface BoardProps {
   /** The count-in's title and small print, when the room knows better than "you" and "your opponent". */
   countdownTitle?: string;
   countdownCaption?: string;
+  /** A shared golden coin toss shown during the pre-game count-in. */
+  coinFlip?: { winner: 'X' | 'O' | 'T' } | null;
+  /** The two locked hands, briefly revealed before the opening countdown. */
+  rpsReveal?: { X: 'rock' | 'paper' | 'scissors'; O: 'rock' | 'paper' | 'scissors'; winner: 'X' | 'O' } | null;
+  /** Full pre-game mini-game UI supplied by the room. */
+  preGame?: React.ReactNode | null;
   /** A paused game. The clocks are stopped, and the board says why and what can be done. */
   paused?: { title: string; body?: string; actions?: React.ReactNode } | null;
 }
@@ -332,6 +338,9 @@ export const Board: React.FC<BoardProps> = ({
   resultView = null,
   countdownTitle,
   countdownCaption,
+  coinFlip = null,
+  rpsReveal = null,
+  preGame = null,
   paused = null,
   lmaoMode = false,
   threePlayer = false,
@@ -732,7 +741,9 @@ export const Board: React.FC<BoardProps> = ({
 
         {/* PAUSED. Between the result and the count-in: a seat is empty or its
             player is reconnecting, and the clocks wait for them. */}
-        {paused && countdown === null && (
+        {preGame && <div className="absolute inset-0 z-40">{preGame}</div>}
+
+        {paused && countdown === null && !preGame && (
           <div className="absolute inset-0 z-[25] flex items-center justify-center rounded-lg bg-[var(--ui-scrim)] p-4 backdrop-blur-[2px]">
             <div role="status" aria-live="polite" className="modal-panel w-[min(24rem,100%)] p-6 text-center">
               <p className="display text-2xl text-ink">{paused.title}</p>
@@ -742,13 +753,28 @@ export const Board: React.FC<BoardProps> = ({
           </div>
         )}
 
-        {countdown !== null && (
+        {countdown !== null && !preGame && (
           <div
             role="status"
             aria-live="assertive"
             className="absolute inset-0 z-30 flex items-center justify-center rounded-lg bg-[var(--ui-scrim)] backdrop-blur-[2px]"
           >
             <div className="rounded-lg border border-line-strong bg-surface px-8 py-6 text-center shadow-2xl">
+              {coinFlip && (
+                <div className="coin-stage mx-auto mb-3">
+                  <span className="coin-stage__halo" aria-hidden="true" />
+                  <div className="coin-toss grid h-16 w-16 place-items-center rounded-full border-4 border-[#f5c542] bg-gradient-to-br from-[#fff4a8] via-[#dcae24] to-[#8b5a00] font-display text-2xl font-extrabold text-[#5a3900] shadow-lg">
+                    {coinFlip.winner}
+                  </div>
+                </div>
+              )}
+              {rpsReveal && (
+                <div className="rps-reveal mb-3" aria-label={`Hands revealed: X ${rpsReveal.X}, O ${rpsReveal.O}. ${rpsReveal.winner} goes first.`}>
+                  <span className="rps-reveal__hand">{rpsReveal.X === 'rock' ? '✊' : rpsReveal.X === 'paper' ? '✋' : '✌️'}</span>
+                  <span className="rps-reveal__vs">VS</span>
+                  <span className="rps-reveal__hand">{rpsReveal.O === 'rock' ? '✊' : rpsReveal.O === 'paper' ? '✋' : '✌️'}</span>
+                </div>
+              )}
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">
                 {countdownTitle ?? 'Get ready'}
               </p>

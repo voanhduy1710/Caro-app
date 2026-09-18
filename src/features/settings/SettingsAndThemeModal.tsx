@@ -308,6 +308,19 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
                 </Choice>
               ))}
             </Group>
+
+            <Group label="Who goes first" cols={2}>
+              {[
+                { label: 'Coin flip', val: 'coinFlip' as const },
+                { label: 'Rock paper scissors', val: 'rockPaperScissors' as const },
+              ].map((opt) => (
+                <Choice key={opt.val} selected={(settings.firstMoveMethod ?? 'coinFlip') === opt.val}
+                  disabled={!canEditRules || settings.playerMode === 'oneVsOneVsOne'}
+                  onClick={() => onUpdateSettings({ ...settings, firstMoveMethod: opt.val })}>
+                  {opt.label}
+                </Choice>
+              ))}
+            </Group>
           </div>
 
           {/* LOOK. This device only, and never sent to the other player. */}

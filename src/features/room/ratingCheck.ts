@@ -120,6 +120,11 @@ export const verifyResult = (
       // trust, and the loser's own client disputes a resignation it never sent.
       if (seat === loser) return notes.resigned ? 'confirmed' : 'contradicted';
       return 'confirmed';
+    case 'disconnected':
+      // The winner's client watched the room's reconnect grace period expire.
+      // The disconnected player cannot report, so this allows the survivor to
+      // submit the normal rated-result claim rather than leaving it unrecorded.
+      return loser && seat !== loser ? 'confirmed' : 'unverifiable';
     case 'turn_timeout':
     case 'total_time_out': {
       if (!loser || game.turn !== loser) return 'contradicted';

@@ -11,7 +11,7 @@
  */
 import type { RoomSettings } from '../settings/types';
 import type { ChatMessage } from '../webrtc/types';
-import { getChampionId } from '../avatar/avatarService';
+import { getChampionId, isRagnarokAvatar } from '../avatar/avatarService';
 import type { Clocks, RoomState } from './roomEngine';
 
 // The room code rule has exactly one home. Join and the public lobby already
@@ -32,7 +32,7 @@ export type MoveCorner =
   | 'bottom-left'
   | 'bottom'
   | 'bottom-right';
-export type Phase = 'waiting' | 'countdown' | 'playing' | 'paused' | 'ended';
+export type Phase = 'waiting' | 'opening' | 'countdown' | 'playing' | 'paused' | 'ended';
 
 /**
  * The one place the tease phrase lives. The owner asked for this Vietnamese
@@ -49,7 +49,7 @@ export const TEASE_PHRASE = 'Giỏi thì đánh đi';
 export interface MemberProfile {
   uid: string;
   name: string;
-  /** A champion id, a Google profile photo URL, or null for the default avatar. */
+  /** A champion id, a safe Ragnarok GIF key, a Google profile photo URL, or null for the default avatar. */
   avatar: string | null;
   /** Claims a registered account with a server uid; decides whether a game is rated. */
   rated: boolean;
@@ -67,6 +67,8 @@ export const MAX_AVATAR_LENGTH = 300;
 const DEFAULT_NAME = 'Guest';
 const UID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A public Storage object name, never a URL or a nested path. */
+const RAGNAROK_GIF_KEY = /^ragnarok:([^/\\\u0000-\u001f?#]{1,260}\.gif)$/i;
 const STAT_KEYS = ['elo', 'wins', 'losses', 'draws', 'streak'] as const;
 const STAT_MAX = 10_000;
 
@@ -115,6 +117,9 @@ const cleanName = (value: unknown): string => {
  */
 const cleanAvatar = (value: unknown): string | null => {
   if (typeof value !== 'string' || !value || value.length > MAX_AVATAR_LENGTH) return null;
+  // Ragnarok selections are keys, not URLs. This lets a peer resolve only our
+  // public bucket instead of letting a room member inject a tracking image.
+  if (isRagnarokAvatar(value) && RAGNAROK_GIF_KEY.test(value)) return value;
   const champion = getChampionId(value);
   if (champion) return champion;
   let url: URL;
@@ -180,7 +185,8 @@ export const isAllowedSettings = (value: RoomSettings): boolean =>
   (TURN_TIME_SECONDS as readonly number[]).includes(value.turnTimeSeconds) &&
   typeof value.allowUndo === 'boolean' &&
   (value.placementMode === undefined || value.placementMode === 'normal' || value.placementMode === 'lmao') &&
-  (value.playerMode === undefined || value.playerMode === 'oneVsOne' || value.playerMode === 'oneVsOneVsOne');
+  (value.playerMode === undefined || value.playerMode === 'oneVsOne' || value.playerMode === 'oneVsOneVsOne') &&
+  (value.firstMoveMethod === undefined || value.firstMoveMethod === 'coinFlip' || value.firstMoveMethod === 'rockPaperScissors');
 
 // ---------------------------------------------------------------------------
 // Member to host: intents
@@ -214,6 +220,8 @@ export interface IntentPayloads {
   DISCARD_GAME: { gameId: string };
   CLEAR_SEAT: { seat: Seat };
   UPDATE_SETTINGS: { settings: RoomSettings };
+  FIRST_MOVE_CHOICE: { gameId: string; choice: 'rock' | 'paper' | 'scissors' };
+  COIN_CALL: { gameId: string; call: 'X' | 'O' };
   CHAT: { id: string; text: string; image?: string };
   BUZZ: Record<string, never>;
   TEASE: { targetMemberId: string };
@@ -388,7 +396,10 @@ const VALIDATORS: { [K in IntentType]: (p: Record<string, unknown>) => boolean }
     typeof p.settings.turnTimeSeconds === 'number' &&
     typeof p.settings.allowUndo === 'boolean' &&
     (p.settings.placementMode === undefined || p.settings.placementMode === 'normal' || p.settings.placementMode === 'lmao') &&
-    (p.settings.playerMode === undefined || p.settings.playerMode === 'oneVsOne' || p.settings.playerMode === 'oneVsOneVsOne'),
+    (p.settings.playerMode === undefined || p.settings.playerMode === 'oneVsOne' || p.settings.playerMode === 'oneVsOneVsOne') &&
+    (p.settings.firstMoveMethod === undefined || p.settings.firstMoveMethod === 'coinFlip' || p.settings.firstMoveMethod === 'rockPaperScissors'),
+  FIRST_MOVE_CHOICE: (p) => hasGameId(p) && (p.choice === 'rock' || p.choice === 'paper' || p.choice === 'scissors'),
+  COIN_CALL: (p) => hasGameId(p) && (p.call === 'X' || p.call === 'O'),
   CHAT: (p) =>
     isId(p.id) && typeof p.text === 'string' && (p.image === undefined || typeof p.image === 'string'),
   BUZZ: () => true,

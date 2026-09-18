@@ -20,7 +20,7 @@ import type { ChatMessage } from '../webrtc/types';
 import { supabase } from '../../config/supabase';
 import { roomDiscoveryManager } from '../webrtc/roomDiscoveryService';
 import type { HostedRoomInfo } from '../webrtc/roomDiscoveryService';
-import { requestSeatTicket, saveMatchRecord, submitRatedResult } from '../history/historyService';
+import { requestSeatTicket, resendPendingRatedResults, saveMatchRecord, submitRatedResult } from '../history/historyService';
 import type { RatedSubmitOutcome } from '../history/historyService';
 import { PROTOCOL_VERSION, TEASE_PHRASE, parseIntent, parseRoomCode } from './protocol';
 import type {
@@ -429,6 +429,8 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       resultClocks: new Map<string, Clocks | null>(),
       handled: new Set<string>(readHandled()),
       tickets: new Set<string>(),
+      /** Requests in flight; a failed request is deliberately not considered a ticket. */
+      ticketRequests: new Set<string>(),
       ratedRefreshed: new Set<string>(),
     };
 
@@ -522,8 +524,8 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
         viewers: room.members.length - seatsFilled,
         members: room.members.length,
         capacity: MAX_MEMBERS,
-        status: room.phase === 'countdown' ? 'playing' : room.phase,
-        openSeat: seatsFilled < activeSeats(room.settings).length && room.phase !== 'countdown',
+        status: room.phase === 'countdown' || room.phase === 'opening' ? 'playing' : room.phase,
+        openSeat: seatsFilled < activeSeats(room.settings).length && room.phase !== 'countdown' && room.phase !== 'opening',
       };
       roomDiscoveryManager.hostRoom(room.roomId, info);
     };
@@ -1005,6 +1007,9 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           if (outcome.code !== 'caller_would_gain' && outcome.code !== 'already_recorded') {
             setRatingNote(result.gameId, 'Not rated.');
           }
+          if (outcome.code === 'caller_would_gain' && !isSubmitter) {
+            setRatingNote(result.gameId, 'Rating pending: confirming both players were seated…');
+          }
           if (isSubmitter) report(result.gameId, 'skipped', outcome.code);
           return;
         case 'failed':
@@ -1044,14 +1049,33 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       const u = userRef.current;
       const game = room?.game;
       if (!room || !game || !me || !u || u.isGuest) return;
-      if (room.phase !== 'countdown' && room.phase !== 'playing' && room.phase !== 'paused') return;
+      if (room.phase !== 'opening' && room.phase !== 'countdown' && room.phase !== 'playing' && room.phase !== 'paused') return;
       const seat = seatOf(room, me);
       const member = room.members.find((m) => m.id === me);
       if (!seat || !member?.profile.rated) return;
       const key = `${game.id}:${seat}`;
-      if (r.tickets.has(key)) return;
-      r.tickets.add(key);
-      if (seat !== 'T') void requestSeatTicket(game.id, seat, room.roomId);
+      if (r.tickets.has(key) || r.ticketRequests.has(key) || seat === 'T') return;
+      r.ticketRequests.add(key);
+      void requestSeatTicket(game.id, seat, room.roomId)
+        .then((saved) => {
+          if (saved) {
+            r.tickets.add(key);
+            // A winning player may have submitted their protected claim before
+            // the other seat's ticket finished. Replay that preserved claim as
+            // soon as both accounts can be proved to have played.
+            return resendPendingRatedResults().then(() => handlersRef.current.onRated?.());
+          }
+          return undefined;
+        })
+        .finally(() => {
+          r.ticketRequests.delete(key);
+          // The ticket endpoint already retries transient errors three times.
+          // Keep trying in the background while the same room/game is live;
+          // previously the first failed request permanently lost the claim.
+          if (!r.tickets.has(key) && r.mirror?.game?.id === game.id && !r.terminal) {
+            window.setTimeout(requestTickets, 5_000);
+          }
+        });
     };
 
     // ------------------------------------------------------------- lifecycle
@@ -1365,6 +1389,14 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
         return id ? sendIntent({ type: 'DISCARD_GAME', payload: { gameId: id } }) : false;
       },
       updateSettings: (settings: RoomSettings) => sendIntent({ type: 'UPDATE_SETTINGS', payload: { settings } }),
+      chooseFirstMove: (choice: 'rock' | 'paper' | 'scissors') => {
+        const id = gameId();
+        return id ? sendIntent({ type: 'FIRST_MOVE_CHOICE', payload: { gameId: id, choice } }) : false;
+      },
+      callCoin: (call: 'X' | 'O') => {
+        const id = gameId();
+        return id ? sendIntent({ type: 'COIN_CALL', payload: { gameId: id, call } }) : false;
+      },
       buzz: () => sendIntent({ type: 'BUZZ', payload: {} }),
       tease: (targetMemberId: string) => sendIntent({ type: 'TEASE', payload: { targetMemberId } }),
       sendChat: async (text: string, image?: string) => {

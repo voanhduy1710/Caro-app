@@ -218,7 +218,8 @@ const forgetPending = (body: RatedResultBody) => {
 
 /** Signed out mid-flight: worth sending again once the player is back. */
 const worthKeeping = (outcome: RatedSubmitOutcome) =>
-  outcome.status === 'network' || (outcome.status === 'refused' && outcome.code === 'http_401');
+  outcome.status === 'network' ||
+  (outcome.status === 'refused' && (outcome.code === 'http_401' || outcome.code === 'caller_would_gain'));
 
 const postRatedResult = async (body: RatedResultBody): Promise<RatedSubmitOutcome> => {
   if (!isSupabaseConfigured || !supabase) return { status: 'failed', why: 'not_configured' };

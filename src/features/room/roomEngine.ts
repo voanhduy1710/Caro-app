@@ -73,7 +73,9 @@ export const RESULTS_KEPT = 5;
 export const RESULTS_CEILING = 2 * RESULTS_KEPT;
 export const SEAT_LOG_CAP = 64;
 export const CHAT_TEXT_MAX = 500;
-export const CHAT_IMAGE_MAX = 250_000;
+// Data URLs are ~4/3 the original binary size. 670k characters therefore
+// permits roughly a 500 KB local GIF or image over the P2P room connection.
+export const CHAT_IMAGE_MAX = 670_000;
 export const CHAT_MIN_INTERVAL_MS = 400;
 export const ROOM_IMAGE_INTERVAL_MS = 5_000;
 export const CHAT_BACKLOG_SIZE = 50;
@@ -138,7 +140,7 @@ export type RatingState =
   | { status: 'saved'; by: Seat; deltas: { X: number; O: number } | null }
   | RatingOutcome;
 
-export type ResultReason = '5_in_a_row' | 'board_full' | 'turn_timeout' | 'total_time_out' | 'resigned';
+export type ResultReason = '5_in_a_row' | 'board_full' | 'turn_timeout' | 'total_time_out' | 'resigned' | 'disconnected';
 
 export interface GameResult {
   gameId: string;
@@ -160,6 +162,15 @@ export interface Game {
   settings: RoomSettings;
   /** The fixed symbol of the player who made the first move. */
   openingSeat: Seat;
+  /** Shared, pre-game resolution shown to every seated player. */
+  firstMove: {
+    method: 'coinFlip' | 'rockPaperScissors';
+    winner: Seat | null;
+    /** Coin call and result: X is sun/heads, O is moon/tails. */
+    call?: 'X' | 'O' | null;
+    face?: 'X' | 'O' | null;
+    choices?: { X: 'rock' | 'paper' | 'scissors' | null; O: 'rock' | 'paper' | 'scissors' | null };
+  };
   /** Alternates from openingSeat; players themselves always retain X or O. */
   moves: Array<[number, number]>;
   /** Visual position of each move, index-for-index with `moves`. */
@@ -547,10 +558,13 @@ export const restore = (snap: HostSnapshot, now: number): EngineState => {
   const { room, host } = d;
   // v2 snapshots predate the third seat. Keep them playable as 1v1 rooms.
   room.settings.playerMode ??= 'oneVsOne';
+  room.settings.firstMoveMethod ??= 'coinFlip';
   room.seats.T ??= null;
   room.score.T ??= 0;
   if (room.game) {
     room.game.settings.playerMode ??= 'oneVsOne';
+    room.game.settings.firstMoveMethod ??= 'coinFlip';
+    room.game.firstMove ??= { method: 'coinFlip', winner: room.game.openingSeat, face: room.game.openingSeat === 'O' ? 'O' : 'X' };
     room.game.clocks.T ??= room.game.clocks.X;
     room.game.startedWith.T ??= room.game.startedWith.X;
     room.game.vacatedAt.T ??= null;
@@ -711,12 +725,15 @@ const startNewGame = (d: EngineState, ctx: Ctx): void => {
     ...d.room.settings,
     placementMode: d.room.settings.placementMode ?? 'normal',
     playerMode: d.room.settings.playerMode ?? 'oneVsOne',
+    firstMoveMethod: d.room.settings.firstMoveMethod,
   };
   // The host occupies X in a fresh room, so X opens game one. Every completed
   // game flips the opening seat: O opens game two, X game three, and so on.
   // `gamesPlayed` only increments in endGame, so an aborted count-in does not
   // accidentally consume a player's turn to open.
-  const openingSeat = activeSeats(settings)[d.room.gamesPlayed % activeSeats(settings).length];
+  const useRps = settings.playerMode === 'oneVsOne' && settings.firstMoveMethod === 'rockPaperScissors';
+  const useCoinCall = settings.playerMode === 'oneVsOne' && settings.firstMoveMethod === 'coinFlip';
+  const openingSeat = useRps || useCoinCall ? 'X' : activeSeats(settings)[d.room.gamesPlayed % activeSeats(settings).length];
   d.room.game = {
     id: ctx.env.randomId(16),
     number: d.room.gamesPlayed + 1,
@@ -726,6 +743,11 @@ const startNewGame = (d: EngineState, ctx: Ctx): void => {
     moveBy: [],
     turn: openingSeat,
     openingSeat,
+    firstMove: useRps
+      ? { method: 'rockPaperScissors', winner: null, choices: { X: null, O: null } }
+      : useCoinCall
+      ? { method: 'coinFlip', winner: null, call: null, face: null }
+      : { method: 'coinFlip', winner: openingSeat, face: 'X' },
     clocks: fullClocks(settings),
     startedWith: { X: playerRef(x), O: playerRef(o), T: playerRef(t ?? x) },
     seatLog: [],
@@ -738,7 +760,13 @@ const startNewGame = (d: EngineState, ctx: Ctx): void => {
   };
   d.host.runningSince = null;
   d.room.autoStartArmed = false;
-  startCountdown(d, false, ctx.now);
+  if (useRps || useCoinCall) {
+    d.room.phase = 'opening';
+    d.room.countdown = null;
+    d.host.countdownEndsAt = null;
+  } else {
+    startCountdown(d, false, ctx.now);
+  }
 };
 
 /**
@@ -908,14 +936,17 @@ const endGame = (
   if (room.score.pair !== pair) room.score = { pair, X: 0, O: 0, T: 0 };
   if (winner !== 'DRAW') room.score[winner] += 1;
   const players = { X: playerRef(x), O: playerRef(o), T: playerRef(t ?? x) };
-  const rating: RatingState = game.settings.playerMode === 'oneVsOneVsOne'
-    ? { status: 'unrated', why: 'three_player', guestSeats: [] }
-    : (() => {
-        const decision = ratingDecision({ winner, players: { X: players.X, O: players.O, T: players.T } });
-        return decision.rated
-          ? { status: 'pending', submitters: decision.submitters, reports: {} }
-          : { status: 'unrated', why: decision.why, guestSeats: decision.guestSeats };
-      })();
+  let rating: RatingState;
+  if (game.settings.playerMode === 'oneVsOneVsOne') {
+    rating = { status: 'unrated', why: 'three_player', guestSeats: [] };
+  } else {
+    const decision = ratingDecision({ winner, players: { X: players.X, O: players.O, T: players.T } });
+    if (decision.rated === false) {
+      rating = { status: 'unrated', why: decision.why, guestSeats: decision.guestSeats };
+    } else {
+      rating = { status: 'pending', submitters: decision.submitters, reports: {} };
+    }
+  }
   room.results.push({
     gameId: game.id,
     number: game.number,
@@ -1328,6 +1359,7 @@ const handleUpdateSettings = (d: EngineState, m: Member, p: IntentPayloads['UPDA
     allowUndo,
     placementMode: p.settings.placementMode ?? 'normal',
     playerMode: p.settings.playerMode ?? 'oneVsOne',
+    firstMoveMethod: p.settings.firstMoveMethod ?? 'coinFlip',
   };
   // A rematch offer was made under the old rules; accepting it must not start
   // a game under rules the other player never saw.
@@ -1337,6 +1369,49 @@ const handleUpdateSettings = (d: EngineState, m: Member, p: IntentPayloads['UPDA
     game.rematch = null;
     sendEvent(ctx, offerer, 'rematch_declined', { why: 'rules_changed' });
   }
+};
+
+const handleFirstMoveChoice = (d: EngineState, m: Member, p: IntentPayloads['FIRST_MOVE_CHOICE'], ctx: Ctx): void => {
+  const { room } = d;
+  const game = room.game;
+  if (room.phase !== 'opening' || !game || game.id !== p.gameId) return reject(ctx, m.id, 'FIRST_MOVE_CHOICE', 'not_playing');
+  const seat = seatOf(d, m.id);
+  if (seat !== 'X' && seat !== 'O' || game.firstMove.method !== 'rockPaperScissors' || !game.firstMove.choices) {
+    return reject(ctx, m.id, 'FIRST_MOVE_CHOICE', 'not_seated');
+  }
+  if (game.firstMove.choices[seat] !== null) return;
+  game.firstMove.choices[seat] = p.choice;
+  const { X, O } = game.firstMove.choices;
+  if (!X || !O) return;
+  if (X === O) {
+    game.firstMove.choices = { X: null, O: null };
+    return;
+  }
+  const xWins = (X === 'rock' && O === 'scissors') || (X === 'paper' && O === 'rock') || (X === 'scissors' && O === 'paper');
+  const winner: Seat = xWins ? 'X' : 'O';
+  game.firstMove.winner = winner;
+  game.openingSeat = winner;
+  game.turn = winner;
+  startCountdown(d, false, ctx.now);
+};
+
+const handleCoinCall = (d: EngineState, m: Member, p: IntentPayloads['COIN_CALL'], ctx: Ctx): void => {
+  const { room } = d;
+  const game = room.game;
+  if (room.phase !== 'opening' || !game || game.id !== p.gameId || game.firstMove.method !== 'coinFlip') {
+    return reject(ctx, m.id, 'COIN_CALL', 'not_playing');
+  }
+  if (!m.isHost || game.firstMove.call !== null) return reject(ctx, m.id, 'COIN_CALL', 'not_host');
+  const hostSeat = seatOf(d, m.id);
+  if (hostSeat !== 'X' && hostSeat !== 'O') return reject(ctx, m.id, 'COIN_CALL', 'not_seated');
+  const face: 'X' | 'O' = ctx.env.randomId(1).charCodeAt(0) % 2 === 0 ? 'X' : 'O';
+  const winner: Seat = p.call === face ? hostSeat : otherSeat(hostSeat);
+  game.firstMove.call = p.call;
+  game.firstMove.face = face;
+  game.firstMove.winner = winner;
+  game.openingSeat = winner;
+  game.turn = winner;
+  startCountdown(d, false, ctx.now);
 };
 
 const handleChat = (d: EngineState, m: Member, p: IntentPayloads['CHAT'], ctx: Ctx): void => {
@@ -1532,6 +1607,12 @@ export const applyIntent = (
     case 'UPDATE_SETTINGS':
       handleUpdateSettings(d, m, intent.payload, ctx);
       break;
+    case 'FIRST_MOVE_CHOICE':
+      handleFirstMoveChoice(d, m, intent.payload, ctx);
+      break;
+    case 'COIN_CALL':
+      handleCoinCall(d, m, intent.payload, ctx);
+      break;
     case 'CHAT':
       handleChat(d, m, intent.payload, ctx);
       break;
@@ -1574,6 +1655,10 @@ const loseConnection = (d: EngineState, memberId: string, ctx: Ctx): void => {
     pause(d, ctx, bankAt);
   } else if (room.phase === 'countdown') {
     abortCountdown(d);
+  } else if (room.phase === 'opening') {
+    room.game = null;
+    room.phase = 'waiting';
+    room.autoStartArmed = true;
   }
 };
 
@@ -1595,6 +1680,19 @@ const expireGrace = (d: EngineState, memberId: string, ctx: Ctx): void => {
   const endsAt = d.host.graceEndsAt[memberId];
   if (!m || m.connected || endsAt === undefined || ctx.now < endsAt) return;
   const seat = seatOf(d, memberId);
+  const game = d.room.game;
+  // A short drop only pauses the game; a player who never returns after the
+  // grace window forfeits an already-started 1v1. End before vacating their
+  // seat so the immutable result keeps both identities for rating/history.
+  if (
+    seat &&
+    game &&
+    game.settings.playerMode === 'oneVsOne' &&
+    game.moves.length > 0 &&
+    (d.room.phase === 'playing' || d.room.phase === 'paused')
+  ) {
+    endGame(d, otherSeat(seat), 'disconnected', null, ctx);
+  }
   if (seat) vacateSeat(d, seat, 'dropped', ctx);
   removeMember(d, memberId, ctx);
 };

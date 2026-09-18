@@ -59,7 +59,7 @@ export const useSound = () => {
     }
   }, []);
 
-  const playMoveSound = useCallback(() => playTone(600, 'sine', 0.08, 0.15), [playTone]);
+  const playMoveSound = useCallback(() => playTone(600, 'sine', 0.09, 0.25), [playTone]);
   const playWinSound = useCallback(() => {
     playTone(523.25, 'triangle', 0.2, 0.2);
     window.setTimeout(() => playTone(659.25, 'triangle', 0.2, 0.2), 150);
@@ -68,13 +68,15 @@ export const useSound = () => {
   const playTimerWarningSound = useCallback(() => playTone(880, 'square', 0.1, 0.05), [playTone]);
   const playClickSound = useCallback(() => playTone(400, 'sine', 0.05, 0.05), [playTone]);
   const playBuzzSound = useCallback(() => {
-    playTone(1200, 'sine', 0.15, 0.25);
-    window.setTimeout(() => playTone(1500, 'sine', 0.2, 0.25), 120);
+    // A bright, clearly separate notification ting: louder than chat without
+    // becoming an alarm, and heard by the sender as well as the recipient.
+    playTone(1318.51, 'sine', 0.16, 0.38);
+    window.setTimeout(() => playTone(1760, 'triangle', 0.32, 0.32), 105);
   }, [playTone]);
   // Softer and lower than Buzz: a chat note should inform, not nudge.
   const playChatSound = useCallback(() => {
-    playTone(660, 'triangle', 0.07, 0.09);
-    window.setTimeout(() => playTone(880, 'triangle', 0.11, 0.08), 70);
+    playTone(660, 'triangle', 0.08, 0.18);
+    window.setTimeout(() => playTone(880, 'triangle', 0.13, 0.16), 70);
   }, [playTone]);
 
   return { playMoveSound, playWinSound, playTimerWarningSound, playClickSound, playBuzzSound, playChatSound };
