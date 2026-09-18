@@ -16,6 +16,7 @@ import {
   Eraser,
   Crosshair,
   Timer,
+  ImagePlus,
 } from 'lucide-react';
 import { setDisplayPref, useDisplayPrefs } from './displayPrefs';
 import type { DisplayPrefs } from './displayPrefs';
@@ -23,6 +24,7 @@ import type { UserProfile } from '../auth/AuthContext';
 import type { ChatMessage } from '../webrtc/types';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { useIsDesktop } from '../../shared/hooks/useMediaQuery';
+import { useSound } from '../../shared/hooks/useSound';
 
 interface GameControlsProps {
   headerNode?: React.ReactNode;
@@ -99,6 +101,14 @@ const CHAT_BAR_HEIGHT_PX = 60;
 const processImageFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
+    // Keep GIF bytes untouched. Drawing one to canvas would flatten its
+    // animation into a single JPEG frame before it ever reaches the peer.
+    if (file.type === 'image/gif') {
+      reader.onload = (event) => resolve(event.target?.result as string);
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+      return;
+    }
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
@@ -260,9 +270,11 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const [isReactionsOpen, setIsReactionsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [simulationCount, setSimulationCount] = useState(0);
+  const { playChatSound } = useSound();
 
   const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   /** The phone's chat bar, which opens the sheet and takes focus back from it. */
   const chatBarRef = useRef<HTMLButtonElement>(null);
 
@@ -277,6 +289,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
   /** Whether the reader is pinned to the newest message. Auto-scroll only then. */
   const stickToBottomRef = useRef(true);
   const seenCountRef = useRef(chatMessages.length);
+  // Chat history is loaded silently. Only a later peer message gets a sound.
+  const notifiedChatIdsRef = useRef(new Set(chatMessages.map((message) => message.id)));
 
   const isOwnMessage = useCallback(
     (message: ChatMessage) => {
@@ -296,6 +310,16 @@ export const GameControls: React.FC<GameControlsProps> = ({
     const who = isOwnMessage(lastMessage) ? 'You' : lastMessage.sender;
     return lastMessage.system ? body : `${who}: ${body}`;
   }, [lastMessage, isOwnMessage]);
+
+  useEffect(() => {
+    let receivedMessage = false;
+    for (const message of chatMessages) {
+      if (notifiedChatIdsRef.current.has(message.id)) continue;
+      notifiedChatIdsRef.current.add(message.id);
+      if (!message.system && !isOwnMessage(message)) receivedMessage = true;
+    }
+    if (receivedMessage) playChatSound();
+  }, [chatMessages, isOwnMessage, playChatSound]);
 
   /**
    * Scroll the feed itself, never `scrollIntoView`: that walks every scrollable
@@ -498,6 +522,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
     if (e) e.preventDefault();
     if (!chatText.trim() && !attachedImage) return;
     onSendChat(chatText.trim(), attachedImage || undefined);
+    playChatSound();
     setChatText('');
     setAttachedImage(null);
     stickToBottomRef.current = true;
@@ -531,6 +556,20 @@ export const GameControls: React.FC<GameControlsProps> = ({
     }
   };
 
+  const attachFile = async (file: File | null) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    try {
+      setAttachedImage(await processImageFile(file));
+    } catch (err) {
+      console.error('Failed to process chat attachment:', err);
+    }
+  };
+
+  const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    void attachFile(e.target.files?.[0] ?? null);
+    e.target.value = '';
+  };
+
   const handleBuzzClick = () => {
     if (isBuzzCooldown || !onSendBuzz) return;
     if (onSendBuzz() === false) return;
@@ -541,6 +580,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
   const handleSendReactionToChat = (emoji: string) => {
     onSendChat(emoji);
+    playChatSound();
     stickToBottomRef.current = true;
   };
 
@@ -838,7 +878,9 @@ export const GameControls: React.FC<GameControlsProps> = ({
               <X size={11} strokeWidth={2.25} aria-hidden="true" />
             </button>
           </div>
-          <span className="text-[11px] text-muted">Image ready to send</span>
+          <span className="text-[11px] text-muted">
+            {attachedImage.startsWith('data:image/gif') ? 'GIF ready to send' : 'Image ready to send'}
+          </span>
         </div>
       )}
 
@@ -860,6 +902,27 @@ export const GameControls: React.FC<GameControlsProps> = ({
             <Smile size={16} strokeWidth={2.25} aria-hidden="true" />
           </button>
         )}
+        {!isAiMode && (
+          <>
+            <input
+              ref={attachmentInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              onChange={handleAttachmentChange}
+              className="sr-only"
+              tabIndex={-1}
+            />
+            <button
+              type="button"
+              onClick={() => attachmentInputRef.current?.click()}
+              title="Attach an image or animated GIF"
+              aria-label="Attach an image or animated GIF"
+              className="btn btn-ghost btn-icon h-9 w-9 shrink-0"
+            >
+              <ImagePlus size={16} strokeWidth={2.25} aria-hidden="true" />
+            </button>
+          </>
+        )}
         <textarea
           ref={textareaRef}
           value={chatText}
@@ -867,7 +930,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder="Type a message..."
-          title="Shift+Enter for a newline, Ctrl+V to paste a screenshot"
+          title="Shift+Enter for a newline, paste an image, or attach an image/GIF"
           aria-label="Chat message"
           rows={1}
           className="min-w-0 flex-1 resize-none overflow-y-auto rounded-md border border-line-strong bg-surface px-3 py-2 text-[13px] leading-snug text-ink focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none"

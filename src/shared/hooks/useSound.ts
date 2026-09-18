@@ -71,6 +71,11 @@ export const useSound = () => {
     playTone(1200, 'sine', 0.15, 0.25);
     window.setTimeout(() => playTone(1500, 'sine', 0.2, 0.25), 120);
   }, [playTone]);
+  // Softer and lower than Buzz: a chat note should inform, not nudge.
+  const playChatSound = useCallback(() => {
+    playTone(660, 'triangle', 0.07, 0.09);
+    window.setTimeout(() => playTone(880, 'triangle', 0.11, 0.08), 70);
+  }, [playTone]);
 
-  return { playMoveSound, playWinSound, playTimerWarningSound, playClickSound, playBuzzSound };
+  return { playMoveSound, playWinSound, playTimerWarningSound, playClickSound, playBuzzSound, playChatSound };
 };

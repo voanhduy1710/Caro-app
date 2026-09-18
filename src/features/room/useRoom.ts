@@ -312,6 +312,9 @@ const loadImage = (src: string): Promise<HTMLImageElement> =>
  */
 const shrinkImage = async (dataUrl: string, maxChars: number): Promise<string | null> => {
   if (dataUrl.length <= maxChars) return dataUrl;
+  // Canvas compression turns an animated GIF into one still JPEG frame. GIFs
+  // stay local data URLs and are rejected if they exceed the P2P chat limit.
+  if (dataUrl.startsWith('data:image/gif')) return null;
   try {
     const img = await loadImage(dataUrl);
     let width = img.width;

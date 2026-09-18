@@ -22,6 +22,18 @@ export interface SimulatedMove {
   piece: Exclude<CellValue, null>;
 }
 
+/** Spreadsheet-style column label: 0 → A, 25 → Z, 26 → AA. */
+const columnLabel = (index: number) => {
+  let value = index + 1;
+  let label = '';
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    label = String.fromCharCode(65 + remainder) + label;
+    value = Math.floor((value - 1) / 26);
+  }
+  return label;
+};
+
 interface BoardProps {
   board: BoardMatrix;
   size: number;
@@ -256,7 +268,7 @@ const BoardCell = memo<BoardCellProps>(({
     onContextMenu={(event) => onContextMenu(event, row, col)}
     onMouseEnter={(event) => onHover(row, col, clickCorner(event))}
     onMouseMove={(event) => onHover(row, col, clickCorner(event))}
-    aria-label={`Row ${row + 1}, column ${col + 1}${cell ? `, ${cell}` : ', empty'}`}
+    aria-label={`Coordinate ${columnLabel(col)}${row + 1}${cell ? `, ${cell}` : ', empty'}`}
     style={{ width: `${cellSize}px`, height: `${cellSize}px` }}
     className={`board-cell relative flex shrink-0 aspect-square items-center justify-center transition-all duration-100 ${
       cell ? 'board-cell--filled' : ''
@@ -292,7 +304,7 @@ const BoardCell = memo<BoardCellProps>(({
       </div>
     ) : showCoords ? (
       <span className="pointer-events-none select-none font-mono text-[9px] leading-none text-subtle opacity-70">
-        {row},{col}
+        {columnLabel(col)}{row + 1}
       </span>
     ) : null}
   </button>
@@ -580,23 +592,23 @@ export const Board: React.FC<BoardProps> = ({
       const existingIdx = prev.findIndex((m) => m.row === r && m.col === c);
       if (existingIdx >= 0) return prev.filter((_, idx) => idx !== existingIdx);
       const lastSim = prev[prev.length - 1];
-      // Simulations are a private analysis sequence, so they always begin at
-      // O rather than borrowing the live turn. This keeps a 1v1 sketch to
-      // O/X and adds T only when the room is explicitly three-player.
+      // Begin with the player who is actually due to move. From there the
+      // analysis line follows the match's active-player order: X/O in 1v1,
+      // X/O/T in 1v1v1.
       const nextPiece: Exclude<CellValue, null> = !lastSim
-        ? 'O'
+        ? currentTurn
         : threePlayer
-        ? lastSim.piece === 'O'
-          ? 'X'
-          : lastSim.piece === 'X'
+        ? lastSim.piece === 'X'
+          ? 'O'
+          : lastSim.piece === 'O'
           ? 'T'
-          : 'O'
-        : lastSim.piece === 'O'
-        ? 'X'
-        : 'O';
+          : 'X'
+        : lastSim.piece === 'X'
+        ? 'O'
+        : 'X';
       return [...prev, { row: r, col: c, piece: nextPiece }];
     });
-  }, [threePlayer]);
+  }, [currentTurn, threePlayer]);
 
   const getBoardThemeClass = () => {
     if (theme.boardTheme === 'light_wood') return 'board-theme-light-wood';
