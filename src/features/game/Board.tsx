@@ -29,6 +29,8 @@ interface BoardProps {
   gameId?: string;
   onCellClick: (row: number, col: number, corner: BoardCorner) => void;
   lmaoMode?: boolean;
+  /** Simulations mirror the active match: O/X in 1v1, O/X/T in 1v1v1. */
+  threePlayer?: boolean;
   placementCorners?: Record<string, BoardCorner>;
   lastMove: [number, number] | null;
   winningLine: Array<[number, number]> | null;
@@ -320,6 +322,7 @@ export const Board: React.FC<BoardProps> = ({
   countdownCaption,
   paused = null,
   lmaoMode = false,
+  threePlayer = false,
   placementCorners,
 }) => {
   const { theme } = useTheme();
@@ -577,10 +580,23 @@ export const Board: React.FC<BoardProps> = ({
       const existingIdx = prev.findIndex((m) => m.row === r && m.col === c);
       if (existingIdx >= 0) return prev.filter((_, idx) => idx !== existingIdx);
       const lastSim = prev[prev.length - 1];
-      const nextPiece: Exclude<CellValue, null> = lastSim ? (lastSim.piece === 'X' ? 'O' : lastSim.piece === 'O' ? 'T' : 'X') : currentTurn;
+      // Simulations are a private analysis sequence, so they always begin at
+      // O rather than borrowing the live turn. This keeps a 1v1 sketch to
+      // O/X and adds T only when the room is explicitly three-player.
+      const nextPiece: Exclude<CellValue, null> = !lastSim
+        ? 'O'
+        : threePlayer
+        ? lastSim.piece === 'O'
+          ? 'X'
+          : lastSim.piece === 'X'
+          ? 'T'
+          : 'O'
+        : lastSim.piece === 'O'
+        ? 'X'
+        : 'O';
       return [...prev, { row: r, col: c, piece: nextPiece }];
     });
-  }, [currentTurn]);
+  }, [threePlayer]);
 
   const getBoardThemeClass = () => {
     if (theme.boardTheme === 'light_wood') return 'board-theme-light-wood';

@@ -1064,6 +1064,7 @@ export const App: React.FC = () => {
                     board={board}
                     size={roomSettings.boardSize}
                     lmaoMode={roomSettings.placementMode === 'lmao'}
+                    threePlayer={roomSettings.playerMode === 'oneVsOneVsOne'}
                     placementCorners={practicePlacementCorners}
                     onCellClick={handleCellClick}
                     lastMove={lastMove}

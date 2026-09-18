@@ -675,6 +675,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
               size={size}
               gameId={game?.id}
               lmaoMode={game?.settings.placementMode === 'lmao'}
+              threePlayer={game?.settings.playerMode === 'oneVsOneVsOne'}
               placementCorners={placementCorners}
               onCellClick={(row, col, corner) => {
                 if (board[row][col] === null) room.move(row, col, corner);
