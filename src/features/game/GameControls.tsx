@@ -58,7 +58,7 @@ interface GameControlsProps {
   /** A chat author's current avatar, when the room still knows them. */
   avatarFor?: (message: ChatMessage) => string | null | undefined;
   /** The seat a viewer could take right now, if any. */
-  openSeat?: 'X' | 'O' | null;
+  openSeat?: 'X' | 'O' | 'T' | null;
   onTakeSeat?: () => void;
   /** Overrides when Resign is available: in a room, only while both seats are filled. */
   canResign?: boolean;

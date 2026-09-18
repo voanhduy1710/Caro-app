@@ -20,7 +20,7 @@ export { ROOM_CODE_PATTERN, parseRoomCode } from '../webrtc/roomCode';
 
 export const PROTOCOL_VERSION = 2;
 
-export type Seat = 'X' | 'O';
+export type Seat = 'X' | 'O' | 'T';
 /** Where a mark sits inside its logical board cell in LMAO mode. */
 export type MoveCorner =
   | 'center'
@@ -179,7 +179,8 @@ export const isAllowedSettings = (value: RoomSettings): boolean =>
   (TOTAL_TIME_MINUTES as readonly number[]).includes(value.totalTimeMinutes) &&
   (TURN_TIME_SECONDS as readonly number[]).includes(value.turnTimeSeconds) &&
   typeof value.allowUndo === 'boolean' &&
-  (value.placementMode === undefined || value.placementMode === 'normal' || value.placementMode === 'lmao');
+  (value.placementMode === undefined || value.placementMode === 'normal' || value.placementMode === 'lmao') &&
+  (value.playerMode === undefined || value.playerMode === 'oneVsOne' || value.playerMode === 'oneVsOneVsOne');
 
 // ---------------------------------------------------------------------------
 // Member to host: intents
@@ -349,7 +350,7 @@ export const envelope = (message: HostMessage): HostEnvelope => ({ v: PROTOCOL_V
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const REPORT_STATUSES: readonly string[] = ['saved', 'failed', 'skipped', 'unknown'];
 
-const isSeat = (value: unknown): value is Seat => value === 'X' || value === 'O';
+const isSeat = (value: unknown): value is Seat => value === 'X' || value === 'O' || value === 'T';
 const isMoveCorner = (value: unknown): value is MoveCorner =>
   value === 'center' ||
   value === 'top-left' ||
@@ -386,7 +387,8 @@ const VALIDATORS: { [K in IntentType]: (p: Record<string, unknown>) => boolean }
     typeof p.settings.totalTimeMinutes === 'number' &&
     typeof p.settings.turnTimeSeconds === 'number' &&
     typeof p.settings.allowUndo === 'boolean' &&
-    (p.settings.placementMode === undefined || p.settings.placementMode === 'normal' || p.settings.placementMode === 'lmao'),
+    (p.settings.placementMode === undefined || p.settings.placementMode === 'normal' || p.settings.placementMode === 'lmao') &&
+    (p.settings.playerMode === undefined || p.settings.playerMode === 'oneVsOne' || p.settings.playerMode === 'oneVsOneVsOne'),
   CHAT: (p) =>
     isId(p.id) && typeof p.text === 'string' && (p.image === undefined || typeof p.image === 'string'),
   BUZZ: () => true,

@@ -19,7 +19,7 @@ export type BoardCorner =
 export interface SimulatedMove {
   row: number;
   col: number;
-  piece: 'X' | 'O';
+  piece: Exclude<CellValue, null>;
 }
 
 interface BoardProps {
@@ -32,9 +32,9 @@ interface BoardProps {
   placementCorners?: Record<string, BoardCorner>;
   lastMove: [number, number] | null;
   winningLine: Array<[number, number]> | null;
-  currentTurn: 'X' | 'O';
+  currentTurn: Exclude<CellValue, null>;
   disabled: boolean;
-  myPiece?: 'X' | 'O';
+  myPiece?: Exclude<CellValue, null>;
   /** Only for naming who moves first in the count-in. */
   opponent?: UserProfile | null;
   gameStatus?: 'lobby' | 'playing' | 'ended';
@@ -46,7 +46,7 @@ interface BoardProps {
   /** Seconds left before the first move, or null when play is already open. */
   countdown?: number | null;
   /** Replaces the player-centred result, for a viewer or anyone the room words it for. */
-  resultView?: { headline: string; tone: string; winnerPiece: 'X' | 'O' | null } | null;
+  resultView?: { headline: string; tone: string; winnerPiece: Exclude<CellValue, null> | null } | null;
   /** The count-in's title and small print, when the room knows better than "you" and "your opponent". */
   countdownTitle?: string;
   countdownCaption?: string;
@@ -55,7 +55,7 @@ interface BoardProps {
 }
 
 interface PieceGlyphProps {
-  piece: 'X' | 'O';
+  piece: Exclude<CellValue, null>;
   pieceTheme: PieceTheme;
   xColor: string;
   oColor: string;
@@ -78,11 +78,12 @@ const PieceGlyph: React.FC<PieceGlyphProps> = ({
   customColor,
 }) => {
   const isX = piece === 'X';
+  const isTriangle = piece === 'T';
   const simClass = isSimulated ? 'opacity-60 scale-95' : '';
   const winClass = !isSimulated && isWinning ? 'animate-winning-cell' : '';
 
   if (pieceTheme === 'calligraphic') {
-    const strokeColor = customColor || (isX ? xColor || '#006699' : oColor || '#e11d24');
+    const strokeColor = customColor || (isX ? xColor || '#006699' : isTriangle ? '#7c3aed' : oColor || '#e11d24');
     return (
       <svg
         viewBox="0 0 24 24"
@@ -92,7 +93,7 @@ const PieceGlyph: React.FC<PieceGlyphProps> = ({
         strokeWidth="4.2"
         strokeLinecap="round"
       >
-        {isX ? (
+        {isTriangle ? <path d="M12 4 20 19H4Z" /> : isX ? (
           <>
             <line x1="5" y1="5" x2="19" y2="19" />
             <line x1="19" y1="5" x2="5" y2="19" />
@@ -105,7 +106,7 @@ const PieceGlyph: React.FC<PieceGlyphProps> = ({
   }
 
   if (pieceTheme === 'laser') {
-    const laserColor = customColor || (isX ? xColor || '#00f0ff' : oColor || '#ff007f');
+    const laserColor = customColor || (isX ? xColor || '#00f0ff' : isTriangle ? '#a855f7' : oColor || '#ff007f');
     return (
       <svg
         viewBox="0 0 24 24"
@@ -116,7 +117,7 @@ const PieceGlyph: React.FC<PieceGlyphProps> = ({
         strokeWidth="3.8"
         strokeLinecap="round"
       >
-        {isX ? (
+        {isTriangle ? <path d="M12 4 20 19H4Z" /> : isX ? (
           <>
             <line x1="5" y1="5" x2="19" y2="19" />
             <line x1="19" y1="5" x2="5" y2="19" />
@@ -129,7 +130,7 @@ const PieceGlyph: React.FC<PieceGlyphProps> = ({
   }
 
   if (pieceTheme === 'gomoku_3d') {
-    const activeColor = customColor || (isX ? xColor : oColor);
+    const activeColor = customColor || (isX ? xColor : isTriangle ? '#7c3aed' : oColor);
     const stoneBg = activeColor ? `radial-gradient(circle at 35% 35%, ${activeColor}, #0f172a)` : undefined;
     return (
       <div
@@ -141,7 +142,7 @@ const PieceGlyph: React.FC<PieceGlyphProps> = ({
     );
   }
 
-  const color = customColor || (isX ? xColor || '#2563eb' : oColor || '#dc2626');
+  const color = customColor || (isX ? xColor || '#2563eb' : isTriangle ? '#7c3aed' : oColor || '#dc2626');
   return (
     <span
       className={`select-none font-black text-xl sm:text-2xl transition-transform ${simClass} ${
@@ -149,7 +150,7 @@ const PieceGlyph: React.FC<PieceGlyphProps> = ({
       } ${winClass}`}
       style={{ color }}
     >
-      {piece}
+      {isTriangle ? '△' : piece}
     </span>
   );
 };
@@ -167,9 +168,9 @@ interface BoardCellProps {
   isMajorBottom: boolean;
   /** Row/column numbers, drawn only in empty cells so pieces stay legible. */
   showCoords: boolean;
-  simulatedPiece: 'X' | 'O' | null;
+  simulatedPiece: Exclude<CellValue, null> | null;
   simulatedColor?: string;
-  currentTurn: 'X' | 'O';
+  currentTurn: Exclude<CellValue, null>;
   boardDisabled: boolean;
   pieceTheme: PieceTheme;
   xColor: string;
@@ -326,9 +327,9 @@ export const Board: React.FC<BoardProps> = ({
 
   const isWin = gameResult?.winner === 'Victory!';
   const isLoss = gameResult?.winner === 'Defeat!';
-  const playerWinnerPiece: 'X' | 'O' | null = isWin ? myPiece : isLoss ? (myPiece === 'X' ? 'O' : 'X') : null;
+  const playerWinnerPiece: Exclude<CellValue, null> | null = isWin ? myPiece ?? null : isLoss ? (myPiece === 'X' ? 'O' : 'X') : null;
   const winnerPiece = resultView ? resultView.winnerPiece : playerWinnerPiece;
-  const winnerColor = winnerPiece === 'X' ? theme.xColor : theme.oColor;
+  const winnerColor = winnerPiece === 'X' ? theme.xColor : winnerPiece === 'T' ? '#7c3aed' : theme.oColor;
   const outcome = resultView
     ? { headline: resultView.headline, tone: resultView.tone }
     : isWin
@@ -576,7 +577,7 @@ export const Board: React.FC<BoardProps> = ({
       const existingIdx = prev.findIndex((m) => m.row === r && m.col === c);
       if (existingIdx >= 0) return prev.filter((_, idx) => idx !== existingIdx);
       const lastSim = prev[prev.length - 1];
-      const nextPiece: 'X' | 'O' = lastSim ? (lastSim.piece === 'X' ? 'O' : 'X') : currentTurn;
+      const nextPiece: Exclude<CellValue, null> = lastSim ? (lastSim.piece === 'X' ? 'O' : lastSim.piece === 'O' ? 'T' : 'X') : currentTurn;
       return [...prev, { row: r, col: c, piece: nextPiece }];
     });
   }, [currentTurn]);

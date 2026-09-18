@@ -40,6 +40,7 @@ import {
   MAX_MEMBERS,
   PING_INTERVAL_MS,
   SEATS,
+  activeSeats,
   applyIntent,
   checkInvariants,
   clockSync,
@@ -507,7 +508,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
         roomDiscoveryManager.stopHostingRoom(room.roomId);
         return;
       }
-      const seatsFilled = SEATS.filter((s) => room.seats[s] !== null).length;
+      const seatsFilled = activeSeats(room.settings).filter((s) => room.seats[s] !== null).length;
       const host = room.members[0];
       const info: HostedRoomInfo = {
         hostName: host.profile.name,
@@ -519,7 +520,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
         members: room.members.length,
         capacity: MAX_MEMBERS,
         status: room.phase === 'countdown' ? 'playing' : room.phase,
-        openSeat: seatsFilled < 2 && room.phase !== 'countdown',
+        openSeat: seatsFilled < activeSeats(room.settings).length && room.phase !== 'countdown',
       };
       roomDiscoveryManager.hostRoom(room.roomId, info);
     };
@@ -771,7 +772,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
         sendIntent({ type: 'STATE_REQUEST', payload: {} });
         return;
       }
-      const by = cur.seats[pieceAt(p.n, game.openingSeat)] ?? '';
+      const by = cur.seats[pieceAt(p.n, game.openingSeat, game.settings)] ?? '';
       setMirror({
         ...cur,
         rev: p.rev,
@@ -1047,7 +1048,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       const key = `${game.id}:${seat}`;
       if (r.tickets.has(key)) return;
       r.tickets.add(key);
-      void requestSeatTicket(game.id, seat, room.roomId);
+      if (seat !== 'T') void requestSeatTicket(game.id, seat, room.roomId);
     };
 
     // ------------------------------------------------------------- lifecycle

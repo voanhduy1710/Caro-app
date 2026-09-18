@@ -15,7 +15,7 @@ import { RoomRoster } from './RoomRoster';
 import { TeaseToast } from './TeaseToast';
 import type { RoomApi } from './useRoom';
 import type { Seat } from './protocol';
-import { DISCARD_GUARD_MS, MAX_MEMBERS, SEATS, boardFromMoves, latestResult, otherSeat, pieceAt } from './roomEngine';
+import { DISCARD_GUARD_MS, MAX_MEMBERS, SEATS, activeSeats, boardFromMoves, latestResult, otherSeat, pieceAt } from './roomEngine';
 import type { GameResult, Member } from './roomEngine';
 
 /** Why a game ended, in words anyone in the room can follow. */
@@ -85,10 +85,11 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   const members = useMemo(() => s?.members ?? [], [s?.members]);
   const myMember = members.find((m) => m.id === me) ?? null;
   const occupantOf = (seat: Seat): Member | null => (s ? (members.find((m) => m.id === s.seats[seat]) ?? null) : null);
-  const bothSeated = Boolean(s && s.seats.X && s.seats.O);
+  const requiredSeats = s ? activeSeats(game?.settings ?? s.settings) : [];
+  const bothSeated = Boolean(s && requiredSeats.every((seat) => s.seats[seat]));
   const connected = room.status === 'connected';
   const isViewer = mySeat === null;
-  const emptySeat: Seat | null = s ? (SEATS.find((seat) => s.seats[seat] === null) ?? null) : null;
+  const emptySeat: Seat | null = s ? (requiredSeats.find((seat) => s.seats[seat] === null) ?? null) : null;
   // A player who gave up a seat in this game may not take one again in it.
   const barred = Boolean(phase === 'paused' && game && myMember && game.gaveUp.includes(myMember.profile.uid));
   const openSeat: Seat | null = phase !== 'countdown' && connected && isViewer && !barred ? emptySeat : null;
@@ -97,6 +98,17 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   const result = s ? latestResult(s) : null;
   const shownResult = phase === 'ended' && result && game && result.gameId === game.id ? result : null;
   const roomLink = room.roomId ? `${window.location.origin}?room=${room.roomId}` : '';
+  // This hook must run while the room is still connecting too. Returning from
+  // the loading view before it ran made React see an extra hook once a room
+  // state arrived, crashing every player-vs-player room.
+  const moves = game?.moves ?? [];
+  const placementCorners = useMemo<Record<string, BoardCorner>>(
+    () =>
+      Object.fromEntries(
+        moves.map(([row, col], index) => [`${row}:${col}`, game?.moveCorners?.[index] ?? 'center']),
+      ) as Record<string, BoardCorner>,
+    [moves, game?.moveCorners],
+  );
 
   /* ------------------------------ flows ------------------------------ */
 
@@ -339,7 +351,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       return (
         <li key={seat} className="flex items-center gap-3 rounded-md border border-line bg-surface p-3">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent font-display text-sm font-extrabold text-accent-fg">
-            {seat}
+            {seat === 'T' ? '△' : seat}
           </span>
           {occupant ? (
             <img
@@ -442,8 +454,12 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
           <ul className="space-y-2" aria-label="Seats">
             {seatRow('X')}
             {seatRow('O')}
+            {s.settings.playerMode === 'oneVsOneVsOne' && seatRow('T')}
           </ul>
-          <p className="text-xs text-muted">The game starts by itself when both seats are filled. The host opens game one; the opening turn alternates after that.</p>
+          <p className="text-xs text-muted">
+            The game starts by itself when {s.settings.playerMode === 'oneVsOneVsOne' ? 'all three seats are filled' : 'both seats are filled'}.
+            The opening turn rotates after every game.
+          </p>
 
           <div className="space-y-2 rounded-md border border-line bg-surface-2 p-3">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -477,15 +493,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   /* -------------------------------- match -------------------------------- */
 
   const size = settings?.boardSize ?? 15;
-  const moves = game?.moves ?? [];
-  const board = boardFromMoves(moves, size, game?.openingSeat);
-  const placementCorners = useMemo<Record<string, BoardCorner>>(
-    () =>
-      Object.fromEntries(
-        moves.map(([row, col], index) => [`${row}:${col}`, game?.moveCorners?.[index] ?? 'center']),
-      ) as Record<string, BoardCorner>,
-    [moves, game?.moveCorners],
-  );
+  const board = boardFromMoves(moves, size, game?.openingSeat, game?.settings);
   if (room.pendingMove && mySeat) {
     const [row, col] = room.pendingMove;
     if (board[row]?.[col] === null) board[row][col] = mySeat;
@@ -527,8 +535,15 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       reconnectingSeconds: room.graceSecondsLeft(occupant.id),
     };
   };
-  const order: [Seat, Seat] = mySeat ? [mySeat, otherSeat(mySeat)] : ['X', 'O'];
+  const order: Seat[] = game?.settings.playerMode === 'oneVsOneVsOne'
+    ? mySeat
+      ? [mySeat, ...SEATS.filter((seat) => seat !== mySeat)]
+      : [...SEATS]
+    : mySeat
+    ? [mySeat, otherSeat(mySeat)]
+    : ['X', 'O'];
   const scoreOf = (seat: Seat) => {
+    if (game?.settings.playerMode === 'oneVsOneVsOne') return s.score[seat];
     const pair = s.seats.X && s.seats.O ? `${s.seats.X}|${s.seats.O}` : null;
     return pair && s.score.pair === pair ? s.score[seat] : 0;
   };
@@ -646,10 +661,10 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       <GameControls
         headerNode={
           <MatchHeader
-            seats={[seatView(order[0]), seatView(order[1])]}
-            score={[scoreOf(order[0]), scoreOf(order[1])]}
+            seats={order.map(seatView)}
+            score={order.map(scoreOf)}
             announcement={announcement}
-            scoreLabel={`Score: ${seatView(order[0]).name} ${scoreOf(order[0])}, ${seatView(order[1]).name} ${scoreOf(order[1])}`}
+            scoreLabel={`Score: ${order.map((seat) => `${seatView(seat).name} ${scoreOf(seat)}`).join(', ')}`}
           />
         }
         rosterNode={roster}
@@ -698,7 +713,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         allowUndo={settings?.allowUndo ?? false}
         isAiMode={false}
         elapsedGameTime={Math.floor((clocks?.elapsed ?? 0) / 1000)}
-        canUndo={phase === 'playing' && Boolean(mySeat) && moves.some((_, i) => pieceAt(i, game?.openingSeat) === mySeat)}
+        canUndo={phase === 'playing' && Boolean(mySeat) && moves.some((_, i) => pieceAt(i, game?.openingSeat, game?.settings) === mySeat)}
         undoPending={undoFrom !== null && undoFrom === mySeat}
         rematchPending={rematchFrom !== null && rematchFrom === mySeat}
         role={isViewer ? 'viewer' : 'player'}
@@ -783,7 +798,7 @@ const describeRating = (result: GameResult, mine: Seat | null, local: string | u
   if (rating.status === 'saved') {
     if (rating.deltas) {
       return mine
-        ? `Rating ${signed(rating.deltas[mine])}`
+        ? mine === 'T' ? 'Casual three-player match.' : `Rating ${signed(rating.deltas[mine])}`
         : `Rated: ${X.name} ${signed(rating.deltas.X)}, ${O.name} ${signed(rating.deltas.O)}`;
     }
     return local ?? 'Rating saved.';

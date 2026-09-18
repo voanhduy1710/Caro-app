@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Link2, UserMinus } from 'lucide-react';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import type { Seat } from './protocol';
+import { SEATS } from './roomEngine';
 import type { Member } from './roomEngine';
 
 interface RoomRosterProps {
   members: Member[];
-  seats: { X: string | null; O: string | null };
+  seats: Record<Seat, string | null>;
   myMemberId: string | null;
   capacity: number;
   graceSecondsLeft: (memberId: string) => number | null;
@@ -39,9 +40,9 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
   const [open, setOpen] = useState(!collapsible);
   const me = members.find((m) => m.id === myMemberId);
   const iAmHost = Boolean(me?.isHost);
-  const watching = members.filter((m) => m.id !== seats.X && m.id !== seats.O).length;
+  const watching = members.filter((m) => !SEATS.some((seat) => seats[seat] === m.id)).length;
 
-  const seatOfMember = (id: string): Seat | null => (seats.X === id ? 'X' : seats.O === id ? 'O' : null);
+  const seatOfMember = (id: string): Seat | null => SEATS.find((seat) => seats[seat] === id) ?? null;
 
   const header = (
     <div className="flex items-center justify-between gap-2 px-3 py-2">

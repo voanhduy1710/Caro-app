@@ -15,7 +15,7 @@ interface SettingsAndThemeModalProps {
   isHost: boolean;
   gameStatus: 'lobby' | 'playing' | 'ended';
   /** Which seat the player holds, so the piece-colour rows can name it. */
-  myPiece?: 'X' | 'O';
+  myPiece?: 'X' | 'O' | 'T';
 }
 
 const BOARD_THEMES: Array<{ id: BoardTheme; name: string }> = [
@@ -292,6 +292,18 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
               ].map((opt) => (
                 <Choice key={opt.val} selected={settings.placementMode === opt.val} disabled={!canEditRules}
                   onClick={() => onUpdateSettings({ ...settings, placementMode: opt.val })}>
+                  {opt.label}
+                </Choice>
+              ))}
+            </Group>
+
+            <Group label="Players" cols={2}>
+              {[
+                { label: '1v1', val: 'oneVsOne' as const },
+                { label: '1v1v1', val: 'oneVsOneVsOne' as const },
+              ].map((opt) => (
+                <Choice key={opt.val} selected={(settings.playerMode ?? 'oneVsOne') === opt.val} disabled={!canEditRules}
+                  onClick={() => onUpdateSettings({ ...settings, playerMode: opt.val })}>
                   {opt.label}
                 </Choice>
               ))}

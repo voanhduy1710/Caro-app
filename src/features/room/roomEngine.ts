@@ -118,6 +118,7 @@ export interface SeatChange {
 export interface Clocks {
   X: number; // total banks in ms (0 = unlimited when totalTimeMinutes = 0)
   O: number;
+  T: number;
   turn: number; // per-move timer in ms (0 = unlimited when turnTimeSeconds = 0)
   elapsed: number;
   running: boolean;
@@ -126,7 +127,7 @@ export interface Clocks {
 export type RatingOutcome = { status: 'failed' | 'skipped' | 'unknown'; why: string | null };
 
 export type RatingState =
-  | { status: 'unrated'; why: 'guest' | 'local_account'; guestSeats: Seat[] }
+  | { status: 'unrated'; why: 'guest' | 'local_account' | 'three_player'; guestSeats: Seat[] }
   | {
       status: 'pending';
       /** The seats whose clients attempt the submission: the loser, or both on a draw. */
@@ -147,7 +148,7 @@ export interface GameResult {
   winner: Seat | 'DRAW';
   line: Array<[number, number]> | null;
   reason: ResultReason;
-  players: { X: PlayerRef; O: PlayerRef }; // final occupants
+  players: { X: PlayerRef; O: PlayerRef; T: PlayerRef }; // T mirrors X in a 1v1 result and is ignored there.
   rating: RatingState;
   endedAt: number;
 }
@@ -167,14 +168,14 @@ export interface Game {
   moveBy: string[];
   turn: Seat;
   clocks: Clocks;
-  startedWith: { X: PlayerRef; O: PlayerRef };
+  startedWith: { X: PlayerRef; O: PlayerRef; T: PlayerRef };
   seatLog: SeatChange[];
   /** Entries removed from the middle of seatLog to keep it at SEAT_LOG_CAP. */
   seatLogDropped: number;
   /** uids that stood up or left during this game and may not sit in it again. */
   gaveUp: string[];
   /** When each seat was last vacated during this game, for the discard guard. */
-  vacatedAt: { X: number | null; O: number | null };
+  vacatedAt: { X: number | null; O: number | null; T: number | null };
   lastMove: { by: string; at: number } | null;
   undo: { from: Seat; expiresAt: number } | null;
   rematch: { from: Seat; expiresAt: number } | null; // only while phase = ended
@@ -188,7 +189,7 @@ export interface RoomState {
   createdAt: number;
   settings: RoomSettings;
   members: Member[]; // host first, then join order
-  seats: { X: string | null; O: string | null };
+  seats: { X: string | null; O: string | null; T: string | null };
   phase: Phase;
   /** msLeft is only meaningful in a toWire() copy, which recomputes it. */
   countdown: { msLeft: number; resuming: boolean } | null;
@@ -201,7 +202,7 @@ export interface RoomState {
   results: GameResult[];
   /** Games that reached a result; numbers the next game even after a discard. */
   gamesPlayed: number;
-  score: { pair: string; X: number; O: number }; // pair = `${Xid}|${Oid}`
+  score: { pair: string; X: number; O: number; T: number };
   sentAt: number;
 }
 
@@ -280,21 +281,31 @@ export const cryptoEnv: EngineEnv = {
 // Derived helpers
 // ---------------------------------------------------------------------------
 
-export const SEATS: readonly Seat[] = ['X', 'O'];
+export const SEATS: readonly Seat[] = ['X', 'O', 'T'];
+export const activeSeats = (settings: RoomSettings): readonly Seat[] =>
+  settings.playerMode === 'oneVsOneVsOne' ? SEATS : ['X', 'O'];
 
 export const otherSeat = (seat: Seat): Seat => (seat === 'X' ? 'O' : 'X');
 
-export const pieceAt = (index: number, openingSeat: Seat = 'X'): Seat =>
-  index % 2 === 0 ? openingSeat : otherSeat(openingSeat);
+export const nextSeat = (seat: Seat, settings: RoomSettings): Seat => {
+  const seats = activeSeats(settings);
+  return seats[(seats.indexOf(seat) + 1) % seats.length];
+};
+
+export const pieceAt = (index: number, openingSeat: Seat = 'X', settings?: RoomSettings): Seat => {
+  const seats = settings ? activeSeats(settings) : (['X', 'O'] as const);
+  return seats[(seats.indexOf(openingSeat) + index) % seats.length];
+};
 
 export const boardFromMoves = (
   moves: ReadonlyArray<[number, number]>,
   size: number,
   openingSeat: Seat = 'X',
+  settings?: RoomSettings,
 ): BoardMatrix => {
   const board = createEmptyBoard(size);
   moves.forEach(([row, col], i) => {
-    board[row][col] = pieceAt(i, openingSeat);
+    board[row][col] = pieceAt(i, openingSeat, settings);
   });
   return board;
 };
@@ -309,6 +320,7 @@ export const seatOf = (state: EngineState | RoomState, memberId: string | null):
   if (memberId === null) return null;
   if (seats.X === memberId) return 'X';
   if (seats.O === memberId) return 'O';
+  if (seats.T === memberId) return 'T';
   return null;
 };
 
@@ -316,7 +328,7 @@ export const occupant = (state: EngineState | RoomState, seat: Seat): Member | u
   findMember(state, roomOf(state).seats[seat]);
 
 export const bothSeatedAndConnected = (state: EngineState | RoomState): boolean =>
-  SEATS.every((seat) => occupant(state, seat)?.connected === true);
+  activeSeats(roomOf(state).settings).every((seat) => occupant(state, seat)?.connected === true);
 
 /** The newest result, which the result card shows. */
 export const latestResult = (state: EngineState | RoomState): GameResult | null => {
@@ -374,7 +386,8 @@ export type RatingDecision =
  * refuses the other, and the idempotency key stops a double count.
  */
 export const ratingDecision = (result: Pick<GameResult, 'winner' | 'players'>): RatingDecision => {
-  const unratedSeats = SEATS.filter((seat) => !result.players[seat].rated);
+  const ratedSeats = result.players.T.memberId === result.players.X.memberId ? (['X', 'O'] as const) : SEATS;
+  const unratedSeats = ratedSeats.filter((seat) => !result.players[seat].rated);
   if (unratedSeats.length > 0) {
     const anyGuest = unratedSeats.some((seat) => result.players[seat].guest);
     return { rated: false, why: anyGuest ? 'guest' : 'local_account', guestSeats: unratedSeats };
@@ -396,7 +409,8 @@ export const checkInvariants = (state: EngineState | RoomState): string[] => {
   }
   if (room.game?.clocks.running && room.phase !== 'playing') problems.push('clocks running outside playing');
   if ((room.countdown !== null) !== (room.phase === 'countdown')) problems.push('countdown out of step with phase');
-  if (room.seats.X !== null && room.seats.X === room.seats.O) problems.push('one member in both seats');
+  const occupiedIds = SEATS.map((seat) => room.seats[seat]).filter((id): id is string => id !== null);
+  if (new Set(occupiedIds).size !== occupiedIds.length) problems.push('one member in multiple seats');
   for (const seat of SEATS) {
     const id = room.seats[seat];
     if (id !== null && !room.members.some((m) => m.id === id)) problems.push(`seat ${seat} holds a non-member`);
@@ -448,16 +462,16 @@ export const createRoom = (opts: CreateRoomOptions, now: number, env: EngineEnv 
       rev: 1,
       isPublic: opts.isPublic,
       createdAt: now,
-      settings: { ...opts.settings },
+      settings: { ...opts.settings, playerMode: opts.settings.playerMode ?? 'oneVsOne' },
       members: [{ id: hostId, profile, isHost: true, connected: true, graceMsLeft: null, joinedAt: now }],
-      seats: { X: hostId, O: null },
+      seats: { X: hostId, O: null, T: null },
       phase: 'waiting',
       countdown: null,
       autoStartArmed: true,
       game: null,
       results: [],
       gamesPlayed: 0,
-      score: { pair: '', X: 0, O: 0 },
+      score: { pair: '', X: 0, O: 0, T: 0 },
       sentAt: now,
     },
     host: {
@@ -531,6 +545,17 @@ export const snapshot = (state: EngineState, now: number): HostSnapshot => {
 export const restore = (snap: HostSnapshot, now: number): EngineState => {
   const d = cloneState(snap.state);
   const { room, host } = d;
+  // v2 snapshots predate the third seat. Keep them playable as 1v1 rooms.
+  room.settings.playerMode ??= 'oneVsOne';
+  room.seats.T ??= null;
+  room.score.T ??= 0;
+  if (room.game) {
+    room.game.settings.playerMode ??= 'oneVsOne';
+    room.game.clocks.T ??= room.game.clocks.X;
+    room.game.startedWith.T ??= room.game.startedWith.X;
+    room.game.vacatedAt.T ??= null;
+  }
+  for (const result of room.results) result.players.T ??= result.players.X;
   room.rev += 1;
   for (const member of room.members) {
     if (member.isHost) {
@@ -655,6 +680,7 @@ const stopClocks = (d: EngineState, at: number): void => {
 const fullClocks = (settings: RoomSettings): Clocks => ({
   X: bankLimitMs(settings),
   O: bankLimitMs(settings),
+  T: bankLimitMs(settings),
   turn: turnLimitMs(settings),
   elapsed: 0,
   running: false,
@@ -679,13 +705,18 @@ const startCountdown = (d: EngineState, resuming: boolean, now: number): void =>
 const startNewGame = (d: EngineState, ctx: Ctx): void => {
   const x = occupant(d, 'X');
   const o = occupant(d, 'O');
-  if (!x || !o) return;
-  const settings = { ...d.room.settings, placementMode: d.room.settings.placementMode ?? 'normal' };
+  const t = occupant(d, 'T');
+  if (!x || !o || (d.room.settings.playerMode === 'oneVsOneVsOne' && !t)) return;
+  const settings = {
+    ...d.room.settings,
+    placementMode: d.room.settings.placementMode ?? 'normal',
+    playerMode: d.room.settings.playerMode ?? 'oneVsOne',
+  };
   // The host occupies X in a fresh room, so X opens game one. Every completed
   // game flips the opening seat: O opens game two, X game three, and so on.
   // `gamesPlayed` only increments in endGame, so an aborted count-in does not
   // accidentally consume a player's turn to open.
-  const openingSeat: Seat = d.room.gamesPlayed % 2 === 0 ? 'X' : 'O';
+  const openingSeat = activeSeats(settings)[d.room.gamesPlayed % activeSeats(settings).length];
   d.room.game = {
     id: ctx.env.randomId(16),
     number: d.room.gamesPlayed + 1,
@@ -696,11 +727,11 @@ const startNewGame = (d: EngineState, ctx: Ctx): void => {
     turn: openingSeat,
     openingSeat,
     clocks: fullClocks(settings),
-    startedWith: { X: playerRef(x), O: playerRef(o) },
+    startedWith: { X: playerRef(x), O: playerRef(o), T: playerRef(t ?? x) },
     seatLog: [],
     seatLogDropped: 0,
     gaveUp: [],
-    vacatedAt: { X: null, O: null },
+    vacatedAt: { X: null, O: null, T: null },
     lastMove: null,
     undo: null,
     rematch: null,
@@ -865,7 +896,8 @@ const endGame = (
   const game = room.game;
   const x = occupant(d, 'X');
   const o = occupant(d, 'O');
-  if (!game || !x || !o) return;
+  const t = occupant(d, 'T');
+  if (!game || !x || !o || (game.settings.playerMode === 'oneVsOneVsOne' && !t)) return;
   stopClocks(d, ctx.now);
   game.undo = null;
   game.rematch = null;
@@ -873,13 +905,17 @@ const endGame = (
   room.countdown = null;
   d.host.countdownEndsAt = null;
   const pair = `${x.id}|${o.id}`;
-  if (room.score.pair !== pair) room.score = { pair, X: 0, O: 0 };
+  if (room.score.pair !== pair) room.score = { pair, X: 0, O: 0, T: 0 };
   if (winner !== 'DRAW') room.score[winner] += 1;
-  const players = { X: playerRef(x), O: playerRef(o) };
-  const decision = ratingDecision({ winner, players });
-  const rating: RatingState = decision.rated
-    ? { status: 'pending', submitters: decision.submitters, reports: {} }
-    : { status: 'unrated', why: decision.why, guestSeats: decision.guestSeats };
+  const players = { X: playerRef(x), O: playerRef(o), T: playerRef(t ?? x) };
+  const rating: RatingState = game.settings.playerMode === 'oneVsOneVsOne'
+    ? { status: 'unrated', why: 'three_player', guestSeats: [] }
+    : (() => {
+        const decision = ratingDecision({ winner, players: { X: players.X, O: players.O, T: players.T } });
+        return decision.rated
+          ? { status: 'pending', submitters: decision.submitters, reports: {} }
+          : { status: 'unrated', why: decision.why, guestSeats: decision.guestSeats };
+      })();
   room.results.push({
     gameId: game.id,
     number: game.number,
@@ -996,7 +1032,7 @@ export const dedupeName = (name: string, taken: string[]): string => {
 };
 
 const sameAccountInOtherSeat = (d: EngineState, seat: Seat, uid: string): boolean =>
-  occupant(d, otherSeat(seat))?.profile.uid === uid;
+  activeSeats(d.room.settings).some((other) => other !== seat && occupant(d, other)?.profile.uid === uid);
 
 /**
  * Where to bank the clocks when the side to move turns out to have been
@@ -1061,7 +1097,7 @@ const handleHello = (d: EngineState, p: IntentPayloads['HELLO'], from: string | 
   // A friend opening the invite link to a fresh room plays at once. Later
   // arrivals watch, and one account never fills both seats.
   if (room.phase === 'waiting') {
-    const seat = SEATS.find((s) => room.seats[s] === null && !sameAccountInOtherSeat(d, s, profile.uid));
+    const seat = activeSeats(room.settings).find((s) => room.seats[s] === null && !sameAccountInOtherSeat(d, s, profile.uid));
     if (seat) room.seats[seat] = id;
   }
   ctx.events.push({ kind: 'bind', memberId: id, supersede: false });
@@ -1106,7 +1142,7 @@ const handleMove = (
   if (p.n !== game.moves.length) return reject(ctx, m.id, 'MOVE', 'stale_move');
   const size = game.settings.boardSize;
   if (p.row >= size || p.col >= size) return reject(ctx, m.id, 'MOVE', 'out_of_bounds');
-  const board = boardFromMoves(game.moves, size, game.openingSeat);
+  const board = boardFromMoves(game.moves, size, game.openingSeat, game.settings);
   if (board[p.row][p.col] !== null) return reject(ctx, m.id, 'MOVE', 'occupied');
   // A move that arrives after the mover's clock ran out is too late: the
   // watchdog only looks four times a second, and the gap must not save anyone.
@@ -1122,7 +1158,7 @@ const handleMove = (
       pause(d, ctx, refundedBankAt(d, prevSeen, ctx.now));
       return reject(ctx, m.id, 'MOVE', 'not_playing');
     }
-    endGame(d, otherSeat(seat), expired, null, ctx);
+    endGame(d, nextSeat(seat, game.settings), expired, null, ctx);
     return reject(ctx, m.id, 'MOVE', 'time_out');
   }
   bankClocks(d, ctx.now);
@@ -1134,7 +1170,7 @@ const handleMove = (
   const win = checkWin(board, p.row, p.col, size);
   if (win) return endGame(d, win.winner, '5_in_a_row', win.line, ctx);
   if (game.moves.length === size * size) return endGame(d, 'DRAW', 'board_full', null, ctx);
-  game.turn = otherSeat(seat);
+  game.turn = nextSeat(seat, game.settings);
   game.clocks.turn = turnLimitMs(game.settings);
   ctx.moveApplied = { n: p.n, row: p.row, col: p.col, corner: game.moveCorners[game.moveCorners.length - 1] };
 };
@@ -1145,7 +1181,7 @@ const takeBack = (d: EngineState, seat: Seat, ctx: Ctx): void => {
   if (!game) return;
   bankClocks(d, ctx.now);
   while (game.moves.length > 0) {
-    const piece = pieceAt(game.moves.length - 1, game.openingSeat);
+    const piece = pieceAt(game.moves.length - 1, game.openingSeat, game.settings);
     game.moves.pop();
     game.moveCorners?.pop();
     game.moveBy.pop();
@@ -1162,16 +1198,17 @@ const handleUndoRequest = (d: EngineState, m: Member, p: IntentPayloads['UNDO_RE
   const game = room.game;
   if (room.phase !== 'playing' || !game) return reject(ctx, m.id, 'UNDO_REQUEST', 'not_playing');
   if (p.gameId !== game.id) return reject(ctx, m.id, 'UNDO_REQUEST', 'wrong_game');
+  if (game.settings.playerMode === 'oneVsOneVsOne') return reject(ctx, m.id, 'UNDO_REQUEST', 'undo_off');
   if (!game.settings.allowUndo) return reject(ctx, m.id, 'UNDO_REQUEST', 'undo_off');
   const seat = seatOf(d, m.id);
   if (!seat) return reject(ctx, m.id, 'UNDO_REQUEST', 'not_seated');
-  if (!game.moves.some((_, i) => pieceAt(i, game.openingSeat) === seat)) return reject(ctx, m.id, 'UNDO_REQUEST', 'no_move_to_undo');
+  if (!game.moves.some((_, i) => pieceAt(i, game.openingSeat, game.settings) === seat)) return reject(ctx, m.id, 'UNDO_REQUEST', 'no_move_to_undo');
   if (game.undo) return reject(ctx, m.id, 'UNDO_REQUEST', 'undo_pending');
   const last = game.moves.length - 1;
   // Instant only for the member who actually made that move: someone who has
   // just sat down must not quietly erase the previous occupant's stone.
   const instant =
-    pieceAt(last, game.openingSeat) === seat &&
+    pieceAt(last, game.openingSeat, game.settings) === seat &&
     game.moveBy[last] === m.id &&
     game.lastMove !== null &&
     ctx.now - game.lastMove.at <= INSTANT_UNDO_MS;
@@ -1185,6 +1222,7 @@ const handleUndoAnswer = (d: EngineState, m: Member, p: IntentPayloads['UNDO_ANS
   if (room.phase !== 'playing' || !game) return reject(ctx, m.id, 'UNDO_ANSWER', 'not_playing');
   if (p.gameId !== game.id) return reject(ctx, m.id, 'UNDO_ANSWER', 'wrong_game');
   if (!game.undo) return reject(ctx, m.id, 'UNDO_ANSWER', 'no_undo');
+  if (game.settings.playerMode === 'oneVsOneVsOne') return reject(ctx, m.id, 'UNDO_ANSWER', 'not_addressed');
   if (seatOf(d, m.id) !== otherSeat(game.undo.from)) return reject(ctx, m.id, 'UNDO_ANSWER', 'not_addressed');
   const from = game.undo.from;
   if (p.accept) return takeBack(d, from, ctx);
@@ -1210,6 +1248,18 @@ const handleRematchAnswer = (d: EngineState, m: Member, p: IntentPayloads['REMAT
   if (room.phase !== 'ended' || !game) return reject(ctx, m.id, 'REMATCH_ANSWER', 'not_ended');
   if (p.gameId !== game.id) return reject(ctx, m.id, 'REMATCH_ANSWER', 'wrong_game');
   if (!game.rematch) return reject(ctx, m.id, 'REMATCH_ANSWER', 'no_offer');
+  if (game.settings.playerMode === 'oneVsOneVsOne') {
+    if (seatOf(d, m.id) === game.rematch.from) return reject(ctx, m.id, 'REMATCH_ANSWER', 'not_addressed');
+    if (!p.accept) {
+      const offerer = occupant(d, game.rematch.from);
+      game.rematch = null;
+      sendEvent(ctx, offerer, 'rematch_declined');
+      return;
+    }
+    if (!bothSeatedAndConnected(d)) return reject(ctx, m.id, 'REMATCH_ANSWER', 'seat_empty');
+    startNewGame(d, ctx);
+    return;
+  }
   if (seatOf(d, m.id) !== otherSeat(game.rematch.from)) return reject(ctx, m.id, 'REMATCH_ANSWER', 'not_addressed');
   const offerer = occupant(d, game.rematch.from);
   if (!p.accept) {
@@ -1228,7 +1278,7 @@ const handleResign = (d: EngineState, m: Member, p: IntentPayloads['RESIGN'], ct
   if (p.gameId !== game.id) return reject(ctx, m.id, 'RESIGN', 'wrong_game');
   const seat = seatOf(d, m.id);
   if (!seat) return reject(ctx, m.id, 'RESIGN', 'not_seated');
-  endGame(d, otherSeat(seat), 'resigned', null, ctx);
+  endGame(d, game.settings.playerMode === 'oneVsOneVsOne' ? 'DRAW' : otherSeat(seat), 'resigned', null, ctx);
 };
 
 const handleDiscard = (d: EngineState, m: Member, p: IntentPayloads['DISCARD_GAME'], ctx: Ctx): void => {
@@ -1236,13 +1286,15 @@ const handleDiscard = (d: EngineState, m: Member, p: IntentPayloads['DISCARD_GAM
   const game = room.game;
   if (room.phase !== 'paused' || !game) return reject(ctx, m.id, 'DISCARD_GAME', 'not_paused');
   if (p.gameId !== game.id) return reject(ctx, m.id, 'DISCARD_GAME', 'wrong_game');
-  const empty = SEATS.find((s) => room.seats[s] === null);
+  const empty = activeSeats(room.settings).find((s) => room.seats[s] === null);
   if (!empty) return reject(ctx, m.id, 'DISCARD_GAME', 'no_empty_seat');
   if (!m.isHost) {
     // The remaining player may end the game too, but only after the seat has
     // stood empty for a while, so a viewer gets a moment to take it first.
     const seat = seatOf(d, m.id);
-    if (!seat || room.seats[otherSeat(seat)] !== null) return reject(ctx, m.id, 'DISCARD_GAME', 'not_host');
+    if (!seat || activeSeats(room.settings).some((other) => other !== seat && room.seats[other] !== null)) {
+      return reject(ctx, m.id, 'DISCARD_GAME', 'not_host');
+    }
     const since = game.vacatedAt[empty] ?? ctx.now;
     const waited = ctx.now - since;
     if (waited < DISCARD_GUARD_MS) return reject(ctx, m.id, 'DISCARD_GAME', 'too_soon', DISCARD_GUARD_MS - waited);
@@ -1269,7 +1321,14 @@ const handleUpdateSettings = (d: EngineState, m: Member, p: IntentPayloads['UPDA
   if (room.phase !== 'waiting' && room.phase !== 'ended') return reject(ctx, m.id, 'UPDATE_SETTINGS', 'locked');
   if (!isAllowedSettings(p.settings)) return reject(ctx, m.id, 'UPDATE_SETTINGS', 'bad_settings');
   const { boardSize, totalTimeMinutes, turnTimeSeconds, allowUndo } = p.settings;
-  room.settings = { boardSize, totalTimeMinutes, turnTimeSeconds, allowUndo, placementMode: p.settings.placementMode ?? 'normal' };
+  room.settings = {
+    boardSize,
+    totalTimeMinutes,
+    turnTimeSeconds,
+    allowUndo,
+    placementMode: p.settings.placementMode ?? 'normal',
+    playerMode: p.settings.playerMode ?? 'oneVsOne',
+  };
   // A rematch offer was made under the old rules; accepting it must not start
   // a game under rules the other player never saw.
   const game = room.game;
@@ -1315,7 +1374,7 @@ const handleChat = (d: EngineState, m: Member, p: IntentPayloads['CHAT'], ctx: C
   // while the host's clock charges them. Players get images when play stops.
   const holdFor =
     image !== undefined && room.phase === 'playing'
-      ? SEATS.map((s) => room.seats[s]).filter((id): id is string => id !== null && id !== m.id)
+      ? activeSeats(room.settings).map((s) => room.seats[s]).filter((id): id is string => id !== null && id !== m.id)
       : [];
   for (const to of holdFor) {
     const mine = host.heldImages.filter((h) => h.to === to);
@@ -1627,7 +1686,7 @@ export const tick = (state: EngineState, now: number, env: EngineEnv = cryptoEnv
       loseConnection(d, mover.id, ctx);
       ctx.events.push({ kind: 'close', memberId: mover.id });
     } else {
-      endGame(d, otherSeat(current.turn), expired, null, ctx);
+      endGame(d, nextSeat(current.turn, current.settings), expired, null, ctx);
     }
   }
 

@@ -28,10 +28,12 @@ import { useRoom, readLastRoom, clearLastRoom } from '../features/room/useRoom';
 import type { LastRoom } from '../features/room/useRoom';
 import { OnlineRoom } from '../features/room/OnlineRoom';
 
+type PracticePiece = 'X' | 'O' | 'T';
+
 interface MoveHistoryItem {
   row: number;
   col: number;
-  piece: 'X' | 'O';
+  piece: PracticePiece;
   corner?: BoardCorner;
 }
 
@@ -39,6 +41,9 @@ const lmaoCornerFor = (row: number, col: number): BoardCorner =>
   (['top-left', 'top', 'top-right', 'left', 'right', 'bottom-left', 'bottom', 'bottom-right'] as const)[
     Math.abs(row * 31 + col) % 8
   ];
+
+const nextPracticePiece = (piece: PracticePiece, threePlayer: boolean): PracticePiece =>
+  threePlayer ? (piece === 'X' ? 'O' : piece === 'O' ? 'T' : 'X') : piece === 'X' ? 'O' : 'X';
 
 /** Why the practice game ended, in words a player can act on. */
 const RESULT_REASONS: Record<string, string> = {
@@ -83,6 +88,18 @@ const BOT_USER: UserProfile = {
   uid: 'ai_bot',
   displayName: 'AI Bot 🤖',
   photoURL: getAvatarPublicUrl('Blitzcrank'),
+  email: '',
+  elo: 1350,
+  wins: 50,
+  losses: 50,
+  draws: 10,
+  streak: 0,
+};
+
+const TRIANGLE_BOT_USER: UserProfile = {
+  uid: 'ai_triangle_bot',
+  displayName: 'AI Triangle 🤖',
+  photoURL: getAvatarPublicUrl('Leona'),
   email: '',
   elo: 1350,
   wins: 50,
@@ -146,8 +163,8 @@ export const App: React.FC = () => {
     [moveHistory],
   );
   const [winningLine, setWinningLine] = useState<Array<[number, number]> | null>(null);
-  const [myPiece, setMyPiece] = useState<'X' | 'O'>('X');
-  const [currentTurn, setCurrentTurn] = useState<'X' | 'O'>('X');
+  const [myPiece, setMyPiece] = useState<PracticePiece>('X');
+  const [currentTurn, setCurrentTurn] = useState<PracticePiece>('X');
   const [gameResult, setGameResult] = useState<{ winner: string; reason: string } | null>(null);
   const [isAiMode, setIsAiMode] = useState<boolean>(false);
 
@@ -170,7 +187,7 @@ export const App: React.FC = () => {
   /** Distinguishes "still looking" from "nobody is hosting". */
   const [roomScanDone, setRoomScanDone] = useState(false);
   /** Rounds won against the bot since the player sat down. */
-  const [sessionScore, setSessionScore] = useState({ mine: 0, theirs: 0 });
+  const [sessionScore, setSessionScore] = useState({ mine: 0, theirs: 0, triangle: 0 });
 
   const { requestMove: requestAiMove, cancelPending: cancelAiMove } = useAiEngine();
   const [isAiThinking, setIsAiThinking] = useState(false);
@@ -278,7 +295,7 @@ export const App: React.FC = () => {
 
   // The end of a practice game.
   const handleGameOver = useCallback((
-    winner: 'X' | 'O' | 'DRAW',
+    winner: PracticePiece | 'DRAW',
     line: Array<[number, number]> | null,
     reason: string,
   ) => {
@@ -294,7 +311,11 @@ export const App: React.FC = () => {
       const isWinner = winner === myPiece;
       winnerText = isWinner ? 'Victory!' : 'Defeat!';
       setSessionScore((prev) =>
-        isWinner ? { ...prev, mine: prev.mine + 1 } : { ...prev, theirs: prev.theirs + 1 }
+        isWinner
+          ? { ...prev, mine: prev.mine + 1 }
+          : winner === 'T'
+          ? { ...prev, triangle: prev.triangle + 1 }
+          : { ...prev, theirs: prev.theirs + 1 }
       );
       if (isWinner) {
         confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
@@ -339,7 +360,7 @@ export const App: React.FC = () => {
     if (gameStatus !== 'playing' || roomSettings.turnTimeSeconds === 0) return;
     if (turnTimeLeft === 5 && previous > 5) playTimerWarningSound();
     if (turnTimeLeft <= 0 && previous > 0) {
-      handleGameOver(currentTurn === 'X' ? 'O' : 'X', null, 'turn_timeout');
+      handleGameOver(nextPracticePiece(currentTurn, roomSettings.playerMode === 'oneVsOneVsOne'), null, 'turn_timeout');
     }
   }, [turnTimeLeft, gameStatus, roomSettings.turnTimeSeconds, currentTurn, playTimerWarningSound, handleGameOver]);
 
@@ -370,7 +391,7 @@ export const App: React.FC = () => {
     if (targetHistory.length > 0) {
       const last = targetHistory[targetHistory.length - 1];
       setLastMove([last.row, last.col]);
-      setCurrentTurn(last.piece === 'X' ? 'O' : 'X');
+      setCurrentTurn(nextPracticePiece(last.piece, roomSettings.playerMode === 'oneVsOneVsOne'));
     } else {
       setLastMove(null);
       setCurrentTurn('X');
@@ -383,15 +404,23 @@ export const App: React.FC = () => {
     currentBoard: BoardMatrix,
     currentHistory: MoveHistoryItem[],
     gameGeneration: number,
+    aiPiece: 'O' | 'T',
   ) => {
     const size = roomSettings.boardSize;
-    const aiPiece: 'X' | 'O' = myPiece === 'X' ? 'O' : 'X';
 
     setIsAiThinking(true);
     let aiRow: number;
     let aiCol: number;
     try {
-      [aiRow, aiCol] = await requestAiMove(currentBoard, size, aiPiece);
+      if (aiPiece === 'O') {
+        [aiRow, aiCol] = await requestAiMove(currentBoard, size, aiPiece);
+      } else {
+        const empty: Array<[number, number]> = [];
+        currentBoard.forEach((line, row) => line.forEach((cell, col) => {
+          if (cell === null) empty.push([row, col]);
+        }));
+        [aiRow, aiCol] = empty[(currentHistory.length * 17) % empty.length];
+      }
     } finally {
       if (practiceGameGenerationRef.current === gameGeneration) setIsAiThinking(false);
     }
@@ -417,10 +446,25 @@ export const App: React.FC = () => {
     } else if (isBoardFull(nextBoard)) {
       handleGameOver('DRAW', null, 'board_full');
     } else {
-      setCurrentTurn(myPiece);
+      setCurrentTurn(nextPracticePiece(aiPiece, roomSettings.playerMode === 'oneVsOneVsOne'));
       setTurnTimeLeft(roomSettings.turnTimeSeconds);
     }
-  }, [myPiece, roomSettings.boardSize, roomSettings.turnTimeSeconds, playMoveSound, handleGameOver, requestAiMove]);
+  }, [roomSettings.boardSize, roomSettings.turnTimeSeconds, roomSettings.playerMode, playMoveSound, handleGameOver, requestAiMove]);
+
+  // In a three-player bot game O and T take turns independently. Keeping the
+  // scheduling here makes an O move naturally hand off to T before the player
+  // receives their next turn, while normal 1v1 still has just one bot move.
+  useEffect(() => {
+    if (!isAiMode || gameStatus !== 'playing' || currentTurn === myPiece || isAiThinking) return;
+    if (currentTurn !== 'O' && currentTurn !== 'T') return;
+    const generation = practiceGameGenerationRef.current;
+    const timer = window.setTimeout(() => {
+      if (practiceGameGenerationRef.current === generation) {
+        void makeAiMove(board, moveHistory, generation, currentTurn);
+      }
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [isAiMode, gameStatus, currentTurn, myPiece, isAiThinking, board, moveHistory, makeAiMove]);
 
   // Execute Cell Move
   const handleCellClick = (row: number, col: number, corner: BoardCorner) => {
@@ -437,7 +481,7 @@ export const App: React.FC = () => {
     lastMoveTimestampRef.current = Date.now();
     playMoveSound();
 
-    const nextTurn = myPiece === 'X' ? 'O' : 'X';
+    const nextTurn = nextPracticePiece(myPiece, roomSettings.playerMode === 'oneVsOneVsOne');
     setCurrentTurn(nextTurn);
     setTurnTimeLeft(roomSettings.turnTimeSeconds);
 
@@ -446,13 +490,6 @@ export const App: React.FC = () => {
       handleGameOver(myPiece, win.line, '5_in_a_row');
     } else if (isBoardFull(nextBoard)) {
       handleGameOver('DRAW', null, 'board_full');
-    } else {
-      const gameGeneration = practiceGameGenerationRef.current;
-      setTimeout(() => {
-        if (practiceGameGenerationRef.current === gameGeneration) {
-          void makeAiMove(nextBoard, updatedHistory, gameGeneration);
-        }
-      }, 400);
     }
   };
 
@@ -522,7 +559,7 @@ export const App: React.FC = () => {
     setIsAiThinking(false);
     setIsAiMode(false);
     // A new opponent starts level.
-    setSessionScore({ mine: 0, theirs: 0 });
+    setSessionScore({ mine: 0, theirs: 0, triangle: 0 });
     resetMatchState();
     setGameStatus('lobby');
   }, [cancelAiMove, resetMatchState]);
@@ -634,8 +671,9 @@ export const App: React.FC = () => {
 
   const roomPhase = room.state?.phase ?? 'waiting';
   const isMyTurn = gameStatus === 'playing' && currentTurn === myPiece;
-  const botPiece: 'X' | 'O' = myPiece === 'X' ? 'O' : 'X';
-  const isBotTurn = gameStatus === 'playing' && currentTurn === botPiece;
+  const botPiece: PracticePiece = myPiece === 'X' ? 'O' : 'X';
+  const isThreePlayerPractice = roomSettings.playerMode === 'oneVsOneVsOne';
+  const isBotTurn = gameStatus === 'playing' && (currentTurn === 'O' || (isThreePlayerPractice && currentTurn === 'T'));
 
   return (
     <div className="min-h-[100dvh] flex flex-col justify-between bg-surface-2 text-ink selection:bg-accent selection:text-accent-fg">
@@ -955,7 +993,41 @@ export const App: React.FC = () => {
             <GameControls
               headerNode={
                 <MatchHeader
-                  seats={[
+                  seats={isThreePlayerPractice ? [
+                    {
+                      name: user?.displayName || 'You',
+                      photoURL: user?.photoURL,
+                      piece: myPiece,
+                      clock: myPiece === 'X' ? p1TotalTime : p2TotalTime,
+                      moveClock: isMyTurn ? turnTimeLeft : 0,
+                      isTurn: isMyTurn,
+                      tag: 'You',
+                      onClick: openProfileModal,
+                      title: 'View and edit your profile',
+                    },
+                    {
+                      name: BOT_USER.displayName,
+                      photoURL: BOT_USER.photoURL,
+                      piece: botPiece,
+                      clock: botPiece === 'X' ? p1TotalTime : p2TotalTime,
+                      moveClock: isBotTurn ? turnTimeLeft : 0,
+                      isTurn: isBotTurn,
+                      tag: isAiThinking ? 'Thinking' : undefined,
+                      onClick: () => setSelectedOpponentProfile(BOT_USER),
+                      title: "View opponent's profile and stats",
+                    },
+                    {
+                      name: TRIANGLE_BOT_USER.displayName,
+                      photoURL: TRIANGLE_BOT_USER.photoURL,
+                      piece: 'T',
+                      clock: 0,
+                      moveClock: currentTurn === 'T' ? turnTimeLeft : 0,
+                      isTurn: currentTurn === 'T',
+                      tag: currentTurn === 'T' && isAiThinking ? 'Thinking' : undefined,
+                      onClick: () => setSelectedOpponentProfile(TRIANGLE_BOT_USER),
+                      title: "View opponent's profile and stats",
+                    },
+                  ] : [
                     {
                       name: user?.displayName || 'You',
                       photoURL: user?.photoURL,
@@ -979,9 +1051,11 @@ export const App: React.FC = () => {
                       title: "View opponent's profile and stats",
                     },
                   ]}
-                  score={[sessionScore.mine, sessionScore.theirs]}
+                  score={isThreePlayerPractice ? [sessionScore.mine, sessionScore.theirs, sessionScore.triangle] : [sessionScore.mine, sessionScore.theirs]}
                   announcement={gameStatus === 'playing' ? (isMyTurn ? 'Your turn' : 'Your opponent’s turn') : 'Match ended'}
-                  scoreLabel={`Score: you ${sessionScore.mine}, opponent ${sessionScore.theirs}`}
+                  scoreLabel={isThreePlayerPractice
+                    ? `Score: you ${sessionScore.mine}, O bot ${sessionScore.theirs}, triangle bot ${sessionScore.triangle}`
+                    : `Score: you ${sessionScore.mine}, opponent ${sessionScore.theirs}`}
                 />
               }
               boardNode={

@@ -1,8 +1,8 @@
-export type CellValue = 'X' | 'O' | null;
+export type CellValue = 'X' | 'O' | 'T' | null;
 export type BoardMatrix = CellValue[][];
 
 export interface WinResult {
-  winner: 'X' | 'O';
+  winner: Exclude<CellValue, null>;
   line: Array<[number, number]>;
 }
 

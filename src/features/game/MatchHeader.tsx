@@ -10,7 +10,7 @@ import { useTheme } from '../theme/ThemeContext';
 export interface SeatView {
   name: string;
   photoURL?: string | null;
-  piece: 'X' | 'O';
+  piece: 'X' | 'O' | 'T';
   /** Total time left in seconds; 0 when the game has no total clock. */
   clock: number;
   /** Seconds left for the move in hand. Only the seat on turn is given one. */
@@ -29,9 +29,9 @@ export interface SeatView {
 
 interface MatchHeaderProps {
   /** Drawn left to right on a phone and top to bottom in the rail. */
-  seats: [SeatView, SeatView];
+  seats: SeatView[];
   /** Rounds won in this sitting, in the same order as the seats. */
-  score: [number, number];
+  score: number[];
   /** Said once to screen readers whenever it changes. */
   announcement: string;
   /** The score in words, for screen readers. */
@@ -257,8 +257,37 @@ const Seat: React.FC<SeatProps> = ({
 
 export const MatchHeader: React.FC<MatchHeaderProps> = ({ seats, score, announcement, scoreLabel }) => {
   const { theme } = useTheme();
-  const colorOf = (piece: 'X' | 'O') => (piece === 'X' ? theme.xColor : theme.oColor);
+  const colorOf = (piece: 'X' | 'O' | 'T') => (piece === 'X' ? theme.xColor : piece === 'T' ? '#7c3aed' : theme.oColor);
   const [first, second] = seats;
+
+  if (seats.length === 3) {
+    const third = seats[2];
+    return (
+      <div className="grid w-full grid-cols-2 items-start gap-1.5 p-2 lg:gap-3 lg:px-4 lg:py-6">
+        <div className="col-span-2 justify-self-center lg:w-full">
+          <Seat {...first} color={colorOf(first.piece)} />
+        </div>
+        <Seat {...second} color={colorOf(second.piece)} />
+        <Seat {...third} color={colorOf(third.piece)} mirrored />
+        <div className="col-span-2 flex flex-col items-center pt-1">
+          <div className="mb-1 rounded-sm bg-accent px-2 py-0.5 font-display text-xs font-extrabold tracking-wider text-accent-fg shadow-[0_2px_0_var(--ui-accent-shadow)] lg:mb-2 lg:px-3 lg:py-1">
+            1v1v1
+          </div>
+          <div className="flex items-center gap-1 font-mono text-sm font-bold tabular-nums text-subtle lg:text-lg">
+            <span className="text-ink">{score[0] ?? 0}</span>
+            <span aria-hidden="true">-</span>
+            <span className="text-ink">{score[1] ?? 0}</span>
+            <span aria-hidden="true">-</span>
+            <span className="text-ink">{score[2] ?? 0}</span>
+            <span className="sr-only">{scoreLabel}</span>
+          </div>
+        </div>
+        <p aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
+      </div>
+    );
+  }
 
   /* The phone row is sized for a 320px screen, where a seat showing both
      clocks beside a two-digit score is as wide as it gets: any larger and
