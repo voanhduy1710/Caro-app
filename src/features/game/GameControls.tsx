@@ -31,7 +31,7 @@ interface GameControlsProps {
   myUser: UserProfile | null;
   chatMessages: ChatMessage[];
   onSendChat: (text: string, image?: string) => void;
-  onSendBuzz?: () => void;
+  onSendBuzz?: () => boolean | void;
   onProposeUndo: () => void;
   onProposeRematch: () => void;
   onResign: () => void;
@@ -533,7 +533,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
   const handleBuzzClick = () => {
     if (isBuzzCooldown || !onSendBuzz) return;
-    onSendBuzz();
+    if (onSendBuzz() === false) return;
     setIsBuzzCooldown(true);
     if (buzzCooldownRef.current) clearTimeout(buzzCooldownRef.current);
     buzzCooldownRef.current = setTimeout(() => setIsBuzzCooldown(false), 2000);

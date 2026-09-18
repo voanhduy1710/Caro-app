@@ -3,6 +3,7 @@ import confetti from 'canvas-confetti';
 import { Check, Copy, Globe, Lock, Share2, WifiOff } from 'lucide-react';
 import type { UserProfile } from '../auth/AuthContext';
 import { Board } from '../game/Board';
+import type { BoardCorner } from '../game/Board';
 import { MatchHeader } from '../game/MatchHeader';
 import type { SeatView } from '../game/MatchHeader';
 import { GameControls } from '../game/GameControls';
@@ -71,7 +72,7 @@ interface OnlineRoomProps {
 
 export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules, onViewMyProfile, onViewProfile, exitRef }) => {
   const isDesktop = useIsDesktop();
-  const { playWinSound, playTimerWarningSound, playClickSound } = useSound();
+  const { playWinSound, playTimerWarningSound, playClickSound, playBuzzSound } = useSound();
   const [confirmSpec, setConfirmSpec] = useState<ConfirmSpec | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [dismissedPromptAt, setDismissedPromptAt] = useState<number | null>(null);
@@ -478,6 +479,13 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   const size = settings?.boardSize ?? 15;
   const moves = game?.moves ?? [];
   const board = boardFromMoves(moves, size, game?.openingSeat);
+  const placementCorners = useMemo<Record<string, BoardCorner>>(
+    () =>
+      Object.fromEntries(
+        moves.map(([row, col], index) => [`${row}:${col}`, game?.moveCorners?.[index] ?? 'center']),
+      ) as Record<string, BoardCorner>,
+    [moves, game?.moveCorners],
+  );
   if (room.pendingMove && mySeat) {
     const [row, col] = room.pendingMove;
     if (board[row]?.[col] === null) board[row][col] = mySeat;
@@ -651,8 +659,10 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
               board={board}
               size={size}
               gameId={game?.id}
-              onCellClick={(row, col) => {
-                if (board[row][col] === null) room.move(row, col);
+              lmaoMode={game?.settings.placementMode === 'lmao'}
+              placementCorners={placementCorners}
+              onCellClick={(row, col, corner) => {
+                if (board[row][col] === null) room.move(row, col, corner);
               }}
               lastMove={lastMove}
               winningLine={shownResult?.line ?? null}
@@ -674,7 +684,11 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         myUser={user}
         chatMessages={room.chatMessages}
         onSendChat={(text, image) => void room.sendChat(text, image)}
-        onSendBuzz={() => room.buzz()}
+        onSendBuzz={() => {
+          const sent = room.buzz();
+          if (sent) playBuzzSound();
+          return sent;
+        }}
         onProposeUndo={() => room.requestUndo()}
         onProposeRematch={() => room.offerRematch()}
         onResign={requestResign}

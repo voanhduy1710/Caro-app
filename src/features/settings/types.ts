@@ -3,6 +3,8 @@ export interface RoomSettings {
   totalTimeMinutes: number; // 5, 15, 30, 0 (0 = Unlimited)
   turnTimeSeconds: number; // 10, 30, 60, 0 (0 = Unlimited)
   allowUndo: boolean;
+  /** Normal keeps marks centred; LMAO lets marks sit at a chosen cell corner. */
+  placementMode?: 'normal' | 'lmao';
 }
 
 /**
@@ -14,6 +16,7 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   totalTimeMinutes: 0,
   turnTimeSeconds: 0,
   allowUndo: true,
+  placementMode: 'normal',
 };
 
 /** How the win condition actually behaves, in the words a player would use. */
@@ -40,4 +43,5 @@ export const summariseRoomSettings = (settings: RoomSettings): RoomSettingsFact[
     value: settings.turnTimeSeconds === 0 ? 'Unlimited' : `${settings.turnTimeSeconds}s`,
   },
   { label: 'Take back', value: settings.allowUndo ? 'Allowed' : 'Off' },
+  { label: 'Mode', value: settings.placementMode === 'lmao' ? 'LMAO' : 'Normal' },
 ];

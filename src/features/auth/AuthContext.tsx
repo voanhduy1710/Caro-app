@@ -194,7 +194,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           uid: data.uid,
           username: data.username || authUser.user_metadata?.username,
           displayName: data.display_name || authUser.user_metadata?.full_name || 'Gomoku Master',
-          photoURL: getAvatarPublicUrl(data.photo_url || authUser.user_metadata?.avatar_url),
+          // Keep the stored avatar key intact. In particular, a Ragnarok GIF is
+          // saved as `ragnarok:<filename>`; resolving it to its public Storage
+          // URL here loses that collection identity and made refresh fall back
+          // to the default LoL avatar.
+          photoURL: data.photo_url || authUser.user_metadata?.avatar_url || getChampionIdForSeed(authUser.id),
           email: authUser.email || '',
           elo: data.elo ?? 1200,
           wins: data.wins ?? 0,
@@ -209,7 +213,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         uid: authUser.id,
         username: authUser.user_metadata?.username,
         displayName: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Gomoku Master',
-        photoURL: getAvatarPublicUrl(authUser.user_metadata?.avatar_url),
+        photoURL: authUser.user_metadata?.avatar_url || getChampionIdForSeed(authUser.id),
         email: authUser.email || '',
         elo: 1200,
         wins: 0,
@@ -237,7 +241,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return {
         uid: authUser.id,
         displayName: authUser.user_metadata?.full_name || 'Gomoku Master',
-        photoURL: getAvatarPublicUrl(authUser.user_metadata?.avatar_url),
+        photoURL: authUser.user_metadata?.avatar_url || getChampionIdForSeed(authUser.id),
         email: authUser.email || '',
         elo: 1200,
         wins: 0,

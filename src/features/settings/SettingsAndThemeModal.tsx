@@ -284,6 +284,18 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
                 </Choice>
               ))}
             </Group>
+
+            <Group label="Placement mode" cols={2}>
+              {[
+                { label: 'Normal', val: 'normal' as const },
+                { label: 'LMAO', val: 'lmao' as const },
+              ].map((opt) => (
+                <Choice key={opt.val} selected={settings.placementMode === opt.val} disabled={!canEditRules}
+                  onClick={() => onUpdateSettings({ ...settings, placementMode: opt.val })}>
+                  {opt.label}
+                </Choice>
+              ))}
+            </Group>
           </div>
 
           {/* LOOK. This device only, and never sent to the other player. */}

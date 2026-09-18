@@ -161,6 +161,8 @@ export interface Game {
   openingSeat: Seat;
   /** Alternates from openingSeat; players themselves always retain X or O. */
   moves: Array<[number, number]>;
+  /** Visual position of each move, index-for-index with `moves`. */
+  moveCorners?: import('./protocol').MoveCorner[];
   /** The member who made each move, index for index with `moves`. */
   moveBy: string[];
   turn: Seat;
@@ -579,7 +581,7 @@ interface Ctx {
   events: EngineEvent[];
   replies: Reply[];
   /** Set by a move that did not end the game: MOVE_APPLIED replaces ROOM_STATE. */
-  moveApplied: { n: number; row: number; col: number } | null;
+  moveApplied: { n: number; row: number; col: number; corner?: import('./protocol').MoveCorner } | null;
   welcome: { memberId: string; token: string; resumed: boolean; expired: boolean } | null;
 }
 
@@ -678,7 +680,7 @@ const startNewGame = (d: EngineState, ctx: Ctx): void => {
   const x = occupant(d, 'X');
   const o = occupant(d, 'O');
   if (!x || !o) return;
-  const settings = { ...d.room.settings };
+  const settings = { ...d.room.settings, placementMode: d.room.settings.placementMode ?? 'normal' };
   // The host occupies X in a fresh room, so X opens game one. Every completed
   // game flips the opening seat: O opens game two, X game three, and so on.
   // `gamesPlayed` only increments in endGame, so an aborted count-in does not
@@ -689,6 +691,7 @@ const startNewGame = (d: EngineState, ctx: Ctx): void => {
     number: d.room.gamesPlayed + 1,
     settings,
     moves: [],
+    moveCorners: [],
     moveBy: [],
     turn: openingSeat,
     openingSeat,
@@ -1124,6 +1127,7 @@ const handleMove = (
   }
   bankClocks(d, ctx.now);
   game.moves.push([p.row, p.col]);
+  (game.moveCorners ??= []).push(game.settings.placementMode === 'lmao' ? p.corner ?? 'center' : 'center');
   game.moveBy.push(m.id);
   game.lastMove = { by: m.id, at: ctx.now };
   board[p.row][p.col] = seat;
@@ -1132,7 +1136,7 @@ const handleMove = (
   if (game.moves.length === size * size) return endGame(d, 'DRAW', 'board_full', null, ctx);
   game.turn = otherSeat(seat);
   game.clocks.turn = turnLimitMs(game.settings);
-  ctx.moveApplied = { n: p.n, row: p.row, col: p.col };
+  ctx.moveApplied = { n: p.n, row: p.row, col: p.col, corner: game.moveCorners[game.moveCorners.length - 1] };
 };
 
 /** Takes back moves from the end through `seat`'s most recent one, and gives `seat` the move. */
@@ -1143,6 +1147,7 @@ const takeBack = (d: EngineState, seat: Seat, ctx: Ctx): void => {
   while (game.moves.length > 0) {
     const piece = pieceAt(game.moves.length - 1, game.openingSeat);
     game.moves.pop();
+    game.moveCorners?.pop();
     game.moveBy.pop();
     if (piece === seat) break;
   }
@@ -1264,7 +1269,7 @@ const handleUpdateSettings = (d: EngineState, m: Member, p: IntentPayloads['UPDA
   if (room.phase !== 'waiting' && room.phase !== 'ended') return reject(ctx, m.id, 'UPDATE_SETTINGS', 'locked');
   if (!isAllowedSettings(p.settings)) return reject(ctx, m.id, 'UPDATE_SETTINGS', 'bad_settings');
   const { boardSize, totalTimeMinutes, turnTimeSeconds, allowUndo } = p.settings;
-  room.settings = { boardSize, totalTimeMinutes, turnTimeSeconds, allowUndo };
+  room.settings = { boardSize, totalTimeMinutes, turnTimeSeconds, allowUndo, placementMode: p.settings.placementMode ?? 'normal' };
   // A rematch offer was made under the old rules; accepting it must not start
   // a game under rules the other player never saw.
   const game = room.game;

@@ -21,6 +21,17 @@ export { ROOM_CODE_PATTERN, parseRoomCode } from '../webrtc/roomCode';
 export const PROTOCOL_VERSION = 2;
 
 export type Seat = 'X' | 'O';
+/** Where a mark sits inside its logical board cell in LMAO mode. */
+export type MoveCorner =
+  | 'center'
+  | 'top-left'
+  | 'top'
+  | 'top-right'
+  | 'left'
+  | 'right'
+  | 'bottom-left'
+  | 'bottom'
+  | 'bottom-right';
 export type Phase = 'waiting' | 'countdown' | 'playing' | 'paused' | 'ended';
 
 /**
@@ -167,7 +178,8 @@ export const isAllowedSettings = (value: RoomSettings): boolean =>
   (BOARD_SIZES as readonly number[]).includes(value.boardSize) &&
   (TOTAL_TIME_MINUTES as readonly number[]).includes(value.totalTimeMinutes) &&
   (TURN_TIME_SECONDS as readonly number[]).includes(value.turnTimeSeconds) &&
-  typeof value.allowUndo === 'boolean';
+  typeof value.allowUndo === 'boolean' &&
+  (value.placementMode === undefined || value.placementMode === 'normal' || value.placementMode === 'lmao');
 
 // ---------------------------------------------------------------------------
 // Member to host: intents
@@ -192,7 +204,7 @@ export interface IntentPayloads {
   HELLO: HelloPayload;
   TAKE_SEAT: { seat: Seat };
   LEAVE_SEAT: Record<string, never>;
-  MOVE: { gameId: string; n: number; row: number; col: number };
+  MOVE: { gameId: string; n: number; row: number; col: number; corner?: MoveCorner };
   UNDO_REQUEST: { gameId: string };
   UNDO_ANSWER: { gameId: string; accept: boolean };
   REMATCH_OFFER: { gameId: string };
@@ -302,6 +314,7 @@ export interface HostMessagePayloads {
     n: number;
     row: number;
     col: number;
+    corner?: MoveCorner;
     turn: Seat;
     clocks: Clocks;
     rev: number;
@@ -337,6 +350,16 @@ const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const REPORT_STATUSES: readonly string[] = ['saved', 'failed', 'skipped', 'unknown'];
 
 const isSeat = (value: unknown): value is Seat => value === 'X' || value === 'O';
+const isMoveCorner = (value: unknown): value is MoveCorner =>
+  value === 'center' ||
+  value === 'top-left' ||
+  value === 'top' ||
+  value === 'top-right' ||
+  value === 'left' ||
+  value === 'right' ||
+  value === 'bottom-left' ||
+  value === 'bottom' ||
+  value === 'bottom-right';
 const isId = (value: unknown): value is string => typeof value === 'string' && SAFE_ID.test(value);
 const isCount = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 0;
 const hasGameId = (p: Record<string, unknown>): boolean => isId(p.gameId);
@@ -349,7 +372,7 @@ const VALIDATORS: { [K in IntentType]: (p: Record<string, unknown>) => boolean }
   },
   TAKE_SEAT: (p) => isSeat(p.seat),
   LEAVE_SEAT: () => true,
-  MOVE: (p) => hasGameId(p) && isCount(p.n) && isCount(p.row) && isCount(p.col),
+  MOVE: (p) => hasGameId(p) && isCount(p.n) && isCount(p.row) && isCount(p.col) && (p.corner === undefined || isMoveCorner(p.corner)),
   UNDO_REQUEST: hasGameId,
   UNDO_ANSWER: (p) => hasGameId(p) && typeof p.accept === 'boolean',
   REMATCH_OFFER: hasGameId,
@@ -362,7 +385,8 @@ const VALIDATORS: { [K in IntentType]: (p: Record<string, unknown>) => boolean }
     typeof p.settings.boardSize === 'number' &&
     typeof p.settings.totalTimeMinutes === 'number' &&
     typeof p.settings.turnTimeSeconds === 'number' &&
-    typeof p.settings.allowUndo === 'boolean',
+    typeof p.settings.allowUndo === 'boolean' &&
+    (p.settings.placementMode === undefined || p.settings.placementMode === 'normal' || p.settings.placementMode === 'lmao'),
   CHAT: (p) =>
     isId(p.id) && typeof p.text === 'string' && (p.image === undefined || typeof p.image === 'string'),
   BUZZ: () => true,

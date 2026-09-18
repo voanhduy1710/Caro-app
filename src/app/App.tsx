@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import { Bot, Globe, Lock } from 'lucide-react';
 import { useAuth } from '../features/auth/AuthContext';
@@ -7,6 +7,7 @@ import type { ActiveRoomInfo } from '../features/webrtc/roomDiscoveryService';
 import { useSound } from '../shared/hooks/useSound';
 import { Navbar } from '../shared/components/Navbar';
 import { Board } from '../features/game/Board';
+import type { BoardCorner } from '../features/game/Board';
 import { MatchHeader } from '../features/game/MatchHeader';
 import { GameControls } from '../features/game/GameControls';
 import { SettingsAndThemeModal } from '../features/settings/SettingsAndThemeModal';
@@ -31,7 +32,13 @@ interface MoveHistoryItem {
   row: number;
   col: number;
   piece: 'X' | 'O';
+  corner?: BoardCorner;
 }
+
+const lmaoCornerFor = (row: number, col: number): BoardCorner =>
+  (['top-left', 'top', 'top-right', 'left', 'right', 'bottom-left', 'bottom', 'bottom-right'] as const)[
+    Math.abs(row * 31 + col) % 8
+  ];
 
 /** Why the practice game ended, in words a player can act on. */
 const RESULT_REASONS: Record<string, string> = {
@@ -134,6 +141,10 @@ export const App: React.FC = () => {
   const [board, setBoard] = useState<BoardMatrix>(() => createEmptyBoard(DEFAULT_ROOM_SETTINGS.boardSize));
   const [lastMove, setLastMove] = useState<[number, number] | null>(null);
   const [moveHistory, setMoveHistory] = useState<MoveHistoryItem[]>([]);
+  const practicePlacementCorners = useMemo<Record<string, BoardCorner>>(
+    () => Object.fromEntries(moveHistory.map((move) => [`${move.row}:${move.col}`, move.corner ?? 'center'])),
+    [moveHistory],
+  );
   const [winningLine, setWinningLine] = useState<Array<[number, number]> | null>(null);
   const [myPiece, setMyPiece] = useState<'X' | 'O'>('X');
   const [currentTurn, setCurrentTurn] = useState<'X' | 'O'>('X');
@@ -394,7 +405,10 @@ export const App: React.FC = () => {
 
     setBoard(nextBoard);
     setLastMove([aiRow, aiCol]);
-    setMoveHistory([...currentHistory, { row: aiRow, col: aiCol, piece: aiPiece }]);
+    setMoveHistory([
+      ...currentHistory,
+      { row: aiRow, col: aiCol, piece: aiPiece, corner: roomSettings.placementMode === 'lmao' ? lmaoCornerFor(aiRow, aiCol) : 'center' },
+    ]);
     playMoveSound();
 
     const win = checkWin(nextBoard, aiRow, aiCol, size);
@@ -409,13 +423,13 @@ export const App: React.FC = () => {
   }, [myPiece, roomSettings.boardSize, roomSettings.turnTimeSeconds, playMoveSound, handleGameOver, requestAiMove]);
 
   // Execute Cell Move
-  const handleCellClick = (row: number, col: number) => {
+  const handleCellClick = (row: number, col: number, corner: BoardCorner) => {
     if (!isAiMode || gameStatus !== 'playing' || board[row][col] !== null) return;
     if (currentTurn !== myPiece) return;
 
     const nextBoard = board.map((r) => [...r]);
     nextBoard[row][col] = myPiece;
-    const updatedHistory = [...moveHistory, { row, col, piece: myPiece }];
+    const updatedHistory = [...moveHistory, { row, col, piece: myPiece, corner: roomSettings.placementMode === 'lmao' ? corner : 'center' }];
 
     setBoard(nextBoard);
     setLastMove([row, col]);
@@ -975,6 +989,8 @@ export const App: React.FC = () => {
                   <Board
                     board={board}
                     size={roomSettings.boardSize}
+                    lmaoMode={roomSettings.placementMode === 'lmao'}
+                    placementCorners={practicePlacementCorners}
                     onCellClick={handleCellClick}
                     lastMove={lastMove}
                     winningLine={winningLine}

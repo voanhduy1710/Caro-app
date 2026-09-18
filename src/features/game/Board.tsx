@@ -5,6 +5,17 @@ import type { PieceTheme } from '../theme/types';
 import type { UserProfile } from '../auth/AuthContext';
 import { useDisplayPrefs } from './displayPrefs';
 
+export type BoardCorner =
+  | 'center'
+  | 'top-left'
+  | 'top'
+  | 'top-right'
+  | 'left'
+  | 'right'
+  | 'bottom-left'
+  | 'bottom'
+  | 'bottom-right';
+
 export interface SimulatedMove {
   row: number;
   col: number;
@@ -16,7 +27,9 @@ interface BoardProps {
   size: number;
   /** Changes for every online rematch, resetting board-local presentation state. */
   gameId?: string;
-  onCellClick: (row: number, col: number) => void;
+  onCellClick: (row: number, col: number, corner: BoardCorner) => void;
+  lmaoMode?: boolean;
+  placementCorners?: Record<string, BoardCorner>;
   lastMove: [number, number] | null;
   winningLine: Array<[number, number]> | null;
   currentTurn: 'X' | 'O';
@@ -161,9 +174,11 @@ interface BoardCellProps {
   pieceTheme: PieceTheme;
   xColor: string;
   oColor: string;
-  onSelect: (row: number, col: number) => void;
+  placementCorner: BoardCorner;
+  lmaoMode: boolean;
+  onSelect: (row: number, col: number, corner: BoardCorner) => void;
   onContextMenu: (event: React.MouseEvent, row: number, col: number) => void;
-  onHover: (row: number, col: number) => void;
+  onHover: (row: number, col: number, corner: BoardCorner) => void;
 }
 
 /**
@@ -191,12 +206,53 @@ const BoardCell = memo<BoardCellProps>(({
   onSelect,
   onContextMenu,
   onHover,
-}) => (
+  placementCorner,
+  lmaoMode,
+}) => {
+  const placementClass =
+    !lmaoMode || placementCorner === 'center'
+      ? 'flex h-full w-full items-center justify-center'
+      : `absolute flex h-[58%] w-[58%] items-center justify-center ${
+          placementCorner === 'top-left'
+            ? 'left-0 top-0'
+            : placementCorner === 'top'
+            ? 'left-1/2 top-0 -translate-x-1/2'
+            : placementCorner === 'top-right'
+            ? 'right-0 top-0'
+            : placementCorner === 'left'
+            ? 'left-0 top-1/2 -translate-y-1/2'
+            : placementCorner === 'right'
+            ? 'right-0 top-1/2 -translate-y-1/2'
+            : placementCorner === 'bottom-left'
+            ? 'bottom-0 left-0'
+            : placementCorner === 'bottom'
+            ? 'bottom-0 left-1/2 -translate-x-1/2'
+            : 'bottom-0 right-0'
+        }`;
+  const clickCorner = (event: React.MouseEvent<HTMLButtonElement>): BoardCorner => {
+    if (!lmaoMode) return 'center';
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.min(2, Math.floor(((event.clientX - rect.left) / rect.width) * 3));
+    const y = Math.min(2, Math.floor(((event.clientY - rect.top) / rect.height) * 3));
+    const slots: BoardCorner[][] = [
+      ['top-left', 'top', 'top-right'],
+      ['left', 'center', 'right'],
+      ['bottom-left', 'bottom', 'bottom-right'],
+    ];
+    return slots[y][x];
+  };
+  return (
   <button
     type="button"
-    onClick={() => onSelect(row, col)}
+    onClick={(event) => {
+      const corner = clickCorner(event);
+      // LMAO has eight peripheral slots; the centre is deliberately blank.
+      if (lmaoMode && corner === 'center') return;
+      onSelect(row, col, corner);
+    }}
     onContextMenu={(event) => onContextMenu(event, row, col)}
-    onMouseEnter={() => onHover(row, col)}
+    onMouseEnter={(event) => onHover(row, col, clickCorner(event))}
+    onMouseMove={(event) => onHover(row, col, clickCorner(event))}
     aria-label={`Row ${row + 1}, column ${col + 1}${cell ? `, ${cell}` : ', empty'}`}
     style={{ width: `${cellSize}px`, height: `${cellSize}px` }}
     className={`board-cell relative flex shrink-0 aspect-square items-center justify-center transition-all duration-100 ${
@@ -210,11 +266,13 @@ const BoardCell = memo<BoardCellProps>(({
       // confirmed by the board itself. Only the last cell is wrapped, so a
       // 50x50 grid does not carry 2,500 extra nodes for one animation.
       isLast ? (
-        <span className="animate-piece-drop flex h-full w-full items-center justify-center">
+        <span className={`animate-piece-drop ${placementClass}`}>
           <PieceGlyph piece={cell} pieceTheme={pieceTheme} xColor={xColor} oColor={oColor} isWinning={isWinning} />
         </span>
       ) : (
-        <PieceGlyph piece={cell} pieceTheme={pieceTheme} xColor={xColor} oColor={oColor} isWinning={isWinning} />
+        <span className={placementClass}>
+          <PieceGlyph piece={cell} pieceTheme={pieceTheme} xColor={xColor} oColor={oColor} isWinning={isWinning} />
+        </span>
       )
     ) : simulatedPiece ? (
       <PieceGlyph
@@ -226,7 +284,7 @@ const BoardCell = memo<BoardCellProps>(({
         customColor={simulatedColor}
       />
     ) : isHovered && !boardDisabled ? (
-      <div className="opacity-35 w-full h-full flex items-center justify-center">
+      <div className={`opacity-35 ${placementClass}`}>
         <PieceGlyph piece={currentTurn} pieceTheme={pieceTheme} xColor={xColor} oColor={oColor} isSimulated />
       </div>
     ) : showCoords ? (
@@ -235,7 +293,8 @@ const BoardCell = memo<BoardCellProps>(({
       </span>
     ) : null}
   </button>
-));
+  );
+});
 
 BoardCell.displayName = 'BoardCell';
 
@@ -259,6 +318,8 @@ export const Board: React.FC<BoardProps> = ({
   countdownTitle,
   countdownCaption,
   paused = null,
+  lmaoMode = false,
+  placementCorners,
 }) => {
   const { theme } = useTheme();
   const prefs = useDisplayPrefs();
@@ -289,7 +350,7 @@ export const Board: React.FC<BoardProps> = ({
 
   // Private local right-click simulated moves state
   const [simulatedMoves, setSimulatedMoves] = useState<SimulatedMove[]>([]);
-  const [hoveredCell, setHoveredCell] = useState<[number, number] | null>(null);
+  const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number; corner: BoardCorner } | null>(null);
 
   // A room rematch keeps this component mounted while replacing the game. Its
   // grid is empty, but a hover preview or locally simulated stone from the old
@@ -496,13 +557,15 @@ export const Board: React.FC<BoardProps> = ({
   };
 
   // Stable identities keep BoardCell's memoisation effective.
-  const handleSelectCell = useCallback((r: number, c: number) => {
+  const handleSelectCell = useCallback((r: number, c: number, corner: BoardCorner) => {
     if (touchStartRef.current.isMoved) return;
-    onCellClick(r, c);
+    onCellClick(r, c, corner);
   }, [onCellClick]);
 
-  const handleHoverCell = useCallback((r: number, c: number) => {
-    setHoveredCell((prev) => (prev && prev[0] === r && prev[1] === c ? prev : [r, c]));
+  const handleHoverCell = useCallback((r: number, c: number, corner: BoardCorner) => {
+    setHoveredCell((prev) =>
+      prev && prev.row === r && prev.col === c && prev.corner === corner ? prev : { row: r, col: c, corner },
+    );
   }, []);
 
   // Right-click to toggle a private local simulated move
@@ -582,7 +645,12 @@ export const Board: React.FC<BoardProps> = ({
                       cellSize={cellSize}
                       isLast={prefs.markLastMove && Boolean(lastMove && lastMove[0] === rIdx && lastMove[1] === cIdx)}
                       isWinning={isWinningCell(rIdx, cIdx)}
-                      isHovered={Boolean(hoveredCell && hoveredCell[0] === rIdx && hoveredCell[1] === cIdx)}
+                      isHovered={Boolean(
+                        hoveredCell &&
+                          hoveredCell.row === rIdx &&
+                          hoveredCell.col === cIdx &&
+                          (!lmaoMode || hoveredCell.corner !== 'center'),
+                      )}
                       isMajorRight={(cIdx + 1) % 5 === 0 && cIdx + 1 < size}
                       isMajorBottom={(rIdx + 1) % 5 === 0 && rIdx + 1 < size}
                       showCoords={prefs.showCoordinates && cellSize >= 28}
@@ -599,6 +667,16 @@ export const Board: React.FC<BoardProps> = ({
                       pieceTheme={theme.pieceTheme}
                       xColor={theme.xColor}
                       oColor={theme.oColor}
+                      placementCorner={
+                        cell
+                          ? placementCorners?.[`${rIdx}:${cIdx}`] ?? 'center'
+                          : lmaoMode
+                          ? hoveredCell?.row === rIdx && hoveredCell.col === cIdx
+                            ? hoveredCell.corner
+                            : 'center'
+                          : 'center'
+                      }
+                      lmaoMode={lmaoMode}
                       onSelect={handleSelectCell}
                       onContextMenu={handleCellContextMenu}
                       onHover={handleHoverCell}

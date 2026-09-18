@@ -32,6 +32,7 @@ import type {
   RejectReason,
   RoomChatMessage,
   Seat,
+  MoveCorner,
 } from './protocol';
 import {
   CHAT_IMAGE_MAX,
@@ -778,6 +779,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           ...game,
           moves: [...game.moves, [p.row, p.col]],
           moveBy: [...game.moveBy, by],
+          moveCorners: [...(game.moveCorners ?? []), p.corner ?? 'center'],
           turn: p.turn,
           clocks: p.clocks,
           lastMove: { by, at: Date.now() },
@@ -1321,14 +1323,14 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       takeSeat: (seat: Seat) => sendIntent({ type: 'TAKE_SEAT', payload: { seat } }),
       becomeViewer: () => sendIntent({ type: 'LEAVE_SEAT', payload: {} }),
       clearSeat: (seat: Seat) => sendIntent({ type: 'CLEAR_SEAT', payload: { seat } }),
-      move: (row: number, col: number) => {
+      move: (row: number, col: number, corner?: MoveCorner) => {
         const room = r.mirror;
         const game = room?.game;
         if (!room || !game || room.phase !== 'playing' || seatOf(room, r.memberId) !== game.turn) return false;
         const n = game.moves.length;
         noteRequestedMove(game.id, n, row, col);
         setPendingMove([row, col]);
-        const sent = sendIntent({ type: 'MOVE', payload: { gameId: game.id, n, row, col } });
+        const sent = sendIntent({ type: 'MOVE', payload: { gameId: game.id, n, row, col, corner } });
         if (!sent) setPendingMove(null);
         return sent;
       },
