@@ -10,6 +10,11 @@ export const RESULT_REASONS: Record<GameResult['reason'], string> = {
   disconnected: 'A player did not return before the reconnect time expired.',
 };
 
+export const resultReason = (result: GameResult): string =>
+  result.reason === '5_in_a_row' && result.settings.playerMode === 'oneVsOneVsOne'
+    ? 'Four in a row completed the line.'
+    : RESULT_REASONS[result.reason];
+
 export const LEFT_HOW: Record<string, string> = {
   stood: 'stood up',
   left: 'left the room',

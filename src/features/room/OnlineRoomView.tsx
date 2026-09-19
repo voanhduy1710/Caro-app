@@ -17,7 +17,7 @@ import type { Seat } from './protocol';
 import { DISCARD_GUARD_MS, MAX_MEMBERS, SEATS, activeSeats, boardFromMoves, latestResult, otherSeat, pieceAt } from './roomEngine';
 import type { Member } from './roomEngine';
 import { describeRating } from './roomRating';
-import { LEFT_HOW, RESULT_REASONS } from './roomCopy';
+import { LEFT_HOW, resultReason } from './roomCopy';
 import { memberProfile } from './OnlineRoomTypes';
 import type { ConfirmSpec, OnlineRoomProps } from './OnlineRoomTypes';
 
@@ -484,7 +484,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
               myPiece={mySeat ?? undefined}
               gameStatus={phase === 'ended' ? 'ended' : 'playing'}
               resultView={resultView}
-              resultReason={shownResult ? RESULT_REASONS[shownResult.reason] : undefined}
+              resultReason={shownResult ? resultReason(shownResult) : undefined}
               ratingNote={ratingNote}
               countdown={phase === 'countdown' ? room.countdownSecondsLeft : null}
               countdownTitle={s.countdown?.resuming ? 'Resuming' : game?.firstMove.method === 'coinFlip' ? 'Golden coin flip' : 'Get ready'}

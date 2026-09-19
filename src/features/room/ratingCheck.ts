@@ -110,7 +110,13 @@ export const verifyResult = (
       if (!loser || game.moves.length === 0) return 'contradicted';
       const last = game.moves.length - 1;
       const [row, col] = game.moves[last];
-      const win = checkWin(boardFromMoves(game.moves, size, game.openingSeat), row, col, size);
+      const win = checkWin(
+        boardFromMoves(game.moves, size, game.openingSeat),
+        row,
+        col,
+        size,
+        game.settings.playerMode === 'oneVsOneVsOne' ? 4 : 5,
+      );
       return win && win.winner === result.winner && pieceAt(last, game.openingSeat) === result.winner ? 'confirmed' : 'contradicted';
     }
     case 'board_full':

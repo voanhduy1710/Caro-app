@@ -14,14 +14,16 @@ export const createEmptyBoard = (size: number): BoardMatrix => {
 };
 
 /**
- * Checks for 5 or more in a row horizontally, vertically, or diagonally.
+ * Checks for the requested number (or more) in a row horizontally, vertically,
+ * or diagonally. Standard games use five; three-player rooms use four.
  * Returns the winning player and the array of coordinate tuples forming the line.
  */
 export const checkWin = (
   board: BoardMatrix,
   lastRow: number,
   lastCol: number,
-  size: number
+  size: number,
+  winLength = 5,
 ): WinResult | null => {
   const player = board[lastRow][lastCol];
   if (!player) return null;
@@ -54,7 +56,7 @@ export const checkWin = (
       c -= dc;
     }
 
-    if (line.length >= 5) {
+    if (line.length >= winLength) {
       return { winner: player, line };
     }
   }

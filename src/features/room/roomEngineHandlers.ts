@@ -168,7 +168,7 @@ export const handleMove = (
   game.moveBy.push(m.id);
   game.lastMove = { by: m.id, at: ctx.now };
   board[p.row][p.col] = seat;
-  const win = checkWin(board, p.row, p.col, size);
+  const win = checkWin(board, p.row, p.col, size, game.settings.playerMode === 'oneVsOneVsOne' ? 4 : 5);
   if (win) return endGame(d, win.winner, '5_in_a_row', win.line, ctx);
   if (game.moves.length === size * size) return endGame(d, 'DRAW', 'board_full', null, ctx);
   game.turn = nextSeat(seat, game.settings);
