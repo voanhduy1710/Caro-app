@@ -16,7 +16,7 @@ def print_project_summary(root_path=".", output_file="Project_structure.txt"):
         'dist', 'build', '.next', '.nuxt', 'ui', '.ipynb_checkpoints',
         'key', 'keys', 'keys_auth', 'schema', 'schemas',
         'Administrator', 'AppData', 'Local', 'Programs', 'Python', 'Python313', 'Lib',
-        'scratch', '.gemini', 'brain', 'tasks', '.system_generated'
+        'scratch', '.gemini', 'brain', 'tasks', '.system_generated', '.vercel'
     }
 
     # 📝 Common code file extensions

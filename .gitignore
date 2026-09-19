@@ -1,5 +1,10 @@
 # .env & secrets
 pat
+.env
+.env.*
+!.env.example
+.mcp.json
+mcp.json
 
 # Logs
 logs
