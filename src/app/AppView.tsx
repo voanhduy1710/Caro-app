@@ -24,7 +24,7 @@ import { lmaoCornerFor, nextPracticePiece } from './AppViewShared';
 import type { MoveHistoryItem, PracticePiece } from './AppViewShared';
 import type { ConfirmSpec } from './AppViewShared';
 export const App: React.FC = () => {
-  const { user, loading: authLoading, openProfileModal, refreshUserProfile, signInWithCredentials, createLocalAccount } = useAuth();
+  const { user, loading: authLoading, openProfileModal, refreshUserProfile, signInWithCredentials, createAccount } = useAuth();
 
   // A rated result that could not be sent, because the tab closed mid-request
   // or the network dropped, is kept on this device and sent again once the
@@ -149,7 +149,7 @@ export const App: React.FC = () => {
     w.__caro = {
       ...w.__caro,
       signIn: (username: string, password: string) => signInWithCredentials(username, password),
-      createAccount: (username: string, password: string, name?: string) => createLocalAccount(username, password, name),
+      createAccount: (username: string, password: string, name?: string) => createAccount(username, password, name),
       me: () => user,
     };
   });
