@@ -14,17 +14,40 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 $nodeVersion = node -v
 Write-Host "   ✅ Node.js Version: $nodeVersion" -ForegroundColor Green
 
-# 2. Extract Vercel Access Token from .mcp.json
-$vercelToken = "REDACTED_VERCEL_TOKEN"
-if (Test-Path ".mcp.json") {
+# 2. Extract Vercel Access Token from environment, .env, or .mcp.json
+$vercelToken = $env:VERCEL_ACCESS_TOKEN
+if (-not $vercelToken) {
+    $vercelToken = $env:VERCEL_TOKEN
+}
+
+# Try loading from .env if not in environment
+if (-not $vercelToken -and (Test-Path ".env")) {
+    $envLines = Get-Content ".env"
+    foreach ($line in $envLines) {
+        $trimmed = $line.Trim()
+        if ($trimmed -match "^(VERCEL_ACCESS_TOKEN|VERCEL_TOKEN)\s*=\s*(.+)$") {
+            $vercelToken = $matches[2].Trim().Trim('"').Trim("'")
+            break
+        }
+    }
+}
+
+# Try loading from .mcp.json as fallback
+if (-not $vercelToken -and (Test-Path ".mcp.json")) {
     try {
         $mcpContent = Get-Content ".mcp.json" -Raw | ConvertFrom-Json
         if ($mcpContent.mcpServers.vercel.env.VERCEL_TOKEN) {
             $vercelToken = $mcpContent.mcpServers.vercel.env.VERCEL_TOKEN
         }
     } catch {
-        # Fallback to hardcoded token
+        # ignore parse error
     }
+}
+
+if (-not $vercelToken) {
+    Write-Host "❌ Error: Vercel token not found." -ForegroundColor Red
+    Write-Host "   Please ensure VERCEL_ACCESS_TOKEN is set in .env or `$env:VERCEL_TOKEN is set." -ForegroundColor Yellow
+    Exit 1
 }
 
 $env:VERCEL_TOKEN = $vercelToken

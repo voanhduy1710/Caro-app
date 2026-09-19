@@ -1,169 +1,14 @@
-Generated at: 2026-09-18 16:48:23
+Generated at: 2026-09-19 09:10:53
 Root directory: C:\Caro-app
-Folders: 42
-Files: 395
-Lines of code: 23398
-Bytes: 29,905,465
+Folders: 35
+Files: 254
+Lines of code: 20148
+Bytes: 25,090,364
 
 Structure:
 📁 Caro-app/
 ├── 📁 .agents/
 │   └── 📄 AGENTS.md
-├── 📁 .vercel/
-│   ├── 📁 output/
-│   │   ├── 📁 diagnostics/
-│   │   │   ├── 📄 cli_traces.json
-│   │   │   ├── 📄 deploy-manifest.json
-│   │   │   └── 📄 project-manifest.json
-│   │   ├── 📁 static/
-│   │   │   ├── 📁 assets/
-│   │   │   │   ├── 📄 index-cLApp2NQ.js
-│   │   │   │   └── 📄 index-CvlJm8MB.css
-│   │   │   ├── 📁 Avatar/
-│   │   │   │   ├── 📄 Agni L.gif
-│   │   │   │   ├── 📄 Agni M.gif
-│   │   │   │   ├── 📄 Agni S.gif
-│   │   │   │   ├── 📄 Alicel.gif
-│   │   │   │   ├── 📄 Aliot.gif
-│   │   │   │   ├── 📄 Aliza.gif
-│   │   │   │   ├── 📄 Amon Ra.gif
-│   │   │   │   ├── 📄 Angry penguin.gif
-│   │   │   │   ├── 📄 Aqua L.gif
-│   │   │   │   ├── 📄 Aqua M.gif
-│   │   │   │   ├── 📄 Aqua S.gif
-│   │   │   │   ├── 📄 Aqua XL.gif
-│   │   │   │   ├── 📄 Atroce.gif
-│   │   │   │   ├── 📄 Baby Wolf.gif
-│   │   │   │   ├── 📄 Bacsojin.gif
-│   │   │   │   ├── 📄 Banshee.gif
-│   │   │   │   ├── 📄 Baphomet Jr.gif
-│   │   │   │   ├── 📄 Baphomet.gif
-│   │   │   │   ├── 📄 Bday poring.gif
-│   │   │   │   ├── 📄 Blue pixy poring.gif
-│   │   │   │   ├── 📄 Bluewolf.gif
-│   │   │   │   ├── 📄 Bombring.gif
-│   │   │   │   ├── 📄 Bongun.gif
-│   │   │   │   ├── 📄 Caramel.gif
-│   │   │   │   ├── 📄 Carat.gif
-│   │   │   │   ├── 📄 Cat O Nine Tails.gif
-│   │   │   │   ├── 📄 Cat sailor.gif
-│   │   │   │   ├── 📄 Cenere.gif
-│   │   │   │   ├── 📄 Chung E.gif
-│   │   │   │   ├── 📄 Coco.gif
-│   │   │   │   ├── 📄 Condor.gif
-│   │   │   │   ├── 📄 Dame of Sentinel.gif
-│   │   │   │   ├── 📄 Deviruchi.gif
-│   │   │   │   ├── 📄 Dolor.gif
-│   │   │   │   ├── 📄 Domovoi.gif
-│   │   │   │   ├── 📄 Eddga.gif
-│   │   │   │   ├── 📄 Eggring.gif
-│   │   │   │   ├── 📄 ESL.gif
-│   │   │   │   ├── 📄 Evil Nymph.gif
-│   │   │   │   ├── 📄 Fabre.gif
-│   │   │   │   ├── 📄 Firefox.gif
-│   │   │   │   ├── 📄 Fur seal.gif
-│   │   │   │   ├── 📄 Garling.gif
-│   │   │   │   ├── 📄 Garm baby.gif
-│   │   │   │   ├── 📄 Garm.gif
-│   │   │   │   ├── 📄 Geffen mage.gif
-│   │   │   │   ├── 📄 Gemini.gif
-│   │   │   │   ├── 📄 Ghostring.gif
-│   │   │   │   ├── 📄 Gloom.gif
-│   │   │   │   ├── 📄 Green Ferus.gif
-│   │   │   │   ├── 📄 Harpy.gif
-│   │   │   │   ├── 📄 Hydra.gif
-│   │   │   │   ├── 📄 Ifrit.gif
-│   │   │   │   ├── 📄 Iguana.gif
-│   │   │   │   ├── 📄 Imp.gif
-│   │   │   │   ├── 📄 Incantation Samurai.gif
-│   │   │   │   ├── 📄 Incubus.gif
-│   │   │   │   ├── 📄 information.md
-│   │   │   │   ├── 📄 Injustice.gif
-│   │   │   │   ├── 📄 Isis.gif
-│   │   │   │   ├── 📄 Jejering.gif
-│   │   │   │   ├── 📄 Kafra 1.gif
-│   │   │   │   ├── 📄 Kafra 2.gif
-│   │   │   │   ├── 📄 King Poring.gif
-│   │   │   │   ├── 📄 Kraken leg.gif
-│   │   │   │   ├── 📄 Lady Solace.gif
-│   │   │   │   ├── 📄 Lady Tanee.gif
-│   │   │   │   ├── 📄 Lion.gif
-│   │   │   │   ├── 📄 Loli Ruri.gif
-│   │   │   │   ├── 📄 Lord of Death.gif
-│   │   │   │   ├── 📄 Lunatic.gif
-│   │   │   │   ├── 📄 Martin.gif
-│   │   │   │   ├── 📄 Mavka.gif
-│   │   │   │   ├── 📄 Maya purple.gif
-│   │   │   │   ├── 📄 Medusa.gif
-│   │   │   │   ├── 📄 Mer.gif
-│   │   │   │   ├── 📄 Mimic.gif
-│   │   │   │   ├── 📄 Minorous.gif
-│   │   │   │   ├── 📄 Mistress of Shelter.gif
-│   │   │   │   ├── 📄 Misty.gif
-│   │   │   │   ├── 📄 Miyabi Doll.gif
-│   │   │   │   ├── 📄 Monk female.gif
-│   │   │   │   ├── 📄 Monk male.gif
-│   │   │   │   ├── 📄 Moonlight Flower.gif
-│   │   │   │   ├── 📄 Nekoring.gif
-│   │   │   │   ├── 📄 Nightmare.gif
-│   │   │   │   ├── 📄 Ninja female.gif
-│   │   │   │   ├── 📄 Ninja male.gif
-│   │   │   │   ├── 📄 Owl Duke.gif
-│   │   │   │   ├── 📄 P Echidna.gif
-│   │   │   │   ├── 📄 P Hera.gif
-│   │   │   │   ├── 📄 P Lilith.gif
-│   │   │   │   ├── 📄 P Siren.gif
-│   │   │   │   ├── 📄 Phen.gif
-│   │   │   │   ├── 📄 Piamette.gif
-│   │   │   │   ├── 📄 Picky egg.gif
-│   │   │   │   ├── 📄 Picky.gif
-│   │   │   │   ├── 📄 Pinguicula.gif
-│   │   │   │   ├── 📄 Pitman.gif
-│   │   │   │   ├── 📄 Pixy poring.gif
-│   │   │   │   ├── 📄 Poison spore.gif
-│   │   │   │   ├── 📄 Pope merc.gif
-│   │   │   │   ├── 📄 Pope.gif
-│   │   │   │   ├── 📄 Poporing.gif
-│   │   │   │   ├── 📄 Pouring.gif
-│   │   │   │   ├── 📄 Question octopus.gif
-│   │   │   │   ├── 📄 Red Eruma.gif
-│   │   │   │   ├── 📄 Red Ferus.gif
-│   │   │   │   ├── 📄 Requiem.gif
-│   │   │   │   ├── 📄 Ricecake.gif
-│   │   │   │   ├── 📄 Roda Frog.gif
-│   │   │   │   ├── 📄 Rotar Zairo.gif
-│   │   │   │   ├── 📄 Roween.gif
-│   │   │   │   ├── 📄 Siroma.gif
-│   │   │   │   ├── 📄 Skeleton prisoner.gif
-│   │   │   │   ├── 📄 Spore.gif
-│   │   │   │   ├── 📄 Sting.gif
-│   │   │   │   ├── 📄 Succubus.gif
-│   │   │   │   ├── 📄 Tarou.gif
-│   │   │   │   ├── 📄 Tera S.gif
-│   │   │   │   ├── 📄 Valkyrie.gif
-│   │   │   │   ├── 📄 Ventus L.gif
-│   │   │   │   ├── 📄 Ventus M.gif
-│   │   │   │   ├── 📄 Ventus S.gif
-│   │   │   │   ├── 📄 Ventus XL.gif
-│   │   │   │   ├── 📄 Watermelonring.gif
-│   │   │   │   ├── 📄 Wicked Nymph.gif
-│   │   │   │   ├── 📄 Wild rider.gif
-│   │   │   │   ├── 📄 Wizard female.gif
-│   │   │   │   ├── 📄 Wizard male.gif
-│   │   │   │   ├── 📄 Zealotus.gif
-│   │   │   │   ├── 📄 Zerom.gif
-│   │   │   │   ├── 📄 Zipper Bear.gif
-│   │   │   │   └── 📄 Zombie prisoner.gif
-│   │   │   ├── 📄 favicon.svg
-│   │   │   ├── 📄 icons.svg
-│   │   │   ├── 📄 index.html
-│   │   │   └── 📄 Logo.svg
-│   │   ├── 📄 builds.json
-│   │   └── 📄 config.json
-│   ├── 📁 static-build/
-│   │   └── 📄 package-manifest.json
-│   ├── 📄 project.json
-│   └── 📄 README.txt
 ├── 📁 public/
 │   ├── 📁 assets/
 │   │   └── 📁 minigames/
@@ -334,7 +179,8 @@ Structure:
 │   └── 📄 upload_avatars.js
 ├── 📁 src/
 │   ├── 📁 app/
-│   │   └── 📄 App.tsx
+│   │   ├── 📄 App.tsx
+│   │   └── 📄 AppView.tsx
 │   ├── 📁 assets/
 │   │   ├── 📄 hero.png
 │   │   ├── 📄 Logo.svg
@@ -345,7 +191,9 @@ Structure:
 │   ├── 📁 features/
 │   │   ├── 📁 auth/
 │   │   │   ├── 📄 AuthContext.tsx
+│   │   │   ├── 📄 AuthContextProvider.tsx
 │   │   │   ├── 📄 AuthModal.tsx
+│   │   │   ├── 📄 authTypes.ts
 │   │   │   ├── 📄 passwordHash.ts
 │   │   │   └── 📄 SupabaseConfigModal.tsx
 │   │   ├── 📁 avatar/
@@ -356,6 +204,7 @@ Structure:
 │   │   │   ├── 📄 Board.tsx
 │   │   │   ├── 📄 displayPrefs.ts
 │   │   │   ├── 📄 GameControls.tsx
+│   │   │   ├── 📄 GameControlsView.tsx
 │   │   │   ├── 📄 MatchHeader.tsx
 │   │   │   └── 📄 useAiEngine.ts
 │   │   ├── 📁 history/
@@ -373,13 +222,15 @@ Structure:
 │   │   │   └── 📄 ProfileModal.tsx
 │   │   ├── 📁 room/
 │   │   │   ├── 📄 OnlineRoom.tsx
+│   │   │   ├── 📄 OnlineRoomView.tsx
 │   │   │   ├── 📄 protocol.ts
 │   │   │   ├── 📄 ratingCheck.ts
-│   │   │   ├── 📄 roomEngine.test.ts
 │   │   │   ├── 📄 roomEngine.ts
+│   │   │   ├── 📄 roomEngineCore.ts
 │   │   │   ├── 📄 RoomRoster.tsx
 │   │   │   ├── 📄 TeaseToast.tsx
-│   │   │   └── 📄 useRoom.ts
+│   │   │   ├── 📄 useRoom.ts
+│   │   │   └── 📄 useRoomCore.ts
 │   │   ├── 📁 settings/
 │   │   │   ├── 📄 SettingsAndThemeModal.tsx
 │   │   │   └── 📄 types.ts
@@ -424,6 +275,7 @@ Structure:
 │       ├── 📄 20260911041529_seat_tickets_and_match_claims.sql
 │       └── 📄 20260911041924_schedule_match_claim_finalizer.sql
 ├── 📄 .env
+├── 📄 .env.example
 ├── 📄 .gitignore
 ├── 📄 .mcp.json
 ├── 📄 .oxlintrc.json
@@ -453,26 +305,20 @@ Heavy files (> 100 kb):
 📄 public/assets/minigames/slab_eye.png: 2.62 MB
 📄 public/assets/minigames/coin_o.png: 2.47 MB
 📄 public/caro-cyberpunk-sword-slash.png: 1.13 MB
-📄 .vercel/output/static/Logo.svg: 766.38 KB
 📄 src/assets/Logo.svg: 766.38 KB
-📄 .vercel/output/static/assets/index-cLApp2NQ.js: 574.40 KB
-📄 .vercel/output/static/Avatar/Lord of Death.gif: 232.18 KB
 📄 public/Avatar/Lord of Death.gif: 232.18 KB
-📄 .vercel/output/static/Avatar/Incantation Samurai.gif: 126.61 KB
 📄 public/Avatar/Incantation Samurai.gif: 126.61 KB
 📄 public/fonts/google-sans-flex-latin.woff2: 117.10 KB
 
 Large Files (> 300 lines):
-📄 src/features/room/roomEngine.test.ts: 1872 lines
-📄 src/features/room/roomEngine.ts: 1809 lines
-📄 src/features/room/useRoom.ts: 1583 lines
-📄 .vercel/static-build/package-manifest.json: 1246 lines
-📄 src/app/App.tsx: 1215 lines
-📄 src/features/game/GameControls.tsx: 1191 lines
+📄 src/features/room/roomEngineCore.ts: 1809 lines
+📄 src/features/room/useRoomCore.ts: 1583 lines
+📄 src/app/AppView.tsx: 1215 lines
+📄 src/features/game/GameControlsView.tsx: 1191 lines
 📄 src/styles/index.css: 1159 lines
-📄 src/features/room/OnlineRoom.tsx: 865 lines
+📄 src/features/room/OnlineRoomView.tsx: 865 lines
 📄 src/features/game/Board.tsx: 797 lines
-📄 src/features/auth/AuthContext.tsx: 736 lines
+📄 src/features/auth/AuthContextProvider.tsx: 681 lines
 📄 src/features/webrtc/roomDiscoveryService.ts: 471 lines
 📄 src/features/auth/AuthModal.tsx: 458 lines
 📄 src/features/room/protocol.ts: 435 lines
@@ -486,18 +332,17 @@ Large Files (> 300 lines):
 📄 src/features/history/historyService.ts: 317 lines
 
 Small Files (< 60 lines):
-📄 .vercel/project.json: 1 lines
-📄 .vercel/output/diagnostics/cli_traces.json: 1 lines
-📄 .vercel/output/diagnostics/deploy-manifest.json: 1 lines
-📄 .vercel/output/diagnostics/project-manifest.json: 1 lines
-📄 .vercel/output/static/assets/index-CvlJm8MB.css: 2 lines
+📄 src/app/App.tsx: 2 lines
+📄 src/features/game/GameControls.tsx: 2 lines
+📄 src/features/room/OnlineRoom.tsx: 2 lines
+📄 src/features/room/roomEngine.ts: 2 lines
+📄 src/features/room/useRoom.ts: 2 lines
+📄 src/features/auth/AuthContext.tsx: 3 lines
 📄 tsconfig.json: 7 lines
 📄 .oxlintrc.json: 8 lines
 📄 supabase/migrations/20260911041924_schedule_match_claim_finalizer.sql: 10 lines
-📄 .vercel/README.txt: 11 lines
 📄 src/features/webrtc/types.ts: 14 lines
 📄 supabase/migrations/20260911033353_record_game_id_and_seat_log.sql: 16 lines
-📄 .vercel/output/config.json: 18 lines
 📄 src/config/supabase.ts: 18 lines
 📄 scripts/delete_users.js: 19 lines
 📄 src/main.tsx: 19 lines
@@ -509,7 +354,6 @@ Small Files (< 60 lines):
 📄 tsconfig.app.json: 27 lines
 📄 src/features/game/aiEngine.worker.ts: 27 lines
 📄 src/shared/hooks/useMediaQuery.ts: 28 lines
-📄 .vercel/output/builds.json: 30 lines
 📄 scripts/clear_data.js: 30 lines
 📄 vite.config.ts: 32 lines
 📄 src/shared/hooks/useModalChrome.ts: 32 lines
@@ -521,6 +365,7 @@ Small Files (< 60 lines):
 📄 scripts/_env.js: 42 lines
 📄 src/features/leaderboard/leaderboardService.ts: 48 lines
 📄 .mcp.json: 50 lines
+📄 src/features/auth/authTypes.ts: 52 lines
 📄 src/shared/hooks/useUiTheme.ts: 52 lines
 📄 src/shared/utils/eloCalculator.ts: 54 lines
 📄 scripts/setup_auth.js: 55 lines
