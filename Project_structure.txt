@@ -1,9 +1,9 @@
-Generated at: 2026-09-19 09:10:53
+Generated at: 2026-09-19 09:19:58
 Root directory: C:\Caro-app
 Folders: 35
-Files: 254
-Lines of code: 20148
-Bytes: 25,090,364
+Files: 259
+Lines of code: 19976
+Bytes: 25,078,871
 
 Structure:
 📁 Caro-app/
@@ -195,6 +195,7 @@ Structure:
 │   │   │   ├── 📄 AuthModal.tsx
 │   │   │   ├── 📄 authTypes.ts
 │   │   │   ├── 📄 passwordHash.ts
+│   │   │   ├── 📄 profileService.ts
 │   │   │   └── 📄 SupabaseConfigModal.tsx
 │   │   ├── 📁 avatar/
 │   │   │   └── 📄 avatarService.ts
@@ -221,12 +222,16 @@ Structure:
 │   │   │   ├── 📄 OpponentProfileModal.tsx
 │   │   │   └── 📄 ProfileModal.tsx
 │   │   ├── 📁 room/
+│   │   │   ├── 📄 memberProfile.ts
 │   │   │   ├── 📄 OnlineRoom.tsx
 │   │   │   ├── 📄 OnlineRoomView.tsx
 │   │   │   ├── 📄 protocol.ts
 │   │   │   ├── 📄 ratingCheck.ts
+│   │   │   ├── 📄 roomCopy.ts
 │   │   │   ├── 📄 roomEngine.ts
 │   │   │   ├── 📄 roomEngineCore.ts
+│   │   │   ├── 📄 roomEngineImplementation.ts
+│   │   │   ├── 📄 roomRating.ts
 │   │   │   ├── 📄 RoomRoster.tsx
 │   │   │   ├── 📄 TeaseToast.tsx
 │   │   │   ├── 📄 useRoom.ts
@@ -311,14 +316,14 @@ Heavy files (> 100 kb):
 📄 public/fonts/google-sans-flex-latin.woff2: 117.10 KB
 
 Large Files (> 300 lines):
-📄 src/features/room/roomEngineCore.ts: 1809 lines
+📄 src/features/room/roomEngineImplementation.ts: 1809 lines
 📄 src/features/room/useRoomCore.ts: 1583 lines
 📄 src/app/AppView.tsx: 1215 lines
 📄 src/features/game/GameControlsView.tsx: 1191 lines
 📄 src/styles/index.css: 1159 lines
-📄 src/features/room/OnlineRoomView.tsx: 865 lines
+📄 src/features/room/OnlineRoomView.tsx: 810 lines
 📄 src/features/game/Board.tsx: 797 lines
-📄 src/features/auth/AuthContextProvider.tsx: 681 lines
+📄 src/features/auth/AuthContextProvider.tsx: 598 lines
 📄 src/features/webrtc/roomDiscoveryService.ts: 471 lines
 📄 src/features/auth/AuthModal.tsx: 458 lines
 📄 src/features/room/protocol.ts: 435 lines
@@ -339,11 +344,14 @@ Small Files (< 60 lines):
 📄 src/features/room/useRoom.ts: 2 lines
 📄 src/features/auth/AuthContext.tsx: 3 lines
 📄 tsconfig.json: 7 lines
+📄 src/features/room/roomEngineCore.ts: 7 lines
 📄 .oxlintrc.json: 8 lines
 📄 supabase/migrations/20260911041924_schedule_match_claim_finalizer.sql: 10 lines
 📄 src/features/webrtc/types.ts: 14 lines
+📄 src/features/room/memberProfile.ts: 16 lines
 📄 supabase/migrations/20260911033353_record_game_id_and_seat_log.sql: 16 lines
 📄 src/config/supabase.ts: 18 lines
+📄 src/features/room/roomCopy.ts: 18 lines
 📄 scripts/delete_users.js: 19 lines
 📄 src/main.tsx: 19 lines
 📄 src/features/history/types.ts: 20 lines
@@ -358,6 +366,7 @@ Small Files (< 60 lines):
 📄 vite.config.ts: 32 lines
 📄 src/shared/hooks/useModalChrome.ts: 32 lines
 📄 src/shared/hooks/useBackdropDismiss.ts: 33 lines
+📄 src/features/room/roomRating.ts: 34 lines
 📄 src/shared/components/ListSkeleton.tsx: 35 lines
 📄 supabase/migrations/20260911024144_scope_auto_confirm_and_revoke_truncate.sql: 35 lines
 📄 package.json: 37 lines
