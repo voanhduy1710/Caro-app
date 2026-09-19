@@ -39,7 +39,7 @@ export const AuthModal: React.FC = () => {
     authModalTab,
     setAuthModalTab,
     signInWithCredentials,
-    createLocalAccount,
+    createAccount,
     authError,
     setAuthError,
   } = useAuth();
@@ -165,7 +165,7 @@ export const AuthModal: React.FC = () => {
     if (Object.keys(nextErrors).length > 0 || isSubmitting) return;
 
     setIsSubmitting(true);
-    const result = await createLocalAccount(
+    const result = await createAccount(
       username,
       createPassword,
       createDisplayName.trim() || username

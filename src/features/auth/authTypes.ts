@@ -18,13 +18,6 @@ export type CreateAccountResult =
 
 export type ProfileSaveResult = 'saved' | 'signed-out' | 'refused';
 
-export interface LocalAccount {
-  username: string;
-  /** PBKDF2 record. Older installs may still hold clear text; see signIn. */
-  password: string;
-  profile: UserProfile;
-}
-
 export interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
@@ -32,7 +25,7 @@ export interface AuthContextType {
   signOut: () => Promise<void>;
   loginAsGuest: (customName?: string) => void;
   signInWithCredentials: (username: string, password: string) => Promise<boolean>;
-  createLocalAccount: (username: string, password: string, displayName?: string) => Promise<CreateAccountResult>;
+  createAccount: (username: string, password: string, displayName?: string) => Promise<CreateAccountResult>;
   updateLocalGuestName: (newName: string) => void;
   showConfigGuide: boolean;
   setShowConfigGuide: (show: boolean) => void;

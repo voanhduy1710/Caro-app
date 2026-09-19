@@ -1,18 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../../config/supabase';
-import { hashPassword, verifyPassword, isLegacyPlaintext } from './passwordHash';
 import { getAvatarPublicUrl, getChampionIdForSeed } from '../avatar/avatarService';
 import { fetchOrCreateProfile } from './profileService';
 
-import type { AuthContextType, CreateAccountResult, LocalAccount, ProfileSaveResult, UserProfile } from './authTypes';
+import type { AuthContextType, CreateAccountResult, ProfileSaveResult, UserProfile } from './authTypes';
 export type { CreateAccountResult, ProfileSaveResult, UserProfile } from './authTypes';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const GUEST_STORAGE_KEY = 'caro_app_guest_user';
-const SAVED_PROFILE_KEY = 'caro_app_user_profile';
-const ACCOUNTS_STORAGE_KEY = 'caro_app_accounts';
-
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
 
 const normalizeUsername = (value: string) => value.trim().toLowerCase();
@@ -82,9 +78,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const getInitialGuest = (customName?: string): UserProfile => {
     try {
-      const savedProfile = localStorage.getItem(SAVED_PROFILE_KEY);
-      if (savedProfile) return upgradeLegacyGuest(JSON.parse(savedProfile), SAVED_PROFILE_KEY);
-
       const savedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
       if (savedGuest) return upgradeLegacyGuest(JSON.parse(savedGuest), GUEST_STORAGE_KEY);
     } catch (e) {
@@ -113,6 +106,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     return guestUser;
   };
+
+  useEffect(() => {
+    // Supabase is the only account store. Remove credentials and stale account
+    // snapshots written by the retired browser-only account implementation.
+    try {
+      localStorage.removeItem('caro_app_accounts');
+      localStorage.removeItem('caro_app_user_profile');
+    } catch (error) {
+      console.warn('Failed to clear retired local account storage:', error);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -172,26 +176,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const getLocalAccounts = (): LocalAccount[] => {
-    try {
-      const stored = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
-      const accounts = stored ? JSON.parse(stored) : [];
-      return Array.isArray(accounts) ? accounts : [];
-    } catch (error) {
-      console.warn('Failed to load local accounts:', error);
-      return [];
-    }
-  };
-
-  const saveLocalAccounts = (accounts: LocalAccount[]) => {
-    try {
-      localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
-    } catch (error) {
-      console.warn('Failed to save local account:', error);
-    }
-  };
-
-  const createLocalAccount = async (usernameInput: string, password: string, customDisplayName?: string): Promise<CreateAccountResult> => {
+  const createAccount = async (usernameInput: string, password: string, customDisplayName?: string): Promise<CreateAccountResult> => {
     const username = normalizeUsername(usernameInput);
     const displayName = customDisplayName?.trim() || username;
 
@@ -210,8 +195,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const email = usernameToEmail(username);
 
-    if (supabase && isSupabaseConfigured) {
-      try {
+    if (!supabase || !isSupabaseConfigured) {
+      setAuthError('Account creation is not available right now.');
+      return { ok: false };
+    }
+    try {
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
           password,
@@ -272,46 +260,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (session) {
             setUser(profile);
-            localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(profile));
           }
           setAuthError(null);
           return { ok: true, signedIn: Boolean(session) };
         }
-      } catch (err: any) {
-        console.warn('Supabase Auth signup error:', err);
-        setAuthError(err?.message || 'Account creation failed. Please try again.');
-      }
-
-      return { ok: false };
+    } catch (err: any) {
+      console.warn('Supabase Auth signup error:', err);
+      setAuthError(err?.message || 'Account creation failed. Please try again.');
     }
-
-    // Offline/local-only mode: accounts stay entirely in this browser.
-    const accounts = getLocalAccounts();
-    if (accounts.some((account) => normalizeUsername(account.username) === username)) {
-      setAuthError('That username is already registered. Please sign in instead.');
-      return { ok: false };
-    }
-
-    const uid = `user_${username}`;
-    const profile: UserProfile = {
-      uid,
-      username,
-      displayName,
-      photoURL: getAvatarPublicUrl(),
-      email,
-      elo: 1200,
-      wins: 0,
-      losses: 0,
-      draws: 0,
-      streak: 0,
-      isGuest: false,
-    };
-
-    saveLocalAccounts([...accounts, { username, password: await hashPassword(password), profile }]);
-    localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(profile));
-    setAuthError(null);
-    setUser(profile);
-    return { ok: true, signedIn: true };
+    return { ok: false };
   };
 
   const signInWithCredentials = async (username: string, password: string): Promise<boolean> => {
@@ -323,8 +280,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const email = usernameToEmail(normalizedUsername);
 
     // 1. Try standard Supabase Auth first
-    if (supabase && isSupabaseConfigured) {
-      try {
+    if (!supabase || !isSupabaseConfigured) {
+      setAuthError('Sign-in is not available right now.');
+      return false;
+    }
+    try {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -333,47 +293,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!error && data?.user) {
           const profile = await fetchOrCreateProfile(data.user);
           setUser(profile);
-          localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(profile));
           setAuthError(null);
           return true;
         }
         setAuthError(error?.message === 'Invalid login credentials'
           ? 'Incorrect username or password.'
           : error?.message || 'Sign-in failed. Please try again.');
-      } catch (err) {
-        console.warn('Supabase Auth sign-in exception:', err);
-        setAuthError('Sign-in failed. Please try again.');
-      }
-      return false;
+    } catch (err) {
+      console.warn('Supabase Auth sign-in exception:', err);
+      setAuthError('Sign-in failed. Please try again.');
     }
-
-    // Local-only sign-in is intentionally used only when Supabase is not configured.
-    const accounts = getLocalAccounts();
-    const account = accounts.find((item) => normalizeUsername(item.username) === normalizedUsername);
-
-    let passwordMatches = false;
-    if (account) {
-      if (isLegacyPlaintext(account.password)) {
-        // Upgrade records written before hashing existed, on a correct login.
-        passwordMatches = account.password === password;
-        if (passwordMatches) {
-          account.password = await hashPassword(password);
-          saveLocalAccounts(accounts);
-        }
-      } else {
-        passwordMatches = await verifyPassword(password, account.password);
-      }
-    }
-
-    if (!account || !passwordMatches) {
-      setAuthError('Incorrect username or password.');
-      return false;
-    }
-
-    localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(account.profile));
-    setAuthError(null);
-    setUser(account.profile);
-    return true;
+    return false;
   };
 
   const signOut = async () => {
@@ -381,7 +311,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await supabase.auth.signOut();
     }
     try {
-      localStorage.removeItem(SAVED_PROFILE_KEY);
       localStorage.removeItem(GUEST_STORAGE_KEY);
     } catch (e) {
       console.warn('Failed to clear localStorage on signout:', e);
@@ -460,24 +389,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // The browser's copies are written only once the change is known to stand,
-    // so a refused save never reaches them and a reload cannot bring it back.
-    try {
-      localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(updated));
-      if (updated.isGuest) {
+    if (updated.isGuest) {
+      try {
         localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(updated));
+      } catch (error) {
+        console.warn('Failed to update guest profile in localStorage:', error);
       }
-    } catch (e) {
-      console.warn('Failed to update profile in localStorage:', e);
-    }
-
-    const accounts = getLocalAccounts();
-    const accIdx = accounts.findIndex(
-      (a) => a.profile.uid === user.uid || (user.username && a.username.toLowerCase() === user.username.toLowerCase())
-    );
-    if (accIdx >= 0) {
-      accounts[accIdx].profile = updated;
-      saveLocalAccounts(accounts);
     }
 
     return 'saved';
@@ -536,18 +453,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    if (user.username) {
-      const accounts = getLocalAccounts();
-      const accIdx = accounts.findIndex(
-        (a) => a.username.toLowerCase() === user.username?.toLowerCase() || a.profile.uid === user.uid
-      );
-      if (accIdx >= 0) {
-        accounts[accIdx].password = await hashPassword(newPassword);
-        saveLocalAccounts(accounts);
-        changed = true;
-      }
-    }
-
     if (!changed) {
       return { success: false, message: 'No account was found to update. Try signing in again.' };
     }
@@ -564,7 +469,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signOut,
         loginAsGuest,
         signInWithCredentials,
-        createLocalAccount,
+        createAccount,
         updateLocalGuestName,
         updateUserProfile,
         refreshUserProfile,
