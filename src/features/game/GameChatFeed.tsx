@@ -1,0 +1,14 @@
+import React from 'react';
+import { ArrowDown } from 'lucide-react';
+import type { ChatMessage } from '../webrtc/types';
+import type { UserProfile } from '../auth/AuthContext';
+import { getAvatarPublicUrl } from '../avatar/avatarService';
+import { formatTime } from './GameControlsShared';
+
+export interface GameChatFeedProps {
+  messages: ChatMessage[]; emptyText?: string; opponent: UserProfile | null; avatarFor?: (message: ChatMessage) => string | null | undefined;
+  listRef: React.RefObject<HTMLDivElement | null>; onScroll: () => void; isOwn: (message: ChatMessage) => boolean;
+  onOpenImage: (image: string | null) => void; hasNewBelow: boolean; onShowNew: () => void;
+}
+
+export const GameChatFeed: React.FC<GameChatFeedProps> = ({ messages, emptyText, opponent, avatarFor, listRef, onScroll, isOwn, onOpenImage, hasNewBelow, onShowNew }) => <div className="relative flex-1 min-h-0"><div ref={listRef} onScroll={onScroll} className="chat-message-list h-full overflow-y-auto overscroll-contain space-y-2 pr-1 text-xs">{messages.length === 0 ? <p className="py-10 text-center text-[13px] text-subtle">{emptyText ?? 'No messages yet. Say hello to your opponent.'}</p> : messages.map((m) => { const mine = isOwn(m); if (m.system) return <div key={m.id} className="flex justify-center"><span className="chip text-[11px]">{m.text}</span></div>; return <div key={m.id} className={`flex items-end gap-1.5 ${mine ? 'justify-end' : 'justify-start'}`}>{!mine && <img src={getAvatarPublicUrl(avatarFor?.(m) ?? m.senderAvatar ?? opponent?.photoURL)} alt="" aria-hidden="true" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = getAvatarPublicUrl(); }} className="w-6 h-6 rounded-full border border-line bg-surface object-contain shrink-0 mb-0.5" />}<div className={`max-w-[78%] rounded-md border px-3 py-2 ${mine ? 'bg-accent border-accent text-accent-fg rounded-br-sm' : 'bg-surface border-line text-ink rounded-bl-sm'}`}>{!mine && <div className="text-[10px] font-semibold text-muted mb-0.5">{m.sender}</div>}{m.text && <div className="text-[13px] leading-snug whitespace-pre-wrap break-words">{m.text}</div>}{m.image && <button type="button" onClick={() => onOpenImage(m.image || null)} className="mt-1.5 block cursor-pointer" title="Open image"><img src={m.image} alt="Attachment" className="max-h-44 rounded-sm border border-line object-cover hover:opacity-95 transition" /></button>}<div className={`mt-1 font-mono text-[10px] tabular-nums ${mine ? 'text-accent-fg/70' : 'text-subtle'}`}>{formatTime(m.timestamp)}</div></div></div>; })}</div>{hasNewBelow && <button type="button" onClick={onShowNew} className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-inverse px-3 py-1 text-[11px] font-medium text-inverse-fg shadow-lg transition hover:opacity-90">New messages<ArrowDown size={12} strokeWidth={2} aria-hidden="true" /></button>}</div>;

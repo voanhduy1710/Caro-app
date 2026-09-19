@@ -1,0 +1,294 @@
+/* =============================================================================
+   Motion. Every animation names a job: panel-pop a layer opened, pop-in the
+   screen arrived, piece-drop your move landed, turn-bob whose turn it is,
+   winning-pulse the line that won.
+   Nothing loops for decoration.
+   ========================================================================== */
+
+@keyframes scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes panel-pop {
+  from { opacity: 0; transform: translateY(16px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes skeleton-sweep {
+  to { transform: translateX(100%); }
+}
+
+@keyframes winning-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1.15); }
+  50% { transform: scale(1.18); filter: brightness(1.4); }
+}
+
+/* The overshoot is the point: a piece that only fades in does not feel placed. */
+@keyframes piece-drop {
+  0% { opacity: 0; transform: scale(0.3) rotate(-14deg); }
+  60% { opacity: 1; transform: scale(1.18) rotate(3deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes turn-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.animate-winning-cell {
+  animation: winning-pulse 0.8s infinite ease-in-out;
+}
+
+.animate-piece-drop {
+  animation: piece-drop 0.3s var(--ease-pop);
+}
+
+.animate-turn-bob {
+  animation: turn-bob 1.4s infinite ease-in-out;
+}
+
+/* The child sets --i and the delay follows, so no JS orchestrator is needed. */
+.animate-pop-in {
+  animation: pop-in 0.42s var(--ease-pop) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+/* Mandatory for anything above a static motion level. Infinite loops and
+   transforms collapse; the winning line stays marked by brightness alone. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-winning-cell {
+    animation: none;
+    filter: brightness(1.35);
+  }
+
+  .animate-turn-bob {
+    animation: none;
+  }
+
+  /* Entrances must still END visible, never stuck at their `from` frame. */
+  .animate-pop-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .btn:not(:disabled):hover {
+    transform: none;
+  }
+}
+
+/* =============================================================================
+   Board
+
+   The four board themes are a user-facing feature, so each keeps its own
+   material identity and none of them follow the app theme. That is deliberate:
+   a board is a physical object on the table, and it also keeps the player's
+   chosen piece colours legible in both light and dark, which a theme-following
+   board could not promise.
+   ========================================================================== */
+
+.board-cell {
+  aspect-ratio: 1 / 1 !important;
+  box-sizing: border-box;
+  transition: background-color 0.12s var(--ease-out-quart),
+              border-color 0.12s var(--ease-out-quart);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Cells holding a real piece keep their resting look on hover. */
+.board-cell.board-cell--filled:hover {
+  background: inherit;
+  cursor: default;
+}
+
+.board-cell:focus-visible {
+  outline: 3px solid var(--ui-text);
+  outline-offset: -3px;
+  z-index: 30;
+}
+
+/* Graph paper is the only board that follows the app theme, so it is the only
+   one whose focus ring can. The other three are fixed materials: on them
+   --ui-text is whatever the app theme says, which put a near-white ring on
+   bamboo at 1.10:1 and a navy ring on the laser grid at 1.42:1. Each fixed
+   board pins a ring measured against its own tile instead. */
+.board-theme-light-wood .board-cell:focus-visible,
+.board-theme-classic-wood .board-cell:focus-visible {
+  outline-color: #0d2b45;  /* 11.78:1 on bamboo, 4.22:1 on classic wood */
+}
+
+.board-theme-laser-futuristic .board-cell:focus-visible {
+  outline-color: #ffffff;  /* 20.23:1 on the grid, and not a piece colour */
+}
+
+.board-grid-inner {
+  display: grid;
+  gap: 0 !important;
+}
+
+/* Every fifth line is promoted so the eye can count position on a large
+   board. Thickness, not colour, so each board theme keeps its own palette. */
+.board-cell--gx {
+  border-right-width: 2px !important;
+}
+
+.board-cell--gy {
+  border-bottom-width: 2px !important;
+}
+
+/* 1. Graph paper - the neutral default, theme-aware. Thin rules rather than
+      tiles: on a 50x50 board heavy grout competes with the pieces, and the
+      pieces are the thing that has to be read at a glance. */
+.board-theme-graph-paper {
+  background: var(--ui-surface);
+  border: 2px solid var(--ui-border-strong);
+}
+
+.board-theme-graph-paper .board-grid-inner {
+  border-top: 1px solid var(--ui-border-strong);
+  border-left: 1px solid var(--ui-border-strong);
+}
+
+.board-theme-graph-paper .board-cell {
+  background: var(--ui-surface);
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.board-theme-graph-paper .board-cell:hover:not(:disabled) {
+  background: var(--ui-accent-soft);
+  border-color: var(--ui-accent);
+}
+
+/* 2. Light bamboo wood */
+.board-theme-light-wood {
+  background-color: #f7e6c4;
+  background-image: radial-gradient(#d6a265 0.75px, transparent 0.75px);
+  background-size: 20px 20px;
+  box-shadow: inset 0 0 25px rgba(184, 134, 11, 0.15), 0 8px 0 #b98a4e, 0 20px 40px -18px rgb(13 43 69 / 0.4);
+  border: 3px solid #d6a265;
+}
+
+.board-theme-light-wood .board-grid-inner {
+  border-top: 1px solid rgba(184, 134, 11, 0.4);
+  border-left: 1px solid rgba(184, 134, 11, 0.4);
+}
+
+.board-theme-light-wood .board-cell {
+  background: rgba(247, 230, 196, 0.85);
+  border-right: 1px solid rgba(184, 134, 11, 0.4);
+  border-bottom: 1px solid rgba(184, 134, 11, 0.4);
+}
+
+.board-theme-light-wood .board-cell:hover:not(:disabled) {
+  background: rgba(235, 210, 165, 0.95);
+  border-color: #b8860b;
+}
+
+/* 3. Futuristic laser grid */
+.board-theme-laser-futuristic {
+  background-color: #05020e !important;
+  box-shadow: inset 0 0 70px rgba(192, 132, 252, 0.45), 0 15px 35px -5px rgba(0, 0, 0, 0.9) !important;
+  border: 3px solid #2e1065 !important;
+}
+
+.board-theme-laser-futuristic .board-grid-inner {
+  gap: 2px !important;
+  padding: 2px !important;
+  background-color: #FAE0F7 !important;
+  box-shadow:
+    0 0 12px #FAE0F7,
+    0 0 24px #e879f9,
+    0 0 40px #c084fc,
+    inset 0 0 15px #e879f9 !important;
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+.board-theme-laser-futuristic .board-cell {
+  background: #090318 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: inset 0 0 6px rgba(192, 132, 252, 0.3) !important;
+}
+
+.board-theme-laser-futuristic .board-cell:hover:not(:disabled) {
+  background: rgba(217, 70, 239, 0.35) !important;
+  box-shadow: inset 0 0 15px #e879f9, 0 0 20px #FAE0F7 !important;
+}
+
+/* 4. Warm mahogany wood */
+.board-theme-classic-wood {
+  background-color: #c47842 !important;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(70, 30, 10, 0.08) 0px, rgba(70, 30, 10, 0.08) 1px, transparent 1px, transparent 4px),
+    repeating-linear-gradient(90deg, rgba(255, 235, 200, 0.07) 0px, rgba(255, 235, 200, 0.07) 2px, transparent 2px, transparent 18px),
+    linear-gradient(135deg, #d4874e 0%, #ab5e2a 100%) !important;
+  box-shadow: inset 0 0 40px rgba(90, 40, 15, 0.5), 0 10px 0 #6d3413, 0 24px 44px -18px rgba(25, 10, 2, 0.55) !important;
+  border: 6px solid #8f441b !important;
+}
+
+.board-theme-classic-wood .board-grid-inner {
+  border-top: 1.5px solid #fef3c7 !important;
+  border-left: 1.5px solid #fef3c7 !important;
+  box-shadow: 0 0 3px rgba(254, 243, 199, 0.4) !important;
+}
+
+.board-theme-classic-wood .board-cell {
+  background: rgba(196, 120, 66, 0.85) !important;
+  border-right: 1.5px solid #fef3c7 !important;
+  border-bottom: 1.5px solid #fef3c7 !important;
+  box-shadow: inset 0 0 3px rgba(100, 45, 15, 0.2);
+  border-radius: 0 !important;
+}
+
+.board-theme-classic-wood .board-cell:hover:not(:disabled) {
+  background: rgba(230, 150, 90, 0.95) !important;
+  border-color: #ffffff !important;
+  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+/* 3D go stones */
+.stone-black {
+  background: radial-gradient(circle at 35% 35%, #64748b, #0f172a);
+  border: 1px solid #1e293b;
+  border-radius: 9999px;
+  width: 82%;
+  height: 82%;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: auto;
+}
+
+.stone-white {
+  background: radial-gradient(circle at 35% 35%, #ffffff, #cbd5e1);
+  border: 1px solid #94a3b8;
+  border-radius: 9999px;
+  width: 82%;
+  height: 82%;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: auto;
+}
+

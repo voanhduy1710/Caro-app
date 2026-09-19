@@ -1,59 +1,25 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
-import { Check, Copy, Globe, Lock, Share2, WifiOff } from 'lucide-react';
-import type { UserProfile } from '../auth/AuthContext';
 import { Board } from '../game/Board';
 import type { BoardCorner } from '../game/Board';
 import { MatchHeader } from '../game/MatchHeader';
 import type { SeatView } from '../game/MatchHeader';
 import { GameControls } from '../game/GameControls';
-import { getAvatarPublicUrl } from '../avatar/avatarService';
-import { summariseRoomSettings } from '../settings/types';
 import { useIsDesktop } from '../../shared/hooks/useMediaQuery';
 import { useSound } from '../../shared/hooks/useSound';
 import { RoomRoster } from './RoomRoster';
 import { TeaseToast } from './TeaseToast';
 import { CoinTossModal } from '../minigames/CoinTossModal';
 import { RockPaperScissorsModal } from '../minigames/RockPaperScissorsModal';
-import type { RoomApi } from './useRoom';
+import { OnlineRoomLobby } from './OnlineRoomLobby';
+import { HostLostStrip, OnlineRoomConnecting, RoomConfirmDialog } from './OnlineRoomOverlays';
 import type { Seat } from './protocol';
 import { DISCARD_GUARD_MS, MAX_MEMBERS, SEATS, activeSeats, boardFromMoves, latestResult, otherSeat, pieceAt } from './roomEngine';
 import type { Member } from './roomEngine';
 import { describeRating } from './roomRating';
 import { LEFT_HOW, RESULT_REASONS } from './roomCopy';
-
-type ConfirmSpec = {
-  title: string;
-  body: string;
-  confirmLabel: string;
-  cancelLabel?: string;
-  tone?: 'danger' | 'default';
-  onConfirm: () => void;
-};
-
-/** A member as the profile dialogs expect a player. */
-const memberProfile = (member: Member): UserProfile => ({
-  uid: member.profile.uid,
-  displayName: member.profile.name,
-  photoURL: member.profile.avatar ?? '',
-  email: '',
-  elo: member.profile.elo ?? 1200,
-  wins: member.profile.wins ?? 0,
-  losses: member.profile.losses ?? 0,
-  draws: member.profile.draws ?? 0,
-  streak: member.profile.streak ?? 0,
-  isGuest: member.profile.guest,
-});
-
-interface OnlineRoomProps {
-  room: RoomApi;
-  user: UserProfile | null;
-  onOpenRules: () => void;
-  onViewMyProfile: () => void;
-  onViewProfile: (profile: UserProfile) => void;
-  /** Set to this room's exit flow, so the brand logo and Back leave the same way. */
-  exitRef: React.MutableRefObject<(() => void) | null>;
-}
+import { memberProfile } from './OnlineRoomTypes';
+import type { ConfirmSpec, OnlineRoomProps } from './OnlineRoomTypes';
 
 export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules, onViewMyProfile, onViewProfile, exitRef }) => {
   const isDesktop = useIsDesktop();
@@ -251,33 +217,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
 
   /* ------------------------------- views ------------------------------ */
 
-  const confirmDialog = confirmSpec && (
-    <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby="room-confirm-title">
-      <div className="w-full max-w-sm space-y-4 rounded-lg border border-line bg-surface p-6">
-        <div className="space-y-1.5">
-          <h3 id="room-confirm-title" className="text-base font-semibold text-ink">
-            {confirmSpec.title}
-          </h3>
-          <p className="text-xs leading-relaxed text-muted">{confirmSpec.body}</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setConfirmSpec(null)} className="btn btn-secondary btn-sm flex-1" autoFocus>
-            {confirmSpec.cancelLabel ?? 'Cancel'}
-          </button>
-          <button
-            onClick={() => {
-              const run = confirmSpec.onConfirm;
-              setConfirmSpec(null);
-              run();
-            }}
-            className={`btn btn-sm flex-1 ${confirmSpec.tone === 'danger' ? 'btn-danger' : 'btn-primary'}`}
-          >
-            {confirmSpec.confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  const confirmDialog = <RoomConfirmDialog spec={confirmSpec} onDismiss={() => setConfirmSpec(null)} />;
 
   const teaseToast = (
     <TeaseToast notice={room.teaseNotice} onDismiss={room.dismissTease} openSeat={openSeat} onTakeSeat={room.takeSeat} />
@@ -300,178 +240,20 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
 
   // Not in the room yet: opening, joining, or finding the way back in.
   if (!s) {
-    const text =
-      room.status === 'opening'
-        ? 'Opening the room…'
-        : room.status === 'host_lost'
-        ? `Reconnecting to room ${room.roomId}… ${room.hostGraceSecondsLeft ?? ''}s`
-        : `Joining room ${room.roomId}…`;
-    return (
-      <div className="panel w-full max-w-sm space-y-4 p-6 text-center" role="status" aria-live="polite">
-        <p className="text-sm font-medium text-ink">{text}</p>
-        <button onClick={leaveNow} className="btn btn-secondary btn-sm">
-          Cancel
-        </button>
-      </div>
-    );
+    return <OnlineRoomConnecting status={room.status} roomId={room.roomId} seconds={room.hostGraceSecondsLeft} onCancel={leaveNow} />;
   }
 
-  const hostLostStrip = room.status === 'host_lost' && (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-warning bg-warning-soft p-3 text-xs font-medium text-warning">
-      <span className="flex items-center gap-2">
-        <WifiOff size={14} strokeWidth={2.25} aria-hidden="true" />
-        Lost the connection to the host. Waiting for them to come back…
-      </span>
-      <span className="font-mono tabular-nums">{room.hostGraceSecondsLeft}s</span>
-    </div>
-  );
-
+  const hostLostStrip = room.status === 'host_lost' ? <HostLostStrip seconds={room.hostGraceSecondsLeft} /> : null;
   /* ----------------------------- waiting room ----------------------------- */
 
   if (phase === 'waiting') {
-    const seatRow = (seat: Seat) => {
-      const occupant = occupantOf(seat);
-      const isMine = occupant?.id === me;
-      const grace = occupant ? room.graceSecondsLeft(occupant.id) : null;
-      return (
-        <li key={seat} className="flex items-center gap-3 rounded-md border border-line bg-surface p-3">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent font-display text-sm font-extrabold text-accent-fg">
-            {seat === 'T' ? '△' : seat}
-          </span>
-          {occupant ? (
-            <img
-              src={getAvatarPublicUrl(occupant.profile.avatar)}
-              alt=""
-              aria-hidden="true"
-              onError={(e) => {
-                e.currentTarget.onerror = null;
-                e.currentTarget.src = getAvatarPublicUrl();
-              }}
-              className={`h-10 w-10 shrink-0 rounded-full border-2 border-line bg-surface object-contain p-0.5 ${
-                occupant.connected ? '' : 'opacity-50 grayscale'
-              }`}
-            />
-          ) : (
-            <span className="h-10 w-10 shrink-0 rounded-full border-2 border-dashed border-line-strong bg-surface-2" aria-hidden="true" />
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1">
-              <span className={`truncate text-sm font-semibold ${occupant ? 'text-ink' : 'text-subtle'}`}>
-                {occupant ? occupant.profile.name : 'Open seat'}
-              </span>
-              {isMine && <span className="chip chip-accent px-1.5 py-0 text-[10px]">You</span>}
-              {occupant?.isHost && <span className="chip px-1.5 py-0 text-[10px]">Host</span>}
-            </div>
-            {grace !== null && <p className="text-[11px] font-medium text-warning">Reconnecting {grace}s</p>}
-          </div>
-          {!occupant && isViewer && connected && (
-            <button onClick={() => room.takeSeat(seat)} className="btn btn-primary btn-sm shrink-0">
-              Take seat
-            </button>
-          )}
-        </li>
-      );
-    };
-
     return (
-      <div className="w-full max-w-md space-y-4 text-left">
-        <div className="panel space-y-4 p-5">
-          <div className="flex items-start justify-between gap-3 border-b border-line pb-3">
-            <div>
-              <span className="block text-xs font-semibold text-muted">Room code</span>
-              <span className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-subtle">
-                {s.isPublic ? (
-                  <>
-                    <Globe size={13} strokeWidth={2.25} aria-hidden="true" />
-                    <span>Public room</span>
-                  </>
-                ) : (
-                  <>
-                    <Lock size={13} strokeWidth={2.25} aria-hidden="true" />
-                    <span>Private room</span>
-                  </>
-                )}
-              </span>
-            </div>
-            <span className="font-mono text-lg font-semibold tracking-widest text-accent-text">{s.roomId}</span>
-          </div>
-
-          <div className="flex gap-2">
-            <button onClick={copyRoomLink} className="btn btn-tonal btn-sm flex-1">
-              {copyState === 'copied' ? (
-                <>
-                  <Check size={14} strokeWidth={2} aria-hidden="true" />
-                  <span>Link copied</span>
-                </>
-              ) : (
-                <>
-                  <Copy size={14} strokeWidth={2.25} aria-hidden="true" />
-                  <span>Copy invite link</span>
-                </>
-              )}
-            </button>
-            {typeof navigator !== 'undefined' && 'share' in navigator && (
-              <button onClick={shareRoomLink} className="btn btn-secondary btn-sm shrink-0">
-                <Share2 size={14} strokeWidth={2.25} aria-hidden="true" />
-                <span>Share</span>
-              </button>
-            )}
-          </div>
-
-          {/* When the clipboard is blocked, hand over the link itself
-              rather than a success message that was never true. */}
-          {copyState === 'failed' && (
-            <div className="field">
-              <label htmlFor="manual-room-link" className="field-label">
-                Your browser blocked the clipboard. Copy this link by hand:
-              </label>
-              <input
-                id="manual-room-link"
-                type="text"
-                readOnly
-                value={roomLink}
-                onFocus={(e) => e.currentTarget.select()}
-                className="field-input text-xs"
-              />
-            </div>
-          )}
-
-          <ul className="space-y-2" aria-label="Seats">
-            {seatRow('X')}
-            {seatRow('O')}
-            {s.settings.playerMode === 'oneVsOneVsOne' && seatRow('T')}
-          </ul>
-          <p className="text-xs text-muted">
-            The game starts by itself when {s.settings.playerMode === 'oneVsOneVsOne' ? 'all three seats are filled' : 'both seats are filled'}.
-            The opening turn rotates after every game.
-          </p>
-
-          <div className="space-y-2 rounded-md border border-line bg-surface-2 p-3">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {summariseRoomSettings(s.settings).map((fact) => (
-                <span key={fact.label} className="chip">
-                  <span>{fact.label}</span>
-                  <span className="font-semibold text-ink">{fact.value}</span>
-                </span>
-              ))}
-            </div>
-            {room.isHost && (
-              <button type="button" onClick={onOpenRules} className="btn btn-secondary btn-sm">
-                Change rules
-              </button>
-            )}
-          </div>
-
-          <button onClick={requestExit} className="btn btn-secondary w-full">
-            {room.isHost ? 'Close room' : 'Leave room'}
-          </button>
-        </div>
-
-        <div className="-mx-3">{roster}</div>
-        {hostLostStrip}
-        {confirmDialog}
-        {teaseToast}
-      </div>
+      <OnlineRoomLobby
+        room={room} s={s} me={me} isViewer={isViewer} connected={connected} occupantOf={occupantOf}
+        copyState={copyState} roomLink={roomLink} copyRoomLink={copyRoomLink} shareRoomLink={shareRoomLink}
+        onOpenRules={onOpenRules} requestExit={requestExit} roster={roster} hostLostStrip={hostLostStrip}
+        confirmDialog={confirmDialog} teaseToast={teaseToast}
+      />
     );
   }
 
@@ -639,6 +421,14 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
 
   const rps = game?.firstMove.method === 'rockPaperScissors' ? game.firstMove : null;
   const myRpsChoice = mySeat === 'X' || mySeat === 'O' ? rps?.choices?.[mySeat] : null;
+  const coin = game?.firstMove.method === 'coinFlip' ? game.firstMove : null;
+  const hostMember = s.members.find((member) => member.isHost);
+  const hostSeat = hostMember
+    ? (s.seats.X === hostMember.id ? 'X' : s.seats.O === hostMember.id ? 'O' : null)
+    : null;
+  const coinChooserSeat = hostSeat && game ? (game.number % 2 === 1 ? hostSeat : otherSeat(hostSeat)) : null;
+  const coinChooserName = coinChooserSeat ? occupantOf(coinChooserSeat)?.profile.name ?? coinChooserSeat : 'A player';
+  const coinCallerName = coin?.callerMemberId ? s.members.find((member) => member.id === coin.callerMemberId)?.profile.name : undefined;
   const preGame = game?.firstMove.method === 'rockPaperScissors' && (phase === 'opening' || phase === 'countdown') && rps
     ? <RockPaperScissorsModal
         myChoice={myRpsChoice ?? null}
@@ -649,10 +439,11 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       />
     : game?.firstMove.method === 'coinFlip' && (phase === 'opening' || phase === 'countdown')
     ? <CoinTossModal
-        hostName={s.members.find((member) => member.isHost)?.profile.name ?? 'Host'}
-        isHost={room.isHost}
+        chooserName={coinChooserName}
+        canCall={mySeat === coinChooserSeat && coin?.call === null}
         call={game.firstMove.call ?? null}
         face={game.firstMove.face ?? null}
+        callerName={coinCallerName}
         winnerName={game.firstMove.winner ? occupantOf(game.firstMove.winner)?.profile.name : undefined}
         onCall={(face) => room.callCoin(face)}
       />

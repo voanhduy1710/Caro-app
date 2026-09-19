@@ -244,7 +244,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
                   disabled={!canEditRules}
                   onClick={() => onUpdateSettings({ ...settings, totalTimeMinutes: opt.val })}
                 >
-                  {opt.label}
+                {opt.label}
                 </Choice>
               ))}
             </Group>
@@ -309,15 +309,18 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
               ))}
             </Group>
 
-            <Group label="Who goes first" cols={2}>
+            <Group label="Who goes first" cols={3}>
               {[
+                { label: 'Default', val: 'default' as const },
                 { label: 'Coin flip', val: 'coinFlip' as const },
                 { label: 'Rock paper scissors', val: 'rockPaperScissors' as const },
               ].map((opt) => (
-                <Choice key={opt.val} selected={(settings.firstMoveMethod ?? 'coinFlip') === opt.val}
+                <Choice key={opt.val} selected={(settings.firstMoveMethod ?? 'default') === opt.val}
                   disabled={!canEditRules || settings.playerMode === 'oneVsOneVsOne'}
                   onClick={() => onUpdateSettings({ ...settings, firstMoveMethod: opt.val })}>
-                  {opt.label}
+                  {opt.val === 'rockPaperScissors' ? (
+                    <img src="/Rock-paper-scissors-icon.png" alt="Rock paper scissors" className="h-6 w-auto" />
+                  ) : opt.label}
                 </Choice>
               ))}
             </Group>

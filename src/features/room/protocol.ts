@@ -186,7 +186,7 @@ export const isAllowedSettings = (value: RoomSettings): boolean =>
   typeof value.allowUndo === 'boolean' &&
   (value.placementMode === undefined || value.placementMode === 'normal' || value.placementMode === 'lmao') &&
   (value.playerMode === undefined || value.playerMode === 'oneVsOne' || value.playerMode === 'oneVsOneVsOne') &&
-  (value.firstMoveMethod === undefined || value.firstMoveMethod === 'coinFlip' || value.firstMoveMethod === 'rockPaperScissors');
+  (value.firstMoveMethod === undefined || value.firstMoveMethod === 'default' || value.firstMoveMethod === 'coinFlip' || value.firstMoveMethod === 'rockPaperScissors');
 
 // ---------------------------------------------------------------------------
 // Member to host: intents
@@ -397,7 +397,7 @@ const VALIDATORS: { [K in IntentType]: (p: Record<string, unknown>) => boolean }
     typeof p.settings.allowUndo === 'boolean' &&
     (p.settings.placementMode === undefined || p.settings.placementMode === 'normal' || p.settings.placementMode === 'lmao') &&
     (p.settings.playerMode === undefined || p.settings.playerMode === 'oneVsOne' || p.settings.playerMode === 'oneVsOneVsOne') &&
-    (p.settings.firstMoveMethod === undefined || p.settings.firstMoveMethod === 'coinFlip' || p.settings.firstMoveMethod === 'rockPaperScissors'),
+    (p.settings.firstMoveMethod === undefined || p.settings.firstMoveMethod === 'default' || p.settings.firstMoveMethod === 'coinFlip' || p.settings.firstMoveMethod === 'rockPaperScissors'),
   FIRST_MOVE_CHOICE: (p) => hasGameId(p) && (p.choice === 'rock' || p.choice === 'paper' || p.choice === 'scissors'),
   COIN_CALL: (p) => hasGameId(p) && (p.call === 'X' || p.call === 'O'),
   CHAT: (p) =>

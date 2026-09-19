@@ -1,9 +1,9 @@
-Generated at: 2026-09-19 09:19:58
+Generated at: 2026-09-19 11:04:37
 Root directory: C:\Caro-app
 Folders: 35
-Files: 259
-Lines of code: 19976
-Bytes: 25,078,871
+Files: 293
+Lines of code: 19045
+Bytes: 25,078,366
 
 Structure:
 📁 Caro-app/
@@ -173,14 +173,22 @@ Structure:
 │   │   └── 📄 room.e2e.mjs
 │   ├── 📄 _env.js
 │   ├── 📄 clear_data.js
-│   ├── 📄 delete_users.js
 │   ├── 📄 inspect_gomoku.js
-│   ├── 📄 setup_auth.js
 │   └── 📄 upload_avatars.js
 ├── 📁 src/
 │   ├── 📁 app/
+│   │   ├── 📄 ActiveMatchStage.tsx
 │   │   ├── 📄 App.tsx
-│   │   └── 📄 AppView.tsx
+│   │   ├── 📄 AppFeedback.tsx
+│   │   ├── 📄 AppModalStack.tsx
+│   │   ├── 📄 AppNavbar.tsx
+│   │   ├── 📄 AppPageShell.tsx
+│   │   ├── 📄 AppView.tsx
+│   │   ├── 📄 AppViewShared.ts
+│   │   ├── 📄 HomeLobbyMeta.tsx
+│   │   ├── 📄 HomePlayActions.tsx
+│   │   ├── 📄 PracticeMatchView.tsx
+│   │   └── 📄 PublicRoomList.tsx
 │   ├── 📁 assets/
 │   │   ├── 📄 hero.png
 │   │   ├── 📄 Logo.svg
@@ -203,9 +211,18 @@ Structure:
 │   │   │   ├── 📄 aiEngine.ts
 │   │   │   ├── 📄 aiEngine.worker.ts
 │   │   │   ├── 📄 Board.tsx
+│   │   │   ├── 📄 BoardCells.tsx
+│   │   │   ├── 📄 BoardTypes.ts
 │   │   │   ├── 📄 displayPrefs.ts
+│   │   │   ├── 📄 GameActionRail.tsx
+│   │   │   ├── 📄 GameChatComposer.tsx
+│   │   │   ├── 📄 GameChatFeed.tsx
+│   │   │   ├── 📄 GameChatHeader.tsx
+│   │   │   ├── 📄 GameChatLightbox.tsx
 │   │   │   ├── 📄 GameControls.tsx
+│   │   │   ├── 📄 GameControlsShared.tsx
 │   │   │   ├── 📄 GameControlsView.tsx
+│   │   │   ├── 📄 GameReactionPicker.tsx
 │   │   │   ├── 📄 MatchHeader.tsx
 │   │   │   └── 📄 useAiEngine.ts
 │   │   ├── 📁 history/
@@ -224,18 +241,31 @@ Structure:
 │   │   ├── 📁 room/
 │   │   │   ├── 📄 memberProfile.ts
 │   │   │   ├── 📄 OnlineRoom.tsx
+│   │   │   ├── 📄 OnlineRoomLobby.tsx
+│   │   │   ├── 📄 OnlineRoomOverlays.tsx
+│   │   │   ├── 📄 OnlineRoomTypes.ts
 │   │   │   ├── 📄 OnlineRoomView.tsx
 │   │   │   ├── 📄 protocol.ts
 │   │   │   ├── 📄 ratingCheck.ts
 │   │   │   ├── 📄 roomCopy.ts
 │   │   │   ├── 📄 roomEngine.ts
 │   │   │   ├── 📄 roomEngineCore.ts
-│   │   │   ├── 📄 roomEngineImplementation.ts
+│   │   │   ├── 📄 roomEngineHandlers.ts
+│   │   │   ├── 📄 roomEngineHelpers.ts
+│   │   │   ├── 📄 roomEngineLifecycle.ts
+│   │   │   ├── 📄 roomEngineTypes.ts
 │   │   │   ├── 📄 roomRating.ts
 │   │   │   ├── 📄 RoomRoster.tsx
 │   │   │   ├── 📄 TeaseToast.tsx
 │   │   │   ├── 📄 useRoom.ts
-│   │   │   └── 📄 useRoomCore.ts
+│   │   │   ├── 📄 useRoomActions.ts
+│   │   │   ├── 📄 useRoomCore.ts
+│   │   │   ├── 📄 useRoomHost.ts
+│   │   │   ├── 📄 useRoomLifecycle.ts
+│   │   │   ├── 📄 useRoomRatings.ts
+│   │   │   ├── 📄 useRoomTiming.ts
+│   │   │   ├── 📄 useRoomTypes.ts
+│   │   │   └── 📄 useRoomUtilities.ts
 │   │   ├── 📁 settings/
 │   │   │   ├── 📄 SettingsAndThemeModal.tsx
 │   │   │   └── 📄 types.ts
@@ -261,6 +291,9 @@ Structure:
 │   │       ├── 📄 eloCalculator.ts
 │   │       └── 📄 gomokuLogic.ts
 │   ├── 📁 styles/
+│   │   ├── 📄 index-game.css
+│   │   ├── 📄 index-motion.css
+│   │   ├── 📄 index-primitives.css
 │   │   ├── 📄 index.css
 │   │   └── 📄 tokens.css
 │   └── 📄 main.tsx
@@ -300,6 +333,7 @@ Structure:
 ├── 📄 vite.config.ts
 ├── 📄 walkthrough.md
 ├── 📄 Z_prompt_typer.md
+├── 📄 Z_refactoring_prompt.md
 └── 📄 Z_updating_prompt.md
 
 Heavy files (> 100 kb):
@@ -316,17 +350,18 @@ Heavy files (> 100 kb):
 📄 public/fonts/google-sans-flex-latin.woff2: 117.10 KB
 
 Large Files (> 300 lines):
-📄 src/features/room/roomEngineImplementation.ts: 1809 lines
-📄 src/features/room/useRoomCore.ts: 1583 lines
-📄 src/app/AppView.tsx: 1215 lines
-📄 src/features/game/GameControlsView.tsx: 1191 lines
-📄 src/styles/index.css: 1159 lines
-📄 src/features/room/OnlineRoomView.tsx: 810 lines
-📄 src/features/game/Board.tsx: 797 lines
+📄 src/app/AppView.tsx: 600 lines
 📄 src/features/auth/AuthContextProvider.tsx: 598 lines
+📄 src/features/room/useRoomCore.ts: 593 lines
+📄 src/features/game/GameControlsView.tsx: 592 lines
+📄 src/features/room/OnlineRoomView.tsx: 592 lines
+📄 src/styles/index-primitives.css: 555 lines
+📄 src/features/room/roomEngineHandlers.ts: 516 lines
+📄 src/features/game/Board.tsx: 484 lines
 📄 src/features/webrtc/roomDiscoveryService.ts: 471 lines
 📄 src/features/auth/AuthModal.tsx: 458 lines
 📄 src/features/room/protocol.ts: 435 lines
+📄 src/features/room/roomEngineLifecycle.ts: 429 lines
 📄 src/features/profile/ProfileModal.tsx: 427 lines
 📄 src/features/settings/SettingsAndThemeModal.tsx: 398 lines
 📄 src/styles/tokens.css: 366 lines
@@ -335,6 +370,7 @@ Large Files (> 300 lines):
 📄 src/features/game/MatchHeader.tsx: 323 lines
 📄 src/features/game/aiEngine.ts: 320 lines
 📄 src/features/history/historyService.ts: 317 lines
+📄 src/styles/index-game.css: 307 lines
 
 Small Files (< 60 lines):
 📄 src/app/App.tsx: 2 lines
@@ -343,40 +379,56 @@ Small Files (< 60 lines):
 📄 src/features/room/roomEngine.ts: 2 lines
 📄 src/features/room/useRoom.ts: 2 lines
 📄 src/features/auth/AuthContext.tsx: 3 lines
+📄 src/app/AppFeedback.tsx: 4 lines
+📄 src/app/AppNavbar.tsx: 4 lines
+📄 src/app/AppPageShell.tsx: 4 lines
+📄 src/features/game/GameChatHeader.tsx: 4 lines
+📄 src/features/game/GameChatLightbox.tsx: 4 lines
+📄 src/styles/index.css: 5 lines
+📄 src/app/PublicRoomList.tsx: 6 lines
 📄 tsconfig.json: 7 lines
-📄 src/features/room/roomEngineCore.ts: 7 lines
+📄 src/features/game/GameReactionPicker.tsx: 7 lines
 📄 .oxlintrc.json: 8 lines
+📄 src/app/ActiveMatchStage.tsx: 8 lines
+📄 src/app/HomeLobbyMeta.tsx: 9 lines
 📄 supabase/migrations/20260911041924_schedule_match_claim_finalizer.sql: 10 lines
+📄 src/features/room/useRoomTypes.ts: 11 lines
+📄 src/app/AppModalStack.tsx: 13 lines
+📄 src/features/game/GameChatFeed.tsx: 14 lines
 📄 src/features/webrtc/types.ts: 14 lines
 📄 src/features/room/memberProfile.ts: 16 lines
 📄 supabase/migrations/20260911033353_record_game_id_and_seat_log.sql: 16 lines
+📄 src/app/AppViewShared.ts: 17 lines
 📄 src/config/supabase.ts: 18 lines
 📄 src/features/room/roomCopy.ts: 18 lines
-📄 scripts/delete_users.js: 19 lines
 📄 src/main.tsx: 19 lines
 📄 src/features/history/types.ts: 20 lines
 📄 src/features/theme/types.ts: 20 lines
 📄 src/features/webrtc/roomCode.ts: 21 lines
 📄 supabase/migrations/20260910122915_auto_confirm_synthetic_emails.sql: 22 lines
 📄 tsconfig.node.json: 23 lines
+📄 src/features/room/useRoomTiming.ts: 26 lines
 📄 tsconfig.app.json: 27 lines
 📄 src/features/game/aiEngine.worker.ts: 27 lines
 📄 src/shared/hooks/useMediaQuery.ts: 28 lines
 📄 scripts/clear_data.js: 30 lines
+📄 src/app/PracticeMatchView.tsx: 30 lines
 📄 vite.config.ts: 32 lines
 📄 src/shared/hooks/useModalChrome.ts: 32 lines
 📄 src/shared/hooks/useBackdropDismiss.ts: 33 lines
 📄 src/features/room/roomRating.ts: 34 lines
+📄 src/features/room/OnlineRoomOverlays.tsx: 35 lines
+📄 src/features/room/OnlineRoomTypes.ts: 35 lines
 📄 src/shared/components/ListSkeleton.tsx: 35 lines
 📄 supabase/migrations/20260911024144_scope_auto_confirm_and_revoke_truncate.sql: 35 lines
 📄 package.json: 37 lines
 📄 scripts/inspect_gomoku.js: 37 lines
+📄 src/features/game/BoardTypes.ts: 40 lines
 📄 scripts/_env.js: 42 lines
 📄 src/features/leaderboard/leaderboardService.ts: 48 lines
 📄 .mcp.json: 50 lines
 📄 src/features/auth/authTypes.ts: 52 lines
 📄 src/shared/hooks/useUiTheme.ts: 52 lines
 📄 src/shared/utils/eloCalculator.ts: 54 lines
-📄 scripts/setup_auth.js: 55 lines
 📄 src/features/settings/types.ts: 55 lines
 📄 src/features/room/TeaseToast.tsx: 57 lines

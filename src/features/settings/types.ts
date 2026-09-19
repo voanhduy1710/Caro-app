@@ -7,8 +7,8 @@ export interface RoomSettings {
   placementMode?: 'normal' | 'lmao';
   /** Three-player rooms are casual: X, O, then △ take turns. */
   playerMode?: 'oneVsOne' | 'oneVsOneVsOne';
-  /** The shared pre-game decision for the opening move in 1v1 rooms. */
-  firstMoveMethod?: 'coinFlip' | 'rockPaperScissors';
+  /** Default rotates the opening player after each completed game. */
+  firstMoveMethod?: 'default' | 'coinFlip' | 'rockPaperScissors';
 }
 
 /**
@@ -22,7 +22,7 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   allowUndo: true,
   placementMode: 'normal',
   playerMode: 'oneVsOne',
-  firstMoveMethod: 'coinFlip',
+  firstMoveMethod: 'default',
 };
 
 /** How the win condition actually behaves, in the words a player would use. */
@@ -51,5 +51,12 @@ export const summariseRoomSettings = (settings: RoomSettings): RoomSettingsFact[
   { label: 'Take back', value: settings.allowUndo ? 'Allowed' : 'Off' },
   { label: 'Mode', value: settings.placementMode === 'lmao' ? 'LMAO' : 'Normal' },
   { label: 'Players', value: settings.playerMode === 'oneVsOneVsOne' ? '1v1v1' : '1v1' },
-  { label: 'First move', value: settings.firstMoveMethod === 'rockPaperScissors' ? 'Rock paper scissors' : 'Coin flip' },
+  {
+    label: 'First move',
+    value: settings.firstMoveMethod === 'rockPaperScissors'
+      ? 'Rock paper scissors'
+      : settings.firstMoveMethod === 'coinFlip'
+      ? 'Coin flip'
+      : 'Default',
+  },
 ];

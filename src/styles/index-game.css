@@ -1,0 +1,311 @@
+/* =============================================================================
+   Scrolling
+   ========================================================================== */
+
+html, body {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.board-scroll-container {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* The board's height budget, taken from the viewport and never from the frame's
+   own content. The fitted cell size is measured out of this box, so a
+   content-derived height would feed the board's size back into itself and walk
+   every board down to the smallest square it is allowed to draw. */
+.board-frame {
+  height: min(calc(100dvh - 210px), 100vw);
+  min-height: 300px;
+  max-height: 960px;
+}
+
+@media (min-width: 1024px) {
+  .board-frame {
+    /* Reserve only the compact action rail, so the board uses the rest of the stage. */
+    height: calc(100dvh - 165px);
+  }
+}
+
+/* Keep the chat's scrollbar inside its fixed-height feed, never the game row. */
+.chat-message-list {
+  scrollbar-gutter: stable;
+  max-height: 100%;
+}
+
+.board-scroll-container,
+.chat-message-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-border-strong) transparent;
+}
+
+.board-scroll-container::-webkit-scrollbar,
+.chat-message-list::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.board-scroll-container::-webkit-scrollbar-track,
+.chat-message-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.board-scroll-container::-webkit-scrollbar-thumb,
+.chat-message-list::-webkit-scrollbar-thumb {
+  background: var(--ui-border-strong);
+  border-radius: 9999px;
+}
+
+.board-scroll-container::-webkit-scrollbar-thumb:hover,
+.chat-message-list::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-text-subtle);
+}
+
+/* The tease toast. It is centred with left:50% plus a transform, so the
+   keyframes carry the centring too rather than fighting a Tailwind translate. */
+.tease-toast {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+@keyframes tease-pop {
+  0% { transform: translate(-50%, -12px) scale(0.9); opacity: 0; }
+  40% { transform: translate(-50%, 0) scale(1.04); opacity: 1; }
+  55% { transform: translate(calc(-50% - 6px), 0) rotate(-2deg); }
+  70% { transform: translate(calc(-50% + 6px), 0) rotate(2deg); }
+  85% { transform: translate(calc(-50% - 3px), 0) rotate(-1deg); }
+  100% { transform: translate(-50%, 0); }
+}
+
+.animate-tease {
+  animation: tease-pop 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* A full three-second arcade/Yu-Gi-Oh-style toss: launch, hang while spinning,
+   then fall and bounce onto the result. The countdown and animation share the
+   same duration, so every client sees the face settle as play begins. */
+@keyframes coin-toss {
+  0% { transform: translateY(150px) rotateX(0deg) scale(0.72); opacity: 0; }
+  12% { transform: translateY(32px) rotateX(720deg) scale(0.92); opacity: 1; }
+  38% { transform: translateY(-128px) rotateX(2520deg) scale(1.12); }
+  58% { transform: translateY(-116px) rotateX(3960deg) scale(1.08); }
+  80% { transform: translateY(20px) rotateX(5400deg) scale(1); }
+  90% { transform: translateY(-24px) rotateX(5940deg) scale(1.04); }
+  100% { transform: translateY(0) rotateX(6480deg) scale(1); opacity: 1; }
+}
+
+.coin-toss {
+  animation: coin-toss 3s cubic-bezier(0.2, 0.72, 0.25, 1) both;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.coin-stage {
+  position: relative;
+  display: grid;
+  width: 4rem;
+  height: 4rem;
+  place-items: center;
+}
+
+.coin-stage__halo {
+  position: absolute;
+  inset: -1.8rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(255 216 68 / 0.42), transparent 67%);
+  animation: coin-halo 3s ease-out both;
+}
+
+@keyframes coin-halo {
+  0%, 24% { transform: scale(0.25); opacity: 0; }
+  45% { transform: scale(1.5); opacity: 1; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Pre-match mini-games: entirely procedural HTML, SVG and CSS. */
+.minigame-overlay {
+  display: grid; min-height: 100%; place-items: center; overflow: hidden;
+  background: radial-gradient(ellipse at center, rgb(29 50 54 / .78), rgb(3 11 14 / .94));
+  color: #f5e5a0; isolation: isolate;
+}
+.minigame-overlay::before { content: ''; position: absolute; inset: 0; opacity: .2; pointer-events: none; background-image: repeating-linear-gradient(0deg, transparent 0 3px, rgb(255 255 255 / .16) 3px 4px); mix-blend-mode: overlay; }
+.minigame-chamber, .rps-conveyor, .rps-clash { position: relative; width: min(92%, 44rem); border: 4px solid #7b6b43; box-shadow: 0 0 0 2px #18262a, 0 0 0 7px #b99d4c, 0 20px 50px rgb(0 0 0 / .65); background: linear-gradient(90deg, #0a171a, #26383b 22%, #111e22 50%, #26383b 78%, #0a171a); padding: clamp(1rem, 3vw, 2rem); text-align: center; }
+.minigame-chamber::before, .rps-conveyor::before, .rps-clash::before { content: ''; position: absolute; inset: 8px; border: 1px solid rgb(235 212 119 / .7); pointer-events: none; }
+.minigame-chamber__bolts { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 16px 16px, #e7d270 0 3px, #4e421e 4px 6px, transparent 7px) 0 0 / 100% 100%; }
+.minigame-kicker { margin: 0; color: #86eefa; font-size: .68rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+.minigame-title { margin: .25rem 0 .5rem; color: #ffe991; font-family: var(--font-display, serif); font-size: clamp(1.35rem, 3vw, 2.2rem); text-shadow: 0 2px #3d2c09, 0 0 12px rgb(255 213 68 / .4); }
+.coin-game__choice-title { display: flex; align-items: center; justify-content: center; gap: .55rem; min-height: 3rem; }
+.coin-game__choice-icon { display: inline-block; width: 2.65rem; height: 2.65rem; flex: 0 0 auto; border-radius: 50%; filter: drop-shadow(0 0 8px rgb(255 218 77 / .7)); animation: coin-choice-title .45s cubic-bezier(.2, 1.2, .35, 1) both; }
+@keyframes coin-choice-title { from { opacity: 0; transform: scale(.45) rotate(-18deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
+.minigame-copy { margin: .75rem auto 0; max-width: 28rem; color: #d5e4d7; font-size: .8rem; }
+.coin-game__calls { position: relative; z-index: 1; display: flex; justify-content: center; gap: clamp(.8rem, 5vw, 2.8rem); margin-top: 1.2rem; }
+.coin-call { width: 5.5rem; border: 0; background: transparent; color: #f6e19a; font-family: var(--font-display, serif); font-weight: 800; font-size: .85rem; cursor: pointer; transition: transform 180ms ease, filter 180ms ease; }
+.coin-call__preview { width: 4.5rem; height: 4.5rem; margin: 0 auto .4rem; border-radius: 50%; filter: drop-shadow(0 3px 6px rgb(0 0 0 / .55)); transition: transform 180ms ease; }
+.coin-call:hover:not(:disabled) .coin-call__preview, .coin-call:focus-visible .coin-call__preview { transform: scale(1.1); filter: drop-shadow(0 0 14px #E2D309); }
+.coin-call:hover:not(:disabled), .coin-call:focus-visible { transform: translateY(-4px); outline: none; }
+.coin-call:disabled { cursor: wait; opacity: .55; }
+.minigame-coin__art { display: block; height: 100%; width: 100%; }
+/* Realistic 3D Coin Toss Chamber */
+.coin-game__flight { position: relative; height: 9.5rem; margin-top: .4rem; perspective: 1000px; }
+.minigame-coin {
+  --coin-end-rot: 1800deg;
+  position: absolute; z-index: 2; top: 2.2rem; left: calc(50% - 2.5rem);
+  height: 5rem; width: 5rem; border-radius: 50%;
+  transform-style: preserve-3d;
+  animation: coin-toss-arc 2.4s both;
+}
+.minigame-coin--land-O { --coin-end-rot: 1980deg; }
+
+.minigame-coin__body {
+  position: relative; width: 100%; height: 100%; border-radius: 50%;
+  transform-style: preserve-3d;
+  animation: coin-spin-x 2.4s linear both;
+}
+
+.minigame-coin__face {
+  position: absolute; inset: 0; border-radius: 50%;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  filter: drop-shadow(0 4px 10px rgb(0 0 0 / .65));
+}
+.minigame-coin__face--front { transform: translateZ(3px); }
+.minigame-coin__face--back { transform: rotateX(180deg) translateZ(3px); }
+
+.minigame-coin__rim {
+  position: absolute; inset: 0; border-radius: 50%;
+  box-shadow: 0 0 0 2px #9a7d0a, 0 3px 0 2px #685404, 0 5px 0 2px #3d3100;
+  transform: translateZ(0);
+}
+
+/* Arc: coin rises from 0 to Z 100, then falls back down to 0 with zero bouncing */
+@keyframes coin-toss-arc {
+  0% {
+    transform: translateY(0) translateZ(0);
+    animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+  50% {
+    transform: translateY(-75px) translateZ(100px);
+    animation-timing-function: cubic-bezier(0.55, 0.085, 0.68, 0.53);
+  }
+  100% {
+    transform: translateY(0) translateZ(0);
+  }
+}
+
+/* Inner rotation: constant smooth spinning on X-axis, stops completely on landing */
+@keyframes coin-spin-x {
+  0% { transform: rotateX(0deg); }
+  100% { transform: rotateX(var(--coin-end-rot)); }
+}
+
+.coin-game__shadow {
+  position: absolute; z-index: 1; bottom: 1.2rem; left: calc(50% - 2.2rem);
+  width: 4.4rem; height: .8rem; border-radius: 50%;
+  background: rgb(0 0 0 / .75); filter: blur(3px);
+  animation: coin-shadow-sync 2.4s both;
+}
+@keyframes coin-shadow-sync {
+  0% {
+    transform: scale(1);
+    opacity: .7;
+    filter: blur(3px);
+    animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+  50% {
+    transform: scale(.45);
+    opacity: .2;
+    filter: blur(8px);
+    animation-timing-function: cubic-bezier(0.55, 0.085, 0.68, 0.53);
+  }
+  100% {
+    transform: scale(1);
+    opacity: .72;
+    filter: blur(3px);
+  }
+}
+.coin-game__gleam { position: absolute; z-index: 3; top: 4.7rem; left: calc(50% - 5rem); width: 10rem; height: .4rem; border-radius: 999px; pointer-events: none; background: linear-gradient(90deg, transparent 0%, rgb(255 238 150 / .15) 27%, rgb(255 255 232 / .98) 50%, rgb(255 211 56 / .35) 72%, transparent 100%); box-shadow: 0 0 8px 2px rgb(255 213 68 / .7); mix-blend-mode: screen; transform: rotate(-45deg); animation: coin-correct-gleam .7s 2.1s ease-out both; }
+@keyframes coin-correct-gleam { 0% { opacity: 0; transform: translate(-4rem, 4rem) rotate(-45deg); } 28% { opacity: 1; } 100% { opacity: 0; transform: translate(4rem, -4rem) rotate(-45deg); } }
+.coin-game__spark { position: absolute; top: 50%; left: 50%; height: 8px; width: 8px; border-radius: 50%; background: #fff4a7; animation: spark-burst 0.8s 2.35s ease-out both; }
+.coin-game__spark--one { margin-left: -5rem; }.coin-game__spark--two { margin-left: 4.5rem; animation-delay: 2.38s; }
+@keyframes spark-burst { from { transform: scale(.1); opacity: 1; box-shadow: 0 0 0 0 #E2D309; } to { transform: scale(1); opacity: 0; box-shadow: 0 0 0 2rem transparent; } }
+
+/* Rock Paper Scissors Stone Decider */
+.rps-conveyor { overflow: hidden; padding-inline: 0; background: linear-gradient(#071012, #223638 18%, #0a1518 48%, #223638 82%, #071012); }
+.rps-conveyor .minigame-kicker, .rps-conveyor .minigame-title, .rps-conveyor .minigame-copy { position: relative; z-index: 2; margin-inline: 1rem; }
+.rps-rail { position: relative; margin: .8rem 0; overflow: hidden; border-top: 3px solid #695839; border-bottom: 3px solid #181d1f; background: #071013; box-shadow: inset 0 8px 12px rgb(0 0 0 / .6); }
+.rps-rail--opponent { border-color: #71484a; }.rps-rail--player { border-color: #3f8c96; }
+.rps-rail__track { display: flex; width: max-content; gap: 0; padding: .4rem 0; animation: stone-scroll 16s linear infinite; }
+.rps-rail--opponent .rps-rail__track { animation-direction: reverse; animation-duration: 20s; }
+@keyframes stone-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+.stone-slab {
+  position: relative; flex: 0 0 6.5rem; width: 6.5rem; height: 6.5rem; padding: .15rem;
+  border: 0; background: transparent; border-radius: 6px;
+  transition: transform 160ms ease, filter 160ms ease;
+  cursor: pointer;
+}
+.stone-slab--hidden { cursor: default; }
+.stone-slab:not(:disabled):hover, .stone-slab:not(:disabled):focus-visible, .stone-slab--selected {
+  transform: scale(1.08); z-index: 3; outline: none;
+}
+.stone-slab:not(:disabled):hover .stone-slab__img, .stone-slab--selected .stone-slab__img {
+  outline: 3.5px solid #55f3ff;
+  outline-offset: -2px;
+  box-shadow: 0 0 18px #3de8f5, 0 4px 14px rgb(0 0 0 / .8);
+  border-radius: 4px;
+}
+.stone-slab:disabled:not(.stone-slab--hidden) { opacity: .75; cursor: wait; }
+
+.stone-slab__img {
+  display: block; width: 100%; height: 100%;
+  object-fit: cover; border-radius: 4px;
+  box-shadow: 0 3px 8px rgb(0 0 0 / .65);
+  pointer-events: none;
+}
+.stone-slab__flame {
+  position: absolute; top: -.65rem; left: 50%;
+  width: .7rem; height: .95rem; border-radius: 60% 40% 55% 45%;
+  background: #f7e04f; box-shadow: 0 0 12px 5px #f7e04f, 0 0 20px 8px #e29009;
+  transform: translateX(-50%) rotate(45deg);
+  animation: slab-flame 400ms ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: 4;
+}
+@keyframes slab-flame { to { transform: translateX(-50%) translateY(-5px) rotate(45deg) scale(1.2); } }
+
+.rps-clash { min-height: 20rem; overflow: hidden; background: radial-gradient(circle, #1e3435, #030a0c 63%); }
+.rps-clash__doors { position: absolute; top: 0; bottom: 0; width: 50%; background: repeating-linear-gradient(45deg, #283b3c 0 7px, #162627 7px 14px); border-color: #b99d4c; z-index: 1; animation: door-open 750ms ease-out both; }
+.rps-clash__doors--left { left: 0; border-right: 3px solid #b99d4c; }
+.rps-clash__doors--right { right: 0; border-left: 3px solid #b99d4c; animation-name: door-open-right; }
+@keyframes door-open { to { transform: translateX(-104%); } }
+@keyframes door-open-right { to { transform: translateX(104%); } }
+.rps-clash > :not(.rps-clash__doors) { position: relative; z-index: 2; }
+.rps-clash__hands { position: relative; height: 13rem; }
+.rps-clash__hand {
+  position: absolute; left: calc(50% - 3.75rem); display: grid; height: 7.5rem; width: 7.5rem; place-items: center;
+  filter: drop-shadow(0 0 16px rgb(226 211 9 / .8));
+}
+.rps-clash__img {
+  width: 100%; height: 100%; object-fit: cover;
+  border-radius: 6px; box-shadow: 0 4px 14px rgb(0 0 0 / .75);
+}
+.rps-clash__img--top { transform: rotate(180deg); }
+.rps-clash__hand--top { top: .2rem; animation: hand-drop 1.25s ease-out both; }
+.rps-clash__hand--bottom { bottom: .2rem; animation: hand-rise 1.25s ease-out both; }
+.rps-clash__impact { position: absolute; top: calc(50% - 1.2rem); left: calc(50% - 1.2rem); width: 2.4rem; height: 2.4rem; border-radius: 50%; background: radial-gradient(circle, #fffbd3 0 14%, #f6cf4e 16% 33%, transparent 35%); box-shadow: 0 0 0 3px rgb(246 207 78 / .2), 0 0 28px 9px rgb(246 207 78 / .7); animation: impact 1.3s ease-out both; }
+@keyframes hand-drop { 0%,40% { transform: translateY(-7rem); } 62% { transform: translateY(.6rem); } 100% { transform: translateY(0); } }
+@keyframes hand-rise { 0%,40% { transform: translateY(7rem); } 62% { transform: translateY(-.6rem); } 100% { transform: translateY(0); } }
+@keyframes impact { 0%,55% { transform: scale(0); opacity: 0; } 65% { transform: scale(2.3); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-tease {
+    animation: none;
+  }
+  .coin-toss { animation: none; }
+  .coin-stage__halo { animation: none; }
+  .minigame-coin, .coin-game__shadow, .coin-game__spark, .rps-rail__track,
+  .rps-clash__doors, .rps-clash__hand, .rps-clash__impact, .stone-slab__flame {
+    animation: none;
+  }
+}

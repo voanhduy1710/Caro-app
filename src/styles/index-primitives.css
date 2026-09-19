@@ -1,0 +1,555 @@
+/* =============================================================================
+   Base
+   ========================================================================== */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--ui-bg);
+    color: var(--ui-text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 22px;
+    letter-spacing: 0.16px;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body::selection,
+  body *::selection {
+    background: var(--ui-accent);
+    color: var(--ui-accent-fg);
+  }
+
+  /* The display face is the game's voice: the wordmark, headings, the score,
+     the result, and the one action that is the point of a screen. It is not
+     the voice of every chip, label and tool button. Anything below h4 is
+     structure rather than voice, so it stays on the body face.
+
+     Baloo ships tall vertical metrics, so leading is set explicitly rather
+     than left to the font's own line gap. */
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1.1;
+  }
+
+  h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+
+  code, kbd, pre, samp {
+    font-family: var(--font-mono);
+  }
+
+  hr {
+    border-color: var(--ui-border);
+  }
+
+  /* Offset off the shape, so it survives on a chunky coloured control. */
+  :focus-visible {
+    outline: 3px solid var(--ui-accent);
+    outline-offset: 3px;
+    border-radius: var(--radius-sm);
+  }
+}
+
+/* =============================================================================
+   Component primitives
+
+   Shape rule: buttons, chips, inputs and nested cards are 16px rounded
+   squares, panels and modals are 28px, micro tags are 10px, avatars circles.
+
+   Elevation rule: a raised thing is extruded, not blurred. It sits on a hard
+   offset in its own darker hue, and pressing drives the face onto its shadow.
+   ========================================================================== */
+
+@layer components {
+
+  /* --- Buttons ----------------------------------------------------------- */
+
+  .btn {
+    --btn-lift: 4px;
+    --btn-shadow: var(--ui-border-strong);
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    /* Labels never wrap: a two-line button is a broken button. */
+    white-space: nowrap;
+    border-radius: var(--radius-md);
+    border: none;
+    padding: 9px 18px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 20px;
+    cursor: pointer;
+    box-shadow: 0 var(--btn-lift) 0 var(--btn-shadow);
+    transform: translateY(0);
+    transition:
+      background-color 0.18s var(--ease-out-quart),
+      color 0.18s var(--ease-out-quart),
+      transform 0.1s var(--ease-out-quart),
+      box-shadow 0.1s var(--ease-out-quart);
+  }
+
+  /* The face travels exactly the height of its own shadow. */
+  .btn:not(:disabled):active {
+    transform: translateY(var(--btn-lift));
+    box-shadow: 0 0 0 var(--btn-shadow);
+  }
+
+  .btn:not(:disabled):hover {
+    --btn-lift: 5px;
+    transform: translateY(-1px);
+  }
+
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    --btn-lift: 2px;
+  }
+
+  /* A button that is out of action but must keep focus, such as the one the
+     player has just pressed, looks disabled without being :disabled. */
+  .btn[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-sm {
+    padding: 6px 14px;
+    font-size: 14px;
+    line-height: 18px;
+    --btn-lift: 3px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* The loud one. A screen has at most one, so it keeps the game's voice. */
+  .btn-lg {
+    padding: 14px 28px;
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 24px;
+    --btn-lift: 6px;
+  }
+
+  /* White label at 4.51:1. */
+  .btn-primary {
+    background-color: var(--ui-accent);
+    color: var(--ui-accent-fg);
+    --btn-shadow: var(--ui-accent-shadow);
+  }
+
+  .btn-primary:not(:disabled):hover {
+    background-color: var(--ui-accent-hover);
+  }
+
+  /* A blue face needs a non-blue focus ring. */
+  .btn-primary:focus-visible,
+  .btn-inverse:focus-visible,
+  .btn-danger-solid:focus-visible {
+    outline-color: var(--ui-text);
+  }
+
+  .btn-secondary {
+    background-color: var(--ui-surface);
+    color: var(--ui-text);
+    box-shadow:
+      0 0 0 1px var(--ui-border) inset,
+      0 var(--btn-lift) 0 var(--btn-shadow);
+    --btn-shadow: var(--ui-border-strong);
+  }
+
+  .btn-secondary:not(:disabled):active {
+    box-shadow: 0 0 0 1px var(--ui-border) inset, 0 0 0 var(--btn-shadow);
+  }
+
+  .btn-secondary:not(:disabled):hover {
+    background-color: var(--ui-surface-2);
+  }
+
+  /* Tonal: reads as an action without competing with the primary CTA. */
+  .btn-tonal {
+    background-color: var(--ui-accent-soft);
+    color: var(--ui-accent-text);
+    --btn-shadow: var(--ui-border-strong);
+  }
+
+  .btn-tonal:not(:disabled):hover {
+    background-color: var(--ui-accent-soft-hover);
+    color: var(--ui-accent-text-hover);
+  }
+
+  /* Flat controls squash instead of pressing down. */
+  .btn-ghost {
+    background-color: transparent;
+    color: var(--ui-text-muted);
+    box-shadow: none;
+    --btn-lift: 0px;
+  }
+
+  .btn-ghost:not(:disabled):hover {
+    background-color: var(--ui-surface-3);
+    color: var(--ui-text);
+    transform: none;
+  }
+
+  .btn-ghost:not(:disabled):active {
+    transform: scale(0.94);
+    box-shadow: none;
+  }
+
+  .btn-danger {
+    background-color: var(--ui-danger-soft);
+    color: var(--ui-danger);
+    --btn-shadow: var(--ui-border-strong);
+  }
+
+  .btn-danger:not(:disabled):hover {
+    background-color: var(--ui-danger-soft-hover);
+    color: var(--ui-danger-text-hover);
+  }
+
+  .btn-danger-solid {
+    background-color: var(--ui-danger-solid);
+    color: var(--ui-danger-fg);
+    --btn-shadow: var(--ui-danger-shadow);
+  }
+
+  /* High-emphasis alternative to primary, for the one action per surface that
+     competes with it (sign out, close a match) without borrowing the accent. */
+  .btn-inverse {
+    background-color: var(--ui-inverse);
+    color: var(--ui-inverse-fg);
+    --btn-shadow: var(--ui-inverse-shadow);
+  }
+
+  .btn-inverse:not(:disabled):hover {
+    opacity: 0.9;
+  }
+
+  .btn-icon {
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    gap: 0;
+  }
+
+  /* --- Display type -------------------------------------------------------
+
+     Orange on white is 2.30:1, which no size rescues, so the navy outline IS
+     the contrast. Fill and outline are welded together here so no caller can
+     take one without the other.                                            */
+
+  .display-brand {
+    --outline: var(--ui-text);
+    font-family: var(--font-display);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: 0.02em;
+    color: var(--ui-brand);
+    text-shadow:
+      -2px -2px 0 var(--outline), 0 -2px 0 var(--outline), 2px -2px 0 var(--outline),
+      -2px 0 0 var(--outline), 2px 0 0 var(--outline),
+      -2px 2px 0 var(--outline), 0 2px 0 var(--outline), 2px 2px 0 var(--outline),
+      0 6px 0 var(--outline);
+  }
+
+  /* A real stroke joins more cleanly than eight stacked shadows. */
+  @supports (paint-order: stroke) {
+    .display-brand {
+      paint-order: stroke fill;
+      -webkit-text-stroke: 5px var(--outline);
+      text-shadow: 0 6px 0 var(--outline);
+    }
+  }
+
+  /* On navy the outline flips to the page colour. */
+  :root[data-ui-theme='dark'] .display-brand {
+    --outline: #05101f;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-ui-theme='light']) .display-brand {
+      --outline: #05101f;
+    }
+  }
+
+  /* --- Surfaces ---------------------------------------------------------- */
+
+  .panel {
+    background-color: var(--ui-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 0 var(--ui-lift);
+  }
+
+  .card {
+    background-color: var(--ui-surface);
+    border-radius: var(--radius-md);
+    box-shadow: 0 3px 0 var(--ui-lift);
+  }
+
+  /* Inset cards press in rather than out. */
+  .card-inset {
+    background-color: var(--ui-surface-2);
+    border: 2px solid var(--ui-border);
+    border-radius: var(--radius-md);
+    box-shadow: none;
+  }
+
+  /* The avatar art is pixel art; default smoothing turns it to mush at 96px. */
+  .pixel-art {
+    image-rendering: pixelated;
+  }
+
+  /* --- Chips and tags ---------------------------------------------------- */
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    border-radius: var(--radius-sm);
+    background-color: var(--ui-surface-3);
+    color: var(--ui-text-muted);
+    padding: 4px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+  }
+
+  .chip-accent {
+    background-color: var(--ui-accent-soft);
+    color: var(--ui-accent-text);
+  }
+
+  /* Celebration tag: orange face, dark ink at 6.89:1. */
+  .chip-brand {
+    background-color: var(--ui-brand);
+    color: var(--ui-brand-fg);
+  }
+
+  /* --- Forms ------------------------------------------------------------- */
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Label above input, always. Never placeholder-as-label. */
+  .field-label {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 18px;
+    color: var(--ui-text);
+  }
+
+  /* Recessed, so an input is visibly not a button. */
+  .field-input {
+    width: 100%;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--ui-border-strong);
+    background-color: var(--ui-surface-2);
+    color: var(--ui-text);
+    padding: 10px 14px;
+    font-size: 15px;
+    line-height: 22px;
+    transition:
+      border-color 0.18s var(--ease-out-quart),
+      background-color 0.18s var(--ease-out-quart),
+      box-shadow 0.18s var(--ease-out-quart);
+  }
+
+  .field-input::placeholder {
+    /* Subtle, but still 4.92:1 against the field background. */
+    color: var(--ui-text-subtle);
+  }
+
+  .field-input:focus {
+    outline: none;
+    border-color: var(--ui-accent);
+    background-color: var(--ui-surface);
+    box-shadow: 0 0 0 4px var(--ui-accent-ring);
+  }
+
+  .field-input:disabled {
+    background-color: var(--ui-surface-3);
+    color: var(--ui-text-muted);
+    cursor: not-allowed;
+  }
+
+  .field-hint {
+    font-size: 13px;
+    line-height: 18px;
+    color: var(--ui-text-muted);
+  }
+
+  .field-error {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+    color: var(--ui-danger);
+  }
+
+  /* --- Match stage --------------------------------------------------------
+
+     One grid owns the whole match screen, so the chat column is exactly as
+     tall as the board without measuring anything, and the toolbar under the
+     board lines up with the composer under the chat. */
+
+  .match-stage {
+    display: grid;
+    gap: 0;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "left"
+      "board"
+      "right";
+  }
+
+  /* Home lobby: browse public rooms in the left column while the actions for
+     creating, joining and playing live together on the right. */
+  .home-lobby {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  @media (min-width: 1024px) {
+    .home-lobby {
+      display: grid;
+      grid-template-columns: minmax(300px, 0.9fr) minmax(440px, 1.1fr);
+      align-items: start;
+    }
+
+    .home-lobby__intro,
+    .home-lobby__notice { grid-column: 1 / -1; }
+    .home-lobby__rooms {
+      grid-column: 1;
+      grid-row: 3 / span 2;
+      align-self: stretch;
+    }
+    .home-lobby__play { grid-column: 2; grid-row: 3; }
+    .home-lobby__rules { grid-column: 2; grid-row: 4; }
+  }
+
+  @media (min-width: 1024px) {
+    .match-stage {
+      grid-template-columns: 240px minmax(0, 1fr) 320px;
+      grid-template-areas:
+        "left board right";
+      /* Navbar (64) plus the shell's own vertical padding (32). One extra
+         pixel avoids a redundant document scrollbar from fractional viewport
+         rounding on desktop browsers. */
+      height: calc(100dvh - 97px);
+      min-height: 0;
+      overflow: hidden;
+      border-radius: var(--radius-lg);
+      background-color: var(--ui-surface);
+      /* One edge of its own, or the tinted side column dissolves into the
+         page tint behind it. Ring first, then the extrusion. */
+      box-shadow: 0 0 0 2px var(--ui-border), 0 8px 0 var(--ui-lift);
+    }
+
+    /* Practice has no chat, but we still keep the left column for actions/players */
+    .match-stage--solo {
+      grid-template-columns: 240px minmax(0, 1fr);
+      grid-template-areas:
+        "left board";
+    }
+  }
+
+  /* Wide screens: the side columns take the extra width rather than leaving it
+     as margin, because the board is square and can only grow with the height. */
+  @media (min-width: 1440px) {
+    .match-stage { grid-template-columns: 280px minmax(0, 1fr) 360px; }
+    .match-stage--solo { grid-template-columns: 280px minmax(0, 1fr); }
+  }
+
+  @media (min-width: 1700px) {
+    .match-stage { grid-template-columns: 320px minmax(0, 1fr) 400px; }
+    .match-stage--solo { grid-template-columns: 320px minmax(0, 1fr); }
+  }
+
+  /* Columns are told apart by surface tint, not by a rule between them. */
+  .area-left { grid-area: left; display: flex; flex-direction: column; background-color: var(--ui-surface-2); min-height: 0; }
+  .area-board { grid-area: board; min-width: 0; display: flex; flex-direction: column; }
+  .area-right { grid-area: right; min-height: 0; display: flex; flex-direction: column; background-color: var(--ui-surface-2); }
+
+  /* The stage cannot clip its own corners without clipping the reaction picker
+     that opens out of the left column, so the end columns round themselves. */
+  @media (min-width: 1024px) {
+    .area-left {
+      border-top-left-radius: var(--radius-lg);
+      border-bottom-left-radius: var(--radius-lg);
+    }
+
+    .area-right,
+    .match-stage--solo .area-board {
+      border-top-right-radius: var(--radius-lg);
+      border-bottom-right-radius: var(--radius-lg);
+    }
+  }
+
+  /* --- Modals ------------------------------------------------------------ */
+
+  .modal-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background-color: var(--ui-scrim);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: scrim-in 0.18s var(--ease-out-quart);
+  }
+
+  .modal-panel {
+    width: 100%;
+    background-color: var(--ui-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--ui-shadow-lg);
+    /* The bounce is what says a layer opened. */
+    animation: panel-pop 0.34s var(--ease-pop);
+  }
+
+  /* --- Skeleton ---------------------------------------------------------- */
+
+  .skeleton {
+    background-color: var(--ui-surface-3);
+    border-radius: var(--radius-sm);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--ui-surface) 70%, transparent),
+      transparent
+    );
+    animation: skeleton-sweep 1.4s infinite;
+  }
+}
+
