@@ -85,11 +85,11 @@ ORDER BY created_at ASC;
 ## 4. How We Modified the Data
 
 ### Step 4.1: Resetting a User's Password
-Supabase Auth uses Blowfish (`bcrypt`) encryption stored in `auth.users.encrypted_password`. We updated `test_user`'s password to `123456` using PostgreSQL's `pgcrypto` function:
+Supabase Auth uses Blowfish (`bcrypt`) encryption stored in `auth.users.encrypted_password`. To update a user's password using PostgreSQL's `pgcrypto` function:
 
 ```sql
 UPDATE auth.users 
-SET encrypted_password = crypt('123456', gen_salt('bf')),
+SET encrypted_password = crypt('<NEW_SECURE_PASSWORD>', gen_salt('bf')),
     updated_at = NOW()
 WHERE email = 'user@example.com'
 RETURNING id, email, updated_at;
@@ -104,33 +104,33 @@ Content-Type: application/json
 
 {
   "email": "user@example.com",
-  "password": "123456"
+  "password": "<NEW_SECURE_PASSWORD>"
 }
 ```
-Result: Returned `200 OK` with valid JWT tokens.
+Result: Returns `200 OK` with valid JWT tokens.
 
 ---
 
 ### Step 4.2: Updating Player ELO & Match Records
-To increase `player_one`'s ELO by 50 (+2 Wins) and decrease `test_user`'s ELO by 50 (+2 Losses):
+To update player ELO, win/loss stats, and streaks:
 
 ```sql
--- Update player_one (+50 ELO, +2 Wins, +2 Streak)
+-- Update Player 1 stats
 UPDATE gomoku_users 
 SET elo = elo + 50,
     wins = wins + 2,
     streak = streak + 2,
     updated_at = NOW()
-WHERE username = 'player_one'
+WHERE username = '<PLAYER_1_USERNAME>'
 RETURNING uid, username, display_name, elo, wins, losses, streak;
 
--- Update test_user (-50 ELO, +2 Losses, Reset Streak to 0)
+-- Update Player 2 stats
 UPDATE gomoku_users 
 SET elo = elo - 50,
     losses = losses + 2,
     streak = 0,
     updated_at = NOW()
-WHERE username = 'test_user'
+WHERE username = '<PLAYER_2_USERNAME>'
 RETURNING uid, username, display_name, elo, wins, losses, streak;
 ```
 
