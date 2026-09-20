@@ -6,10 +6,14 @@ A modern, high-performance, real-time **Caro (Gomoku / Five-in-a-Row)** web appl
 
 ## Features
 
-- 1v1 Classic
-- 1v1v1 (4 in a row)
-- Lmao mode
-- Coordinates
+- **1v1 Classic**
+- **1v1v1 (4 in a row)**
+- **Lmao mode**
+- **Coordinates**
+- **Unlimited time choices**
+- **Move simulations**
+- **Real live chatting**
+- **Sending memes and GIFs**
 
 ---
 
@@ -118,11 +122,3 @@ Caro-app/
 ├── supabase/             # Database reference guides & SQL setup templates
 └── package.json          # Project metadata and dependencies
 ```
-
----
-
-## Security & Privacy Policy
-
-- **No Committed Secrets**: Never hardcode credentials, access tokens, or database secrets in the codebase. All runtime configuration is driven strictly through `.env` (gitignored).
-- **Client-Safe Keys**: Only public `anon` keys are referenced on the frontend. Administrative SQL operations must be performed using secure dashboard tools or server-side functions.
-- **P2P Data Isolation**: Moves and room messages are transmitted peer-to-peer over encrypted WebRTC channels without intermediate server logging.
