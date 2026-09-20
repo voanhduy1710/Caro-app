@@ -30,10 +30,10 @@ The access token is stored in the workspace configuration file [`.mcp.json`](../
         "-y",
         "@supabase/mcp-server-supabase@latest",
         "--access-token",
-        "<REDACTED_SUPABASE_PAT>"
+        "<YOUR_SUPABASE_ACCESS_TOKEN>"
       ],
       "env": {
-        "SUPABASE_ACCESS_TOKEN": "<REDACTED_SUPABASE_PAT>"
+        "SUPABASE_ACCESS_TOKEN": "<YOUR_SUPABASE_ACCESS_TOKEN>"
       }
     }
   }
