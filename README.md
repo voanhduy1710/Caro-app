@@ -1,19 +1,19 @@
-# ⚔️ Caro League (Gomoku Web App)
+# Caro League (Gomoku Web App)
 
 A modern, high-performance, real-time **Caro (Gomoku / Five-in-a-Row)** web application built with **React 19**, **TypeScript**, **Tailwind CSS v4**, and **WebRTC (PeerJS)**, backed by **Supabase** for user authentication, ELO ratings, and leaderboard persistence.
 
 ---
 
-## ✨ Features
+## Features
 
-### 🎮 Game Modes & Rules
+### Game Modes & Rules
 - **1v1 Classic Gomoku**: Standard 5-in-a-row with configurable board dimensions (15×15, 19×19, 20×20).
 - **1v1v1 Three-Player Mode**: Fast-paced three-way battle featuring a custom triangle piece (`T`) and dynamic 4-in-a-row / 5-in-a-row win triggers.
 - **Pass-and-Play (Local)**: Instant offline play on a single screen or split-device setup.
 - **Algebraic Coordinates & Analysis Mode**: Full chess-style coordinate system (A1–T20) with in-match simulation lines for tactical planning.
-- **LMAO Corner Placement**: Optional fun mode allowing corner-anchored piece placements.
+- **LMAO Corner Placement**: Optional mode allowing corner-anchored piece placements.
 
-### 🌐 Realtime WebRTC Multiplayer
+### Realtime WebRTC Multiplayer
 - **P2P Direct Networking**: Low-latency, serverless move synchronization driven by WebRTC via PeerJS.
 - **Room Engine Hub**:
   - Auto-seating, spectator slots, and match takeover capabilities.
@@ -21,21 +21,21 @@ A modern, high-performance, real-time **Caro (Gomoku / Five-in-a-Row)** web appl
   - Reconnection grace periods preserving state during transient network drops.
 - **Pre-Match Turn Deciders**:
   - Interactive retro arcade minigames: **Coin Flip** and **Stone Rock-Paper-Scissors (RPS)** to decide who plays first.
-- **In-Game Chat**: Real-time room chat with animated sound triggers, sound reaction rows, and peer-to-peer GIF attachments.
+- **In-Game Chat**: Real-time room chat with sound triggers, reaction rows, and peer-to-peer GIF attachments.
 
-### 🏆 Competitive System & Profiles
+### Competitive System & Profiles
 - **Supabase Auth Integration**: Seamless native authentication with guest accounts and persistent user accounts.
 - **ELO Rating & Leaderboards**: Dynamic rating calculation, win/loss tracking, winning streaks, and settled match claims.
 - **Animated Avatars**: Extensive collection of retro animated Ragnarok-style sprites with profile customization.
 
-### 🎨 Visuals, Themes & Audio
+### Visuals, Themes & Audio
 - **Custom Design System**: Dark/Light mode with curated retro-arcade and cyberpunk aesthetics.
 - **Board Themes**: Light Wood, Dark Slate, Cyberpunk Neon, and classic textures.
 - **Web Audio API**: Crisp retro audio effects for piece placement, win fanfare, countdown alerts, and chat reactions.
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Category | Technologies |
 | :--- | :--- |
@@ -48,7 +48,7 @@ A modern, high-performance, real-time **Caro (Gomoku / Five-in-a-Row)** web appl
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Prerequisites
 - [Node.js](https://nodejs.org/) (v18.0 or higher recommended)
@@ -85,7 +85,7 @@ Open [http://localhost:5175](http://localhost:5175) in your browser.
 
 ---
 
-## 📜 PowerShell Helper Scripts
+## PowerShell Helper Scripts
 
 For Windows developers, automated PowerShell workflows are provided in the repository root:
 
@@ -95,7 +95,7 @@ For Windows developers, automated PowerShell workflows are provided in the repos
 
 ---
 
-## 🧪 Testing & Code Quality
+## Testing & Code Quality
 
 ```bash
 # Run unit tests via Vitest
@@ -113,7 +113,7 @@ npm run build
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```text
 Caro-app/
@@ -143,7 +143,7 @@ Caro-app/
 
 ---
 
-## 🔒 Security & Privacy Policy
+## Security & Privacy Policy
 
 - **No Committed Secrets**: Never hardcode credentials, access tokens, or database secrets in the codebase. All runtime configuration is driven strictly through `.env` (gitignored).
 - **Client-Safe Keys**: Only public `anon` keys are referenced on the frontend. Administrative SQL operations must be performed using secure dashboard tools or server-side functions.
