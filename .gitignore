@@ -8,9 +8,12 @@ mcp.json
 
 # Agent rules & scratch prompts
 .agents
+.agents/
 Z_prompt_typer.md
 Z_refactoring_prompt.md
 Z_updating_prompt.md
+USER_FLOW_REVIEW.md
+walkthrough.md
 
 # Logs
 logs
