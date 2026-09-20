@@ -25,18 +25,6 @@ A modern, high-performance, real-time **Caro (Gomoku / Five-in-a-Row)** web appl
 
 ---
 
-## Tech Stack
-
-[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
-[![React](https://img.shields.io/badge/React-19-blue.svg)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38B2AC.svg)](https://tailwindcss.com/)
-[![Supabase](https://img.shields.io/badge/Database-Supabase%20Postgres-3ECF8E.svg)](https://supabase.com/)
-[![WebRTC](https://img.shields.io/badge/Networking-WebRTC%20%2F%20PeerJS-orange.svg)](https://peerjs.com/)
-[![Tests](https://img.shields.io/badge/Tests-Vitest%20Passed-brightgreen.svg)](https://vitest.dev/)
-
----
-
 ## Quick Start
 
 ### 1. Prerequisites
