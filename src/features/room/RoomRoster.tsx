@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Link2, UserMinus } from 'lucide-react';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
+import { formatReconnectDuration } from '../../shared/utils/formatDuration';
 import type { Seat } from './protocol';
 import { SEATS } from './roomEngine';
 import type { Member } from './roomEngine';
@@ -129,7 +130,7 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
                     )}
                   </div>
                   {grace !== null && (
-                    <p className="mt-0.5 text-[11px] font-medium text-warning">Reconnecting {grace}s</p>
+                    <p className="mt-0.5 text-[11px] font-medium text-warning">Reconnecting {formatReconnectDuration(grace)}</p>
                   )}
                   {isMe && seat && watching > 0 && onPassBaton && (
                     <button type="button" onClick={onPassBaton} className="btn btn-secondary btn-sm mt-1 h-7 px-2 text-[11px]">

@@ -1,6 +1,7 @@
 import React from 'react';
 import { WifiOff } from 'lucide-react';
 import type { ConfirmSpec } from './OnlineRoomTypes';
+import { formatReconnectDuration } from '../../shared/utils/formatDuration';
 
 export const RoomConfirmDialog: React.FC<{ spec: ConfirmSpec | null; onDismiss: () => void }> = ({ spec, onDismiss }) => {
   if (!spec) return null;
@@ -25,11 +26,11 @@ export const RoomConfirmDialog: React.FC<{ spec: ConfirmSpec | null; onDismiss: 
 export const HostLostStrip: React.FC<{ seconds: number | null | undefined }> = ({ seconds }) => (
   <div className="flex items-center justify-between gap-3 rounded-md border border-warning bg-warning-soft p-3 text-xs font-medium text-warning">
     <span className="flex items-center gap-2"><WifiOff size={14} strokeWidth={2.25} aria-hidden="true" />Lost the connection to the host. Waiting for them to come back…</span>
-    <span className="font-mono tabular-nums">{seconds}s</span>
+    <span className="font-mono tabular-nums">{seconds === null || seconds === undefined ? '' : formatReconnectDuration(seconds)}</span>
   </div>
 );
 
 export const OnlineRoomConnecting: React.FC<{ status: 'opening' | 'host_lost' | string; roomId: string | null; seconds: number | null; onCancel: () => void }> = ({ status, roomId, seconds, onCancel }) => {
-  const text = status === 'opening' ? 'Opening the room…' : status === 'host_lost' ? `Reconnecting to room ${roomId}… ${seconds ?? ''}s` : `Joining room ${roomId}…`;
+  const text = status === 'opening' ? 'Opening the room…' : status === 'host_lost' ? `Reconnecting to room ${roomId}… ${seconds === null ? '' : formatReconnectDuration(seconds ?? 0)}` : `Joining room ${roomId}…`;
   return <div className="panel w-full max-w-sm space-y-4 p-6 text-center" role="status" aria-live="polite"><p className="text-sm font-medium text-ink">{text}</p><button onClick={onCancel} className="btn btn-secondary btn-sm">Cancel</button></div>;
 };
