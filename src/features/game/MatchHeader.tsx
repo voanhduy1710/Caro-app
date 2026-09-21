@@ -1,6 +1,7 @@
 import React from 'react';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { useTheme } from '../theme/ThemeContext';
+import { formatReconnectDuration } from '../../shared/utils/formatDuration';
 
 /**
  * One seat as the header draws it. The header does not know whether it is a
@@ -199,7 +200,7 @@ const Seat: React.FC<SeatProps> = ({
       >
         {away && (
           <span className="chip shrink-0 px-1.5 py-0 text-[11px] leading-4 text-warning">
-            Reconnecting {reconnectingSeconds}s
+            Reconnecting {formatReconnectDuration(reconnectingSeconds)}
           </span>
         )}
         {tag === 'Thinking' && (

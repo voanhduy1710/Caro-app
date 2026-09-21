@@ -59,19 +59,39 @@ export const handleHello = (d: EngineState, p: IntentPayloads['HELLO'], from: st
     return;
   }
   const { host, room } = d;
+  const restoreMember = (member: Member, token: string): void => {
+    const supersede = host.tabIds[member.id] !== p.tabId;
+    // Refresh display-only account data too, so reconnecting after changing a
+    // profile does not leave the room showing the old name or avatar.
+    member.profile = profile;
+    member.connected = true;
+    member.graceMsLeft = null;
+    delete host.graceEndsAt[member.id];
+    host.lastSeenAt[member.id] = ctx.now;
+    host.tabIds[member.id] = p.tabId;
+    ctx.events.push({ kind: 'bind', memberId: member.id, supersede });
+    ctx.welcome = { memberId: member.id, token, resumed: true, expired: false };
+  };
   if (p.resume) {
     const { memberId, token } = p.resume;
     const member = findMember(d, memberId);
     const known = host.tokens[memberId];
     if (member && known !== undefined && known === token) {
-      const supersede = host.tabIds[memberId] !== p.tabId;
-      member.connected = true;
-      member.graceMsLeft = null;
-      delete host.graceEndsAt[memberId];
-      host.lastSeenAt[memberId] = ctx.now;
-      host.tabIds[memberId] = p.tabId;
-      ctx.events.push({ kind: 'bind', memberId, supersede });
-      ctx.welcome = { memberId, token: known, resumed: true, expired: false };
+      restoreMember(member, known);
+      return;
+    }
+  }
+  // A registered account may reopen the invite from another device, where the
+  // per-browser resume token is unavailable. Reclaim its still-graceful seat
+  // instead of creating a duplicate "Name (2)" room member. Guests have no
+  // durable identity, so they deliberately remain token-only.
+  const accountToRestore = room.members.find((member) =>
+    !member.isHost && !member.connected && !member.profile.guest && !profile.guest && member.profile.uid === profile.uid,
+  );
+  if (accountToRestore) {
+    const token = host.tokens[accountToRestore.id];
+    if (token !== undefined) {
+      restoreMember(accountToRestore, token);
       return;
     }
   }

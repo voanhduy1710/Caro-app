@@ -2,6 +2,7 @@ import React from 'react';
 import { Check, Copy, Globe, Lock, Share2 } from 'lucide-react';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { summariseRoomSettings } from '../settings/types';
+import { formatReconnectDuration } from '../../shared/utils/formatDuration';
 import type { Member, RoomState } from './roomEngine';
 import type { Seat } from './protocol';
 import type { RoomApi } from './useRoom';
@@ -48,7 +49,7 @@ export const OnlineRoomLobby: React.FC<OnlineRoomLobbyProps> = ({ room, s, me, i
               {isMine && <span className="chip chip-accent px-1.5 py-0 text-[10px]">You</span>}
               {occupant?.isHost && <span className="chip px-1.5 py-0 text-[10px]">Host</span>}
             </div>
-            {grace !== null && <p className="text-[11px] font-medium text-warning">Reconnecting {grace}s</p>}
+            {grace !== null && <p className="text-[11px] font-medium text-warning">Reconnecting {formatReconnectDuration(grace)}</p>}
           </div>
           {!occupant && isViewer && connected && (
             <button onClick={() => room.takeSeat(seat)} className="btn btn-primary btn-sm shrink-0">
