@@ -10,7 +10,8 @@ import type { LastRoom } from './useRoomTypes';
 const TOKENS_KEY = 'caro_room_tokens';
 const LAST_ROOM_KEY = 'caro_last_room';
 export const HANDLED_RESULTS_KEY = 'caro_room_handled_results';
-const TOKEN_TTL_MS = 2 * 60_000;
+// A player may close and reopen their tab during the five-hour reconnect grace.
+const TOKEN_TTL_MS = 5 * 60 * 60_000;
 export const LAST_ROOM_TTL_MS = 15 * 60_000;
 export const CHAT_KEEP = 200;
 const ROOM_CODE_LENGTH = 6;
@@ -193,6 +194,7 @@ export const rejectionText = (payload: HostMessagePayloads['REJECTED']): string 
   if (payload.reason === 'cooldown') return `Give it ${seconds ?? 'a few'} more second${seconds === 1 ? '' : 's'} before teasing again.`;
   if (payload.reason === 'too_soon') return `Give the viewers a moment to take the seat first (${seconds ?? 15}s).`;
   if (payload.reason === 'rate_limited') return payload.type === 'CHAT' ? 'Slow down a little.' : null;
+  if (payload.reason === 'reconnect_grace') return `You can claim the win in ${seconds ?? 'a moment'} second${seconds === 1 ? '' : 's'}.`;
   if (payload.type === 'RATING_REPORT' || payload.type === 'PONG' || payload.type === 'STATE_REQUEST') return null;
   return REJECTION_TEXT[payload.reason] ?? null;
 };

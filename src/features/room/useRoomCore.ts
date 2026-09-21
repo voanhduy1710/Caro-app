@@ -82,7 +82,7 @@ const ID_RETRY_WINDOW_MS = 20_000;
 /** The host pings every 2 s, so this much silence means it is gone. */
 const HOST_SILENT_MS = 8_000;
 const HOST_RETRY_MS = 2_000;
-const HOST_LOST_GIVE_UP_MS = 35_000;
+const HOST_LOST_GIVE_UP_MS = 5 * 60 * 60_000;
 const PEER_RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000];
 
 // ---------------------------------------------------------------------------
