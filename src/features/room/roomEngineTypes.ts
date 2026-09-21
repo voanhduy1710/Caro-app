@@ -29,7 +29,10 @@ export { PROTOCOL_VERSION } from './protocol';
 // ---------------------------------------------------------------------------
 
 export const MAX_MEMBERS = 8; // includes the host and members in grace
-export const GRACE_MS = 30_000;
+/** A disconnected player keeps their seat for up to five hours. */
+export const GRACE_MS = 5 * 60 * 60_000;
+/** The remaining 1v1 player may claim a disconnect win after this delay. */
+export const CLAIM_DISCONNECT_WIN_MS = 2 * 60_000;
 export const COUNTDOWN_MS = 3_000;
 export const INSTANT_UNDO_MS = 5_000;
 export const OFFER_TTL_MS = 30_000; // undo requests and rematch offers

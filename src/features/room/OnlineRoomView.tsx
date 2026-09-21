@@ -14,12 +14,19 @@ import { RockPaperScissorsModal } from '../minigames/RockPaperScissorsModal';
 import { OnlineRoomLobby } from './OnlineRoomLobby';
 import { HostLostStrip, OnlineRoomConnecting, RoomConfirmDialog } from './OnlineRoomOverlays';
 import type { Seat } from './protocol';
-import { DISCARD_GUARD_MS, MAX_MEMBERS, SEATS, activeSeats, boardFromMoves, latestResult, otherSeat, pieceAt } from './roomEngine';
+import { CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, GRACE_MS, MAX_MEMBERS, SEATS, activeSeats, boardFromMoves, latestResult, otherSeat, pieceAt } from './roomEngine';
 import type { Member } from './roomEngine';
 import { describeRating } from './roomRating';
 import { LEFT_HOW, resultReason } from './roomCopy';
 import { memberProfile } from './OnlineRoomTypes';
 import type { ConfirmSpec, OnlineRoomProps } from './OnlineRoomTypes';
+
+const formatReconnectTime = (seconds: number | null | undefined) => {
+  if (seconds === null || seconds === undefined) return '';
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+};
 
 export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules, onViewMyProfile, onViewProfile, exitRef }) => {
   const isDesktop = useIsDesktop();
@@ -332,7 +339,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   let paused: { title: string; body?: string; actions?: React.ReactNode } | null = null;
   if (room.status === 'host_lost') {
     paused = {
-      title: `Waiting for the host… ${room.hostGraceSecondsLeft ?? ''}s`,
+      title: `Waiting for the host… ${formatReconnectTime(room.hostGraceSecondsLeft)}`,
       body: 'The clocks are stopped. The room closes if the host does not come back.',
     };
   } else if (phase === 'paused' && game) {
@@ -386,9 +393,26 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         };
       }
     } else if (away) {
+      const reconnectSeconds = room.graceSecondsLeft(away.id);
+      const claimWaitSeconds = reconnectSeconds === null
+        ? null
+        : Math.max(0, Math.ceil((CLAIM_DISCONNECT_WIN_MS - (GRACE_MS - reconnectSeconds * 1000)) / 1000));
+      const canClaimWin =
+        game.settings.playerMode === 'oneVsOne' &&
+        mySeat !== null &&
+        occupantOf(otherSeat(mySeat))?.id === away.id;
       paused = {
         title: 'Game paused',
-        body: `Waiting for ${away.profile.name} to reconnect… ${room.graceSecondsLeft(away.id) ?? ''}s`,
+        body: `Waiting for ${away.profile.name} to reconnect… ${formatReconnectTime(reconnectSeconds)}`,
+        actions: canClaimWin ? (
+          <button
+            onClick={room.claimDisconnectWin}
+            disabled={claimWaitSeconds === null || claimWaitSeconds > 0}
+            className="btn btn-primary"
+          >
+            {claimWaitSeconds && claimWaitSeconds > 0 ? `Claim win in ${claimWaitSeconds}s` : 'Claim disconnect win'}
+          </button>
+        ) : undefined,
       };
     } else {
       paused = { title: 'Game paused', body: 'Resuming shortly…' };

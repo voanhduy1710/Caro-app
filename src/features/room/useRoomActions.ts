@@ -43,6 +43,7 @@ export const createRoomActions = ({ state, sendIntent, appendChat, notice, setPe
     offerRematch: () => { const id = gameId(); return id ? sendIntent({ type: 'REMATCH_OFFER', payload: { gameId: id } }) : false; },
     answerRematch: (accept: boolean) => { const id = gameId(); return id ? sendIntent({ type: 'REMATCH_ANSWER', payload: { gameId: id, accept } }) : false; },
     resign: () => { const id = gameId(); if (!id) return false; noteResigned(id); return sendIntent({ type: 'RESIGN', payload: { gameId: id } }); },
+    claimDisconnectWin: () => { const id = gameId(); return id ? sendIntent({ type: 'CLAIM_DISCONNECT_WIN', payload: { gameId: id } }) : false; },
     discardGame: () => { const id = gameId(); return id ? sendIntent({ type: 'DISCARD_GAME', payload: { gameId: id } }) : false; },
     updateSettings: (settings: RoomSettings) => sendIntent({ type: 'UPDATE_SETTINGS', payload: { settings } }),
     chooseFirstMove: (choice: 'rock' | 'paper' | 'scissors') => { const id = gameId(); return id ? sendIntent({ type: 'FIRST_MOVE_CHOICE', payload: { gameId: id, choice } }) : false; },

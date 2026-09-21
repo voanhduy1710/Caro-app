@@ -1,7 +1,7 @@
 import { checkWin } from '../../shared/utils/gomokuLogic';
 import { cutToCodePoints, isAllowedSettings, MAX_NAME_CODE_POINTS, sanitizeProfile } from './protocol';
 import type { IntentPayloads, RatingReportStatus, RoomChatMessage, Seat } from './protocol';
-import { BUZZ_INTERVAL_MS, CHAT_BACKLOG_SIZE, CHAT_IMAGE_MAX, CHAT_MIN_INTERVAL_MS, CHAT_TEXT_MAX, DISCARD_GUARD_MS, HELD_IMAGES_PER_MEMBER, INSTANT_UNDO_MS, MAX_MEMBERS, OFFER_TTL_MS, RATING_DELTA_MAX, REFUND_AFTER_LAST_SEEN_MS, ROOM_IMAGE_INTERVAL_MS, STALE_MOVER_MS, TEASE_PAIR_COOLDOWN_MS, TEASE_SENDER_COOLDOWN_MS } from './roomEngineTypes';
+import { BUZZ_INTERVAL_MS, CHAT_BACKLOG_SIZE, CHAT_IMAGE_MAX, CHAT_MIN_INTERVAL_MS, CHAT_TEXT_MAX, CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, GRACE_MS, HELD_IMAGES_PER_MEMBER, INSTANT_UNDO_MS, MAX_MEMBERS, OFFER_TTL_MS, RATING_DELTA_MAX, REFUND_AFTER_LAST_SEEN_MS, ROOM_IMAGE_INTERVAL_MS, STALE_MOVER_MS, TEASE_PAIR_COOLDOWN_MS, TEASE_SENDER_COOLDOWN_MS } from './roomEngineTypes';
 import type { EngineEnv, EngineState, Member } from './roomEngineTypes';
 import { activeSeats, boardFromMoves, bothSeatedAndConnected, findMember, nextSeat, occupant, otherSeat, pieceAt, playerRef, seatOf, turnLimitMs } from './roomEngineHelpers';
 import { appendSeatChange, bankClocks, endGame, expiredClock, pause, reject, removeMember, sendEvent, settleRating, startCountdown, startNewGame, vacateSeat } from './roomEngineLifecycle';
@@ -280,6 +280,23 @@ export const handleResign = (d: EngineState, m: Member, p: IntentPayloads['RESIG
   const seat = seatOf(d, m.id);
   if (!seat) return reject(ctx, m.id, 'RESIGN', 'not_seated');
   endGame(d, game.settings.playerMode === 'oneVsOneVsOne' ? 'DRAW' : otherSeat(seat), 'resigned', null, ctx);
+};
+
+/** Lets the connected 1v1 player end a paused game after a fair reconnect window. */
+export const handleClaimDisconnectWin = (d: EngineState, m: Member, p: IntentPayloads['CLAIM_DISCONNECT_WIN'], ctx: Ctx): void => {
+  const { room, host } = d;
+  const game = room.game;
+  if (room.phase !== 'paused' || !game || game.id !== p.gameId || game.settings.playerMode !== 'oneVsOne') {
+    return reject(ctx, m.id, 'CLAIM_DISCONNECT_WIN', 'not_paused');
+  }
+  const claimantSeat = seatOf(d, m.id);
+  if (claimantSeat !== 'X' && claimantSeat !== 'O') return reject(ctx, m.id, 'CLAIM_DISCONNECT_WIN', 'not_seated');
+  const opponent = occupant(d, otherSeat(claimantSeat));
+  if (!opponent || opponent.connected) return reject(ctx, m.id, 'CLAIM_DISCONNECT_WIN', 'not_paused');
+  const lostAt = (host.graceEndsAt[opponent.id] ?? ctx.now) - GRACE_MS;
+  const remaining = CLAIM_DISCONNECT_WIN_MS - (ctx.now - lostAt);
+  if (remaining > 0) return reject(ctx, m.id, 'CLAIM_DISCONNECT_WIN', 'reconnect_grace', remaining);
+  endGame(d, claimantSeat, 'disconnected', null, ctx);
 };
 
 export const handleDiscard = (d: EngineState, m: Member, p: IntentPayloads['DISCARD_GAME'], ctx: Ctx): void => {
