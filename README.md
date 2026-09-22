@@ -25,6 +25,16 @@ A modern, high-performance, real-time **Caro (Gomoku / Five-in-a-Row)** web appl
 
 ---
 
+## Preview
+
+![Preview 1](public/preview_images/Preview_1.png)
+
+![Preview 2](public/preview_images/Preview_2.png)
+
+![Preview 3](public/preview_images/Preview_3.png)
+
+---
+
 ## Quick Start
 
 ### 1. Prerequisites
