@@ -57,6 +57,42 @@ $whoamiRaw = npx -y vercel whoami --token $vercelToken 2>&1
 $whoami = ($whoamiRaw | Where-Object { $_ -notmatch 'telemetry' -and $_ -notmatch 'Worker' -and $_ -notmatch 'NOTE' } | Select-Object -Last 1).Trim()
 Write-Host "   ✅ Authenticated Vercel User: $whoami" -ForegroundColor Green
 
+# Vite substitutes VITE_* values during the remote Vercel build. The .env file
+# is intentionally excluded from uploads, so the project must hold these two
+# public Supabase client settings itself. Syncing them here prevents a deploy
+# that works locally but ships a bundle where all account actions are disabled.
+if (-not (Test-Path ".env")) {
+    Write-Host "❌ Error: .env is required to configure the production Supabase client." -ForegroundColor Red
+    Exit 1
+}
+
+function Get-DotEnvValue([string]$name) {
+    $line = Get-Content ".env" | Where-Object { $_ -match ("^{0}=(.+)$" -f [regex]::Escape($name)) } | Select-Object -First 1
+    if (-not $line) { return $null }
+    return ($line -split '=', 2)[1].Trim().Trim('"').Trim("'")
+}
+
+Write-Host "   ⏳ Syncing required production environment variables..." -ForegroundColor Blue
+foreach ($name in @("VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY")) {
+    $value = Get-DotEnvValue $name
+    if (-not $value) {
+        Write-Host "❌ Error: $name is missing from .env." -ForegroundColor Red
+        Exit 1
+    }
+    # These are browser client values, not server secrets: Vite must expose
+    # them in the app bundle. --force keeps the Vercel project in sync when
+    # the Supabase project/key changes.
+    $env:CARO_VERCEL_ENV_VALUE = $value
+    npx -y vercel env add $name production --force --type config --value $env:CARO_VERCEL_ENV_VALUE --yes --token $vercelToken | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Remove-Item Env:CARO_VERCEL_ENV_VALUE -ErrorAction SilentlyContinue
+        Write-Host "❌ Error: Could not sync $name to Vercel." -ForegroundColor Red
+        Exit 1
+    }
+}
+Remove-Item Env:CARO_VERCEL_ENV_VALUE -ErrorAction SilentlyContinue
+Write-Host "   ✅ Production Supabase configuration synced." -ForegroundColor Green
+
 # 3. Check & Install Dependencies and Test Production Build
 Write-Host "`n[2/4] Verifying node_modules..." -ForegroundColor Yellow
 if (-not (Test-Path "node_modules")) {
