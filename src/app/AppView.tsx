@@ -90,6 +90,8 @@ export const App: React.FC = () => {
   const [turnTimeLeft, setTurnTimeLeft] = useState<number>(DEFAULT_ROOM_SETTINGS.turnTimeSeconds);
   const [p1TotalTime, setP1TotalTime] = useState<number>(DEFAULT_ROOM_SETTINGS.totalTimeMinutes * 60);
   const [p2TotalTime, setP2TotalTime] = useState<number>(DEFAULT_ROOM_SETTINGS.totalTimeMinutes * 60);
+  const [p1ElapsedTime, setP1ElapsedTime] = useState<number>(0);
+  const [p2ElapsedTime, setP2ElapsedTime] = useState<number>(0);
   const [elapsedGameTime, setElapsedGameTime] = useState<number>(0);
 
   const [inputRoomCode, setInputRoomCode] = useState('');
@@ -162,6 +164,8 @@ export const App: React.FC = () => {
       const totalSec = roomSettings.totalTimeMinutes * 60;
       setP1TotalTime(totalSec);
       setP2TotalTime(totalSec);
+      setP1ElapsedTime(0);
+      setP2ElapsedTime(0);
     }
   }, [roomSettings, gameStatus]);
 
@@ -189,6 +193,17 @@ export const App: React.FC = () => {
 
     return () => clearInterval(timer);
   }, [gameStatus, currentTurn, roomSettings.totalTimeMinutes]);
+
+  // Even unlimited games show each side's own thinking time in the board
+  // toolbar. Unlike the optional total bank, these counters always run.
+  useEffect(() => {
+    if (gameStatus !== 'playing') return;
+    const timer = setInterval(() => {
+      if (currentTurn === 'X') setP1ElapsedTime((prev) => prev + 1);
+      else if (currentTurn === 'O') setP2ElapsedTime((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [gameStatus, currentTurn]);
 
   // Overall Match Elapsed Game Timer
   useEffect(() => {
@@ -429,6 +444,8 @@ export const App: React.FC = () => {
     setTurnTimeLeft(roomSettings.turnTimeSeconds);
     setP1TotalTime(roomSettings.totalTimeMinutes * 60);
     setP2TotalTime(roomSettings.totalTimeMinutes * 60);
+    setP1ElapsedTime(0);
+    setP2ElapsedTime(0);
     setElapsedGameTime(0);
     setRatingNote(null);
     matchOverRef.current = false;
@@ -454,6 +471,8 @@ export const App: React.FC = () => {
     setTurnTimeLeft(roomSettings.turnTimeSeconds);
     setP1TotalTime(roomSettings.totalTimeMinutes * 60);
     setP2TotalTime(roomSettings.totalTimeMinutes * 60);
+    setP1ElapsedTime(0);
+    setP2ElapsedTime(0);
   };
 
   /* ----------------------------- navigation ------------------------------ */
@@ -588,7 +607,7 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        <ActiveMatchStage roomActive={roomActive} room={room} user={user} onRules={() => setSettingsAndThemeOpen(true)} onMyProfile={openProfileModal} onOpponent={setSelectedOpponentProfile} exitRef={roomExitRef} practice={practiceInMatch ? { user, openProfileModal, settings: roomSettings, board, placementCorners: practicePlacementCorners, onCellClick: handleCellClick, lastMove, winningLine, currentTurn, myPiece, gameStatus, gameResult, ratingNote, p1TotalTime, p2TotalTime, turnTimeLeft, isAiThinking, elapsedGameTime, moveHistory, sessionScore, onUndo: handleUndoButtonClick, onRematch: handleRematchButtonClick, onExit: requestExitMatch, setOpponent: setSelectedOpponentProfile } : null} />
+        <ActiveMatchStage roomActive={roomActive} room={room} user={user} onRules={() => setSettingsAndThemeOpen(true)} onMyProfile={openProfileModal} onOpponent={setSelectedOpponentProfile} exitRef={roomExitRef} practice={practiceInMatch ? { user, openProfileModal, settings: roomSettings, board, placementCorners: practicePlacementCorners, onCellClick: handleCellClick, lastMove, winningLine, currentTurn, myPiece, gameStatus, gameResult, ratingNote, p1TotalTime, p2TotalTime, p1ElapsedTime, p2ElapsedTime, turnTimeLeft, isAiThinking, elapsedGameTime, moveHistory, sessionScore, onUndo: handleUndoButtonClick, onRematch: handleRematchButtonClick, onExit: requestExitMatch, setOpponent: setSelectedOpponentProfile } : null} />
 
       </main>
 

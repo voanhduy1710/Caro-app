@@ -66,16 +66,22 @@ export const bankLimitMs = (settings: RoomSettings): number => settings.totalTim
 /**
  * The clocks `ms` milliseconds after they were banked. Only a running clock
  * moves, and only the bank of the side to move, the per-move timer and the
- * elapsed time; a limit of 0 means unlimited, so that clock never moves.
+ * elapsed time; a limit of 0 means unlimited, so that bank never moves.
+ * Individual thinking time always accumulates so unlimited games still show
+ * a useful clock for each player.
  * Clients call this with the time since the last ROOM_STATE, MOVE_APPLIED or
  * CLOCK_SYNC; the host calls it with the time since it last banked.
  */
 export const liveClocks = (game: Pick<Game, 'clocks' | 'turn' | 'settings'>, ms: number): Clocks => {
-  const clocks = { ...game.clocks };
+  const clocks = {
+    ...game.clocks,
+    elapsedBySeat: { ...(game.clocks.elapsedBySeat ?? { X: 0, O: 0, T: 0 }) },
+  };
   if (!clocks.running || ms <= 0) return clocks;
   if (game.settings.totalTimeMinutes > 0) clocks[game.turn] = Math.max(0, clocks[game.turn] - ms);
   if (game.settings.turnTimeSeconds > 0) clocks.turn = Math.max(0, clocks.turn - ms);
   clocks.elapsed += ms;
+  clocks.elapsedBySeat[game.turn] += ms;
   return clocks;
 };
 

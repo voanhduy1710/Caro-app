@@ -480,6 +480,15 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   return (
     <>
       <GameControls
+        playerTimers={
+          settings && clocks
+            ? activeSeats(settings).map((piece) => ({
+                piece,
+                seconds: Math.max(0, Math.ceil((settings.totalTimeMinutes > 0 ? clocks[piece] : clocks.elapsedBySeat[piece]) / 1000)),
+                isTurn: phase === 'playing' && turn === piece,
+              }))
+            : []
+        }
         headerNode={
           <MatchHeader
             seats={order.map(seatView)}

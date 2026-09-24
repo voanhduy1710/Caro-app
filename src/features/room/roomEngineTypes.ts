@@ -106,6 +106,8 @@ export interface Clocks {
   T: number;
   turn: number; // per-move timer in ms (0 = unlimited when turnTimeSeconds = 0)
   elapsed: number;
+  /** Thinking time accumulated by each seat, including in unlimited games. */
+  elapsedBySeat: { X: number; O: number; T: number };
   running: boolean;
 }
 
