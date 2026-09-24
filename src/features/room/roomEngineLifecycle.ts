@@ -88,6 +88,7 @@ export const fullClocks = (settings: RoomSettings): Clocks => ({
   T: bankLimitMs(settings),
   turn: turnLimitMs(settings),
   elapsed: 0,
+  elapsedBySeat: { X: 0, O: 0, T: 0 },
   running: false,
 });
 

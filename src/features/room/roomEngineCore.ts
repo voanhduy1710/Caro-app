@@ -92,6 +92,7 @@ export const restore = (snap: HostSnapshot, now: number): EngineState => {
     room.game.settings.firstMoveMethod ??= 'default';
     room.game.firstMove ??= { method: 'default', winner: room.game.openingSeat };
     room.game.clocks.T ??= room.game.clocks.X;
+    room.game.clocks.elapsedBySeat ??= { X: 0, O: 0, T: 0 };
     room.game.startedWith.T ??= room.game.startedWith.X;
     room.game.vacatedAt.T ??= null;
   }

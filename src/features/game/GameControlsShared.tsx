@@ -7,6 +7,8 @@ import { Loader2 } from 'lucide-react';
 export interface GameControlsProps {
   headerNode?: React.ReactNode;
   boardNode?: React.ReactNode;
+  /** Individual total-time clocks drawn beside the board action toolbar. */
+  playerTimers?: Array<{ piece: 'X' | 'O' | 'T'; seconds: number; isTurn: boolean }>;
   opponent: UserProfile | null;
   myUser: UserProfile | null;
   chatMessages: ChatMessage[];

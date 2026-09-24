@@ -4,6 +4,7 @@ import type { ChatMessage } from '../webrtc/types';
 import { useDisplayPrefs } from './displayPrefs';
 import { useIsDesktop } from '../../shared/hooks/useMediaQuery';
 import { useSound } from '../../shared/hooks/useSound';
+import { useTheme } from '../theme/ThemeContext';
 import { CHAT_BAR_HEIGHT_PX, CHAT_OPEN_STORAGE_KEY, formatElapsed, PIN_TO_BOTTOM_MS, processImageFile, readStoredChatOpen, STICK_TO_BOTTOM_PX } from './GameControlsShared';
 import { GameActionRail } from './GameActionRail';
 import { GameReactionPicker } from './GameReactionPicker';
@@ -16,6 +17,7 @@ import type { GameControlsProps } from './GameControlsShared';
 export const GameControls: React.FC<GameControlsProps> = ({
   headerNode,
   boardNode,
+  playerTimers = [],
   myUser,
   opponent,
   chatMessages,
@@ -44,6 +46,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
 }) => {
   const isDesktop = useIsDesktop();
   const prefs = useDisplayPrefs();
+  const { theme } = useTheme();
   const [isPrefsOpen, setIsPrefsOpen] = useState(false);
   const gearRef = useRef<HTMLButtonElement>(null);
   const prefsRef = useRef<HTMLDivElement>(null);
@@ -415,6 +418,29 @@ export const GameControls: React.FC<GameControlsProps> = ({
   // the board, where it is easy to find without making the roster column taller.
   const actionsCell = () => (
     <div className="area-actions relative flex min-h-12 items-center justify-center p-1.5">
+      {playerTimers.length > 0 && (
+        <div className="absolute left-3 hidden items-start gap-7 xl:flex" aria-label="Player clocks">
+          {playerTimers.map(({ piece, seconds, isTurn }) => {
+            const color = piece === 'X' ? theme.xColor : piece === 'O' ? theme.oColor : '#7c3aed';
+            return (
+              <div
+                key={piece}
+                className={`flex min-w-[6.5rem] flex-col items-start font-mono text-sm font-bold tabular-nums transition-opacity ${
+                  isTurn ? 'opacity-100' : 'opacity-70'
+                }`}
+                style={{ color }}
+                title={`${piece} time remaining: ${formatElapsed(seconds)}`}
+              >
+                <span className="font-display text-base font-extrabold leading-4">{piece === 'T' ? '△' : piece}</span>
+                <span className="mt-0.5 flex items-center gap-1.5 whitespace-nowrap">
+                  <Timer size={15} strokeWidth={2.5} aria-hidden="true" />
+                  <span>{formatElapsed(seconds)}</span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       {actionButtons}
       <div
         className="absolute right-2 flex items-center gap-2 px-2 py-1 font-mono text-sm font-semibold text-muted tabular-nums"
