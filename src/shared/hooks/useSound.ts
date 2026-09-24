@@ -68,11 +68,20 @@ export const useSound = () => {
   const playTimerWarningSound = useCallback(() => playTone(880, 'square', 0.1, 0.05), [playTone]);
   const playClickSound = useCallback(() => playTone(400, 'sine', 0.05, 0.05), [playTone]);
   const playBuzzSound = useCallback(() => {
-    // A bright, clearly separate notification ting: louder than chat without
-    // becoming an alarm, and heard by the sender as well as the recipient.
-    playTone(1318.51, 'sine', 0.16, 0.38);
-    window.setTimeout(() => playTone(1760, 'triangle', 0.32, 0.32), 105);
-  }, [playTone]);
+    if (!getDisplayPrefs().soundEnabled || typeof Audio === 'undefined') return;
+    // Use the supplied recording for Buzz instead of synthesising a tone. A
+    // fresh element lets two separate room events finish naturally if they
+    // arrive close together.
+    try {
+      const sound = new Audio('/quick-ting.mp3');
+      sound.volume = 0.8;
+      void sound.play().catch(() => {
+        // Browsers may block a remote notification before the first gesture.
+      });
+    } catch (error) {
+      console.warn('Buzz sound error:', error);
+    }
+  }, []);
   // Softer and lower than Buzz: a chat note should inform, not nudge.
   const playChatSound = useCallback(() => {
     playTone(660, 'triangle', 0.08, 0.18);
