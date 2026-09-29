@@ -53,9 +53,9 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
             <button
               onClick={onClose}
               className="btn btn-ghost btn-icon ml-1"
-             aria-label="Close">
-            <X size={18} strokeWidth={2.25} aria-hidden="true" />
-          </button>
+              aria-label="Close">
+              <X size={18} strokeWidth={2.25} aria-hidden="true" />
+            </button>
           </div>
         </div>
 
@@ -71,17 +71,18 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
               const totalGames = (p.wins || 0) + (p.losses || 0) + (p.draws || 0);
               const winRate = totalGames > 0 ? Math.round(((p.wins || 0) / totalGames) * 100) : 0;
               const formattedRank = (idx + 1).toString().padStart(2, '0');
+              const streak = p.streak || 0;
+              const isHotStreak = streak > 2;
 
               return (
                 <div
                   key={p.uid || idx}
                   onClick={() => onSelectPlayer && onSelectPlayer(p)}
                   title="Click to view full player profile"
-                  className={`p-3 rounded-md flex items-center justify-between transition border cursor-pointer hover:scale-[1.01] ${
-                    idx === 0
-                      ? 'bg-warning-soft border-warning shadow-sm hover:bg-warning/20'
-                      : 'bg-surface-2 border-line hover:border-accent hover:bg-surface-3'
-                  }`}
+                  className={`p-3 rounded-md flex items-center justify-between transition border cursor-pointer hover:scale-[1.01] ${idx === 0
+                    ? 'bg-warning-soft border-warning shadow-sm hover:bg-warning/20'
+                    : 'bg-surface-2 border-line hover:border-accent hover:bg-surface-3'
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-xs font-medium text-accent-text w-6">
@@ -111,7 +112,10 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
 
                   <div className="text-right font-mono">
                     <div className="text-sm font-semibold text-accent-text">{p.elo} ELO</div>
-                    <div className="text-[10px] text-muted">Streak: {p.streak || 0}</div>
+                    <div className={`mt-0.5 flex items-center justify-end gap-1 text-xs font-semibold ${isHotStreak ? 'text-danger' : 'text-muted'}`}>
+                      <span>Streak: {streak}</span>
+                      {isHotStreak && <img src="/Fire_streak.gif" alt="On fire" className="relative bottom-0.5 h-4 w-4 object-contain" />}
+                    </div>
                   </div>
                 </div>
               );

@@ -45,10 +45,14 @@ export const calculateElo = (
  * Returns rank tier title based on ELO score.
  */
 export const getRankTitle = (elo: number): { title: string; color: string } => {
-  if (elo >= 2000) return { title: 'Grandmaster', color: 'text-purple-400 border-purple-500' };
-  if (elo >= 1700) return { title: 'Master', color: 'text-rose-400 border-rose-500' };
-  if (elo >= 1500) return { title: 'Diamond', color: 'text-cyan-400 border-cyan-500' };
-  if (elo >= 1350) return { title: 'Gold', color: 'text-amber-400 border-amber-500' };
+  if (elo >= 2100) return { title: 'Grand Master', color: 'text-purple-400 border-purple-500' };
+  if (elo >= 1900) return { title: 'Master', color: 'text-rose-400 border-rose-500' };
+  if (elo >= 1700) return { title: 'Uranium', color: 'text-lime-400 border-lime-500' };
+  if (elo >= 1500) return { title: 'Platinum', color: 'text-teal-300 border-teal-400' };
+  if (elo >= 1400) return { title: 'Diamond', color: 'text-cyan-400 border-cyan-500' };
+  if (elo >= 1300) return { title: 'Gold', color: 'text-amber-400 border-amber-500' };
   if (elo >= 1200) return { title: 'Silver', color: 'text-slate-300 border-slate-400' };
-  return { title: 'Bronze', color: 'text-amber-700 border-amber-800' };
+  if (elo >= 1100) return { title: 'Bronze', color: 'text-amber-600 border-amber-700' };
+  if (elo >= 1000) return { title: 'Wood', color: 'text-amber-800 border-amber-900' };
+  return { title: 'Stone', color: 'text-stone-400 border-stone-500' };
 };
