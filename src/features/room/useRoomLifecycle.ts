@@ -7,7 +7,7 @@ import { createRoom as createEngineRoom, restore } from './roomEngine';
 import type { EngineState, HostSnapshot, RoomState } from './roomEngine';
 import { PROTOCOL_VERSION, parseRoomCode } from './protocol';
 import type { ClosedReason, CreateRoomInput } from './useRoomTypes';
-import { closeConn, forgetToken, profileClaim, randomCode, readJson, readToken, removeKey, send, setUrlRoom, TAB_ID, writeJson, writeLastRoom } from './useRoomUtilities';
+import { closeConn, forgetToken, loadIceServers, peerOptions, profileClaim, randomCode, readJson, readToken, removeKey, send, setUrlRoom, TAB_ID, writeJson, writeLastRoom } from './useRoomUtilities';
 import type { SavedSession } from './useRoomUtilities';
 
 export interface RoomLifecycleState {
@@ -49,7 +49,7 @@ export const createRoomLifecycle = (options: Options) => {
     setTimeout(() => { if (state.peer === peer && peer.disconnected && !peer.destroyed) try { peer.reconnect(); } catch { /* next event retries */ } }, delay);
   };
   const openHostPeer = (code: string) => {
-    const peer = new Peer(peerPrefix + code, { debug: 1 }); state.peer = peer;
+    const peer = new Peer(peerPrefix + code, peerOptions()); state.peer = peer;
     peer.on('open', () => { if (state.peer !== peer) return; state.peerAttempt = 0; options.setStatus('connected'); startLoop(options.hostLoop, 250); options.announce(); });
     peer.on('connection', (connection) => { if (state.peer === peer) options.acceptConnection(connection); });
     peer.on('disconnected', () => reconnectPeer(peer));
@@ -70,16 +70,20 @@ export const createRoomLifecycle = (options: Options) => {
     try { engine = canRestore && stored ? restore(stored, now) : createEngineRoom({ roomId: code, isPublic: input.isPublic, settings: input.settings, hostProfile: profileClaim(userRef.current), hostTabId: TAB_ID }, now); }
     catch { engine = createEngineRoom({ roomId: code, isPublic: input.isPublic, settings: input.settings, hostProfile: profileClaim(userRef.current), hostTabId: TAB_ID }, now); }
     state.engine = engine; state.memberId = engine.host.hostMemberId; state.idRetryUntil = canRestore ? now + idRetryWindowMs : 0; writeJson(sessionStorage, sessionKey, { roomId: code, isHost: true, memberId: state.memberId });
-    setUrlRoom(code); options.setRoomId(code); options.setIsHost(true); options.setMemberId(state.memberId); options.setError(null); options.setClosedReason(null); options.setHostLostSince(null); options.setChatMessages(canRestore ? [...engine.host.chatBacklog] : []); options.setStatus('opening'); options.publishHost(now, true); openHostPeer(code); return code;
+    setUrlRoom(code); options.setRoomId(code); options.setIsHost(true); options.setMemberId(state.memberId); options.setError(null); options.setClosedReason(null); options.setHostLostSince(null); options.setChatMessages(canRestore ? [...engine.host.chatBacklog] : []); options.setStatus('opening'); options.publishHost(now, true);
+    void loadIceServers().then(() => { if (state.role === 'host' && state.roomId === code && !state.terminal && !state.peer) openHostPeer(code); }); return code;
   };
   const joinRoom = (input: string): string | null => {
     const code = parseRoomCode(input); if (!code) { options.setError('That does not look like a room code. Enter the code your friend sent, or paste their invite link.'); return null; }
     const saved = readJson<SavedSession>(sessionStorage, sessionKey); const resume = saved && !saved.isHost && saved.roomId === code && saved.memberId && saved.token ? { memberId: saved.memberId, token: saved.token } : readToken(code);
     teardown(false); state.role = 'member'; state.roomId = code; state.memberId = resume?.memberId ?? null; state.token = resume?.token ?? null; state.connectAttempts = 0;
     setUrlRoom(code); options.setRoomId(code); options.setIsHost(false); options.setMemberId(null); options.setState(null); options.setChatMessages([]); options.setError(null); options.setClosedReason(null); options.setHostLostSince(null); options.setStatus('joining');
-    const peer = new Peer({ debug: 1 }); state.peer = peer; peer.on('open', () => { if (state.peer === peer) options.connectToHost(); }); peer.on('disconnected', () => reconnectPeer(peer));
-    peer.on('error', (error) => { if (state.peer !== peer || state.terminal) return; const type = (error as { type?: string }).type; if (type === 'peer-unavailable') { if (state.welcomed || state.token) { options.startHostLost(); return; } finish('not_found', `Room ${code} is not open. Check the code with your friend, or ask them to create the room again.`); return; } if (!state.welcomed && state.hostLostSince === null) finish(null, `Could not join room ${code}. ${error.message}`); });
+    void loadIceServers().then(() => { if (state.role === 'member' && state.roomId === code && !state.terminal && !state.peer) openMemberPeer(code); });
     startLoop(options.memberLoop, 1000); return code;
+  };
+  const openMemberPeer = (code: string) => {
+    const peer = new Peer(peerOptions()); state.peer = peer; peer.on('open', () => { if (state.peer === peer) options.connectToHost(); }); peer.on('disconnected', () => reconnectPeer(peer));
+    peer.on('error', (error) => { if (state.peer !== peer || state.terminal) return; const type = (error as { type?: string }).type; if (type === 'peer-unavailable') { if (state.welcomed || state.token) { options.startHostLost(); return; } finish('not_found', `Room ${code} is not open. Check the code with your friend, or ask them to create the room again.`); return; } if (!state.welcomed && state.hostLostSince === null) finish(null, type === 'negotiation-failed' ? `Could not connect to the host of room ${code}. A VPN (such as Cloudflare 1.1.1.1 / WARP) or a strict network can block game connections. Turn the VPN off on both devices, or try another network, then join again.` : `Could not join room ${code}. ${error.message}`); });
   };
   const leaveRoom = () => {
     if (state.role === 'host' && state.engine) { const room = state.engine.room; const closed = { v: PROTOCOL_VERSION, type: 'ROOM_CLOSED' as const, payload: { reason: 'host_left' as const, hostName: room.members[0].profile.name } }; for (const connection of state.conns.values()) { send(connection, closed); closeConn(connection); } roomDiscoveryManager.stopHostingRoom(room.roomId); removeKey(sessionStorage, snapshotKey); }

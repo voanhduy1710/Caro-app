@@ -27,7 +27,10 @@ export const fetchTopLeaderboard = async (topLimit = 20): Promise<UserProfile[]>
               uid: row.uid,
               username: row.username || row.display_name,
               displayName: row.display_name || row.username,
-              photoURL: getAvatarPublicUrl(row.photo_url),
+              // The stored value, not a resolved URL: every view resolves it
+              // with getAvatarPublicUrl, and resolving twice turns a Ragnarok
+              // GIF's storage URL into the default (storage URLs count as dead).
+              photoURL: row.photo_url || getAvatarPublicUrl(),
               email: '',
               elo: row.elo ?? 1200,
               wins: row.wins ?? 0,

@@ -84,6 +84,9 @@ const HOST_SILENT_MS = 8_000;
 const HOST_RETRY_MS = 2_000;
 const HOST_LOST_GIVE_UP_MS = 5 * 60 * 60_000;
 const PEER_RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000];
+/** A first join that has not been welcomed retries this often, then gives up. */
+const JOIN_RETRY_MS = 8_000;
+const JOIN_GIVE_UP_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // The hook
@@ -134,6 +137,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       hostLostSince: null as number | null,
       lastRetryAt: 0,
       connectAttempts: 0,
+      joinStartedAt: 0,
       lastRejected: null as HostMessagePayloads['REJECTED'] | null,
       loop: null as ReturnType<typeof setInterval> | null,
       retryTimer: null as ReturnType<typeof setTimeout> | null,
@@ -206,6 +210,20 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
     const memberLoop = () => {
       if (r.role !== 'member' || r.terminal) return;
       const now = Date.now();
+      // A data channel that never opens fires no event at all (typical behind
+      // a VPN such as Cloudflare WARP, or a strict NAT with no reachable TURN
+      // relay), so the first join needs its own deadline.
+      if (!r.welcomed && r.hostLostSince === null && r.connectAttempts > 0) {
+        if (now - r.joinStartedAt > JOIN_GIVE_UP_MS) {
+          finish(
+            null,
+            `Could not reach the host of room ${r.roomId}. A VPN (such as Cloudflare 1.1.1.1 / WARP) or a strict network can block direct game connections. Turn the VPN off on both devices, or try another network, then join again.`,
+          );
+          return;
+        }
+        if (now - r.lastRetryAt >= JOIN_RETRY_MS) connectToHost();
+        return;
+      }
       if (r.hostLostSince === null && r.hostConn?.open && now - r.lastHeard > HOST_SILENT_MS) {
         startHostLost();
       }
@@ -245,7 +263,9 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           // A half-open attempt may already be gone.
         }
       }
+      if (r.connectAttempts === 0) r.joinStartedAt = Date.now();
       r.connectAttempts += 1;
+      r.lastRetryAt = Date.now();
       const conn = peer.connect(PEER_PREFIX + r.roomId, { reliable: true, metadata: { caro: PROTOCOL_VERSION } });
       r.hostConn = conn;
       conn.on('open', () => {

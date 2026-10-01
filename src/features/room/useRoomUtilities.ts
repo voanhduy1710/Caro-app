@@ -20,6 +20,68 @@ const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 /** Identifies this page load without persisting across tabs. */
 export const TAB_ID = cryptoEnv.randomId(12);
 
+/**
+ * ICE servers for every peer. Players behind strict NATs or on mobile data
+ * cannot reach each other directly and need a TURN relay; PeerJS's free relay
+ * is often overloaded, so a deployment can supply its own through
+ * VITE_TURN_URLS (comma separated), VITE_TURN_USERNAME and VITE_TURN_CREDENTIAL.
+ */
+const iceServers = (): RTCIceServer[] => {
+  const env = import.meta.env;
+  const servers: RTCIceServer[] = [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+  ];
+  const turnUrls = String(env.VITE_TURN_URLS ?? '').split(',').map((url) => url.trim()).filter(Boolean);
+  if (turnUrls.length > 0) {
+    servers.push({ urls: turnUrls, username: env.VITE_TURN_USERNAME ?? '', credential: env.VITE_TURN_CREDENTIAL ?? '' });
+  }
+  if (relayed && relayed.servers.length > 0) {
+    servers.push(...relayed.servers);
+  } else if (turnUrls.length === 0) {
+    // Last resort: PeerJS's free relay, often overloaded or unreachable.
+    servers.push({
+      urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'],
+      username: 'peerjs',
+      credential: 'peerjsp',
+    });
+  }
+  return servers;
+};
+
+/** Short-lived TURN credentials from /api/turn, refreshed well before they expire. */
+let relayed: { servers: RTCIceServer[]; at: number } | null = null;
+let relayedRequest: Promise<void> | null = null;
+const RELAY_FRESH_MS = 60 * 60_000;
+const RELAY_TIMEOUT_MS = 4_000;
+
+/** Resolves once relay credentials are loaded, or after a short timeout without them. */
+export const loadIceServers = (): Promise<void> => {
+  if (relayed && Date.now() - relayed.at < RELAY_FRESH_MS) return Promise.resolve();
+  if (relayedRequest) return relayedRequest;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), RELAY_TIMEOUT_MS);
+  relayedRequest = fetch('/api/turn', { signal: controller.signal })
+    .then(async (res) => {
+      if (!res.ok) return;
+      const data: unknown = await res.json();
+      const list = isRecord(data) && Array.isArray(data.iceServers) ? data.iceServers : [];
+      const servers = list.filter((s): s is RTCIceServer => isRecord(s) && (typeof s.urls === 'string' || Array.isArray(s.urls)));
+      // STUN entries are already in the base list.
+      const turn = servers.filter((s) => [s.urls].flat().some((url) => /^turns?:/.test(String(url))));
+      if (turn.length > 0) relayed = { servers: turn, at: Date.now() };
+    })
+    .catch(() => {
+      // No relay endpoint (local dev) or it is down: fall back to the defaults.
+    })
+    .finally(() => {
+      clearTimeout(timer);
+      relayedRequest = null;
+    });
+  return relayedRequest;
+};
+
+export const peerOptions = () => ({ debug: 1, config: { iceServers: iceServers() } });
+
 export const readJson = <T,>(storage: Storage, key: string): T | null => {
   try {
     const raw = storage.getItem(key);

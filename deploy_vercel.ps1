@@ -93,6 +93,23 @@ foreach ($name in @("VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY")) {
 Remove-Item Env:CARO_VERCEL_ENV_VALUE -ErrorAction SilentlyContinue
 Write-Host "   ✅ Production Supabase configuration synced." -ForegroundColor Green
 
+# Optional: Cloudflare TURN key used by /api/turn so players behind a VPN
+# (Cloudflare 1.1.1.1 / WARP) or strict NAT can still connect. These are server
+# secrets, so they are stored encrypted and never prefixed with VITE_.
+$turnKeyId = Get-DotEnvValue "CLOUDFLARE_TURN_KEY_ID"
+$turnToken = Get-DotEnvValue "CLOUDFLARE_TURN_API_TOKEN"
+if ($turnKeyId -and $turnToken) {
+    foreach ($pair in @(@("CLOUDFLARE_TURN_KEY_ID", $turnKeyId), @("CLOUDFLARE_TURN_API_TOKEN", $turnToken))) {
+        $env:CARO_VERCEL_ENV_VALUE = $pair[1]
+        npx -y vercel env add $pair[0] production --force --sensitive --value $env:CARO_VERCEL_ENV_VALUE --yes --token $vercelToken | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Host "   ⚠️ Could not sync $($pair[0]) to Vercel." -ForegroundColor Yellow }
+    }
+    Remove-Item Env:CARO_VERCEL_ENV_VALUE -ErrorAction SilentlyContinue
+    Write-Host "   ✅ Cloudflare TURN credentials synced." -ForegroundColor Green
+} else {
+    Write-Host "   ⚠️ CLOUDFLARE_TURN_KEY_ID / CLOUDFLARE_TURN_API_TOKEN not in .env: players on VPNs may fail to connect." -ForegroundColor Yellow
+}
+
 # 3. Check & Install Dependencies and Test Production Build
 Write-Host "`n[2/4] Verifying node_modules..." -ForegroundColor Yellow
 if (-not (Test-Path "node_modules")) {
