@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Check, AlertTriangle, Lock } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
+import { RankBadge } from '../../shared/components/RankBadge';
 import { getRankTitle } from '../../shared/utils/eloCalculator';
 import { AVATAR_ITEMS, getAvatarPublicUrl, getChampionId, isRagnarokAvatar, listRagnarokAvatars } from '../avatar/avatarService';
 import type { AvatarItem } from '../avatar/avatarService';
@@ -189,6 +190,7 @@ export const ProfileModal: React.FC = () => {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-semibold text-ink truncate">{displayName || user.displayName}</h3>
+                <RankBadge elo={user.elo} size={28} />
                 <span className={`text-[9px] font-mono font-medium px-1.5 py-0.5 rounded-sm border bg-surface ${rank.color}`}>
                   {rank.title}
                 </span>

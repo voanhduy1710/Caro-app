@@ -1,6 +1,7 @@
 import React from 'react';
 import { Trophy, History, Settings, LogIn, LogOut, UserPlus } from 'lucide-react';
 import { useAuth } from '../../features/auth/AuthContext';
+import { RankBadge } from './RankBadge';
 import { getRankTitle } from '../utils/eloCalculator';
 import { getAvatarPublicUrl } from '../../features/avatar/avatarService';
 
@@ -89,7 +90,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {/* "Guest Player" already says it; repeating it underneath
                     said the same thing twice. */}
                 {!user.isGuest && (
-                  <span className="block font-mono text-[11px] text-muted">
+                  <span className="flex items-center gap-1 font-mono text-[11px] text-muted">
+                    <RankBadge elo={user.elo} size={18} />
                     {user.elo} ELO · {rank.title}
                   </span>
                 )}

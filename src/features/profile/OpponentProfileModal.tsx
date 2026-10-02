@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Flame } from 'lucide-react';
 import type { UserProfile } from '../auth/AuthContext';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
+import { RankBadge } from '../../shared/components/RankBadge';
 import { getRankTitle } from '../../shared/utils/eloCalculator';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 
@@ -65,6 +66,7 @@ export const OpponentProfileModal: React.FC<OpponentProfileModalProps> = ({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="text-lg font-semibold text-ink truncate">{opponent.displayName}</h3>
+              <RankBadge elo={opponent.elo || 1200} size={32} />
               <span className={`text-[10px] font-mono font-medium px-2 py-0.5 rounded-sm border bg-surface ${rank.color}`}>
                 {rank.title}
               </span>

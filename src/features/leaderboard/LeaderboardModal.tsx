@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { fetchTopLeaderboard } from './leaderboardService';
 import { finalizeDueClaims } from '../history/historyService';
 import type { UserProfile } from '../auth/AuthContext';
+import { RankBadge } from '../../shared/components/RankBadge';
 import { getRankTitle } from '../../shared/utils/eloCalculator';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
@@ -99,6 +100,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
                     />
                     <div>
                       <div className="flex items-center gap-2">
+                        <RankBadge elo={p.elo} size={22} />
                         <span className="text-xs font-medium text-ink">{p.displayName}</span>
                         <span className={`text-[9px] px-1.5 py-0.2 rounded-sm border ${rankInfo.color} font-mono font-medium bg-surface`}>
                           {rankInfo.title}

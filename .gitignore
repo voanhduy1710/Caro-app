@@ -41,3 +41,4 @@ dist-ssr
 
 .vercel
 
+supabase/DATABASE_OPERATIONS_GUIDE.md
