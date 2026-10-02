@@ -53,7 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           className="flex shrink-0 items-center gap-2.5 select-none rounded-md px-1 py-1 transition-colors hover:bg-surface-2"
         >
           <img
-            src="/Logo.svg"
+            src="/caro-tab-logo.png"
             alt=""
             aria-hidden="true"
             className="h-8 w-8 rounded-sm"
