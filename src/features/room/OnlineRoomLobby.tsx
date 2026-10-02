@@ -51,7 +51,8 @@ export const OnlineRoomLobby: React.FC<OnlineRoomLobbyProps> = ({ room, s, me, i
             </div>
             {grace !== null && <p className="text-[11px] font-medium text-warning">Reconnecting {formatReconnectDuration(grace)}</p>}
           </div>
-          {!occupant && isViewer && connected && (
+          {/* A seat held by someone who dropped is free to take between games. */}
+          {(!occupant || (!occupant.connected && !occupant.isHost && (s.phase === 'waiting' || s.phase === 'ended'))) && isViewer && connected && (
             <button onClick={() => room.takeSeat(seat)} className="btn btn-primary btn-sm shrink-0">
               Take seat
             </button>

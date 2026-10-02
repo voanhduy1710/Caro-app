@@ -27,6 +27,7 @@ export const createRoomActions = ({ state, sendIntent, appendChat, notice, setPe
     takeSeat: (seat: Seat) => sendIntent({ type: 'TAKE_SEAT', payload: { seat } }),
     becomeViewer: () => sendIntent({ type: 'LEAVE_SEAT', payload: {} }),
     clearSeat: (seat: Seat) => sendIntent({ type: 'CLEAR_SEAT', payload: { seat } }),
+    kickMember: (memberId: string) => sendIntent({ type: 'KICK_MEMBER', payload: { memberId } }),
     move: (row: number, col: number, corner?: MoveCorner) => {
       const room = state.mirror;
       const game = room?.game;

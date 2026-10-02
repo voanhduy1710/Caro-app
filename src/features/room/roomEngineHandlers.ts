@@ -36,6 +36,30 @@ export const sameAccountInOtherSeat = (d: EngineState, seat: Seat, uid: string):
   activeSeats(d.room.settings).some((other) => other !== seat && occupant(d, other)?.profile.uid === uid);
 
 /**
+ * Between games a seat held by someone who dropped protects nothing, so it
+ * should not lock out the people who are here. Typical case: a friend's login
+ * fails, they join as a guest, then come back signed in as a new member while
+ * the guest copy keeps the seat for the whole grace period.
+ */
+export const seatHeldByAbsentee = (d: EngineState, seat: Seat): boolean => {
+  const { phase } = d.room;
+  if (phase !== 'waiting' && phase !== 'ended') return false;
+  const held = occupant(d, seat);
+  return held !== undefined && !held.isHost && !held.connected;
+};
+
+/** Frees an absentee's seat for whoever is about to sit; no "seat open" notice, it is filled at once. */
+const evictAbsentee = (d: EngineState, seat: Seat): void => {
+  const { game } = d.room;
+  if (game) {
+    game.undo = null;
+    game.rematch = null;
+  }
+  d.room.seats[seat] = null;
+  d.room.autoStartArmed = true;
+};
+
+/**
  * Where to bank the clocks when the side to move turns out to have been
  * silent since `seen`: a second after that last sign of life, so the silence
  * is given back, but never before the clocks last started running.
@@ -118,8 +142,12 @@ export const handleHello = (d: EngineState, p: IntentPayloads['HELLO'], from: st
   // A friend opening the invite link to a fresh room plays at once. Later
   // arrivals watch, and one account never fills both seats.
   if (room.phase === 'waiting') {
-    const seat = activeSeats(room.settings).find((s) => room.seats[s] === null && !sameAccountInOtherSeat(d, s, profile.uid));
-    if (seat) room.seats[seat] = id;
+    const fits = (s: Seat) => !sameAccountInOtherSeat(d, s, profile.uid);
+    const seats = activeSeats(room.settings);
+    const open = seats.find((s) => room.seats[s] === null && fits(s));
+    const taken = open ?? seats.find((s) => seatHeldByAbsentee(d, s) && fits(s));
+    if (taken && !open) evictAbsentee(d, taken);
+    if (taken) room.seats[taken] = id;
   }
   ctx.events.push({ kind: 'bind', memberId: id, supersede: false });
   ctx.welcome = { memberId: id, token, resumed: false, expired: p.resume !== undefined };
@@ -131,8 +159,9 @@ export const handleTakeSeat = (d: EngineState, m: Member, seat: Seat, ctx: Ctx):
   // seat_taken comes before the count-in check: the loser of a race for the
   // last seat arrives just after the winner's sit started a count-in, and
   // "someone else took that seat" is what actually happened to them.
-  if (room.seats[seat] !== null) return reject(ctx, m.id, 'TAKE_SEAT', 'seat_taken');
+  if (room.seats[seat] !== null && !seatHeldByAbsentee(d, seat)) return reject(ctx, m.id, 'TAKE_SEAT', 'seat_taken');
   if (sameAccountInOtherSeat(d, seat, m.profile.uid)) return reject(ctx, m.id, 'TAKE_SEAT', 'same_account');
+  if (room.seats[seat] !== null) evictAbsentee(d, seat);
   if (room.phase === 'countdown') return reject(ctx, m.id, 'TAKE_SEAT', 'countdown');
   const { game } = room;
   if (room.phase === 'paused' && game?.gaveUp.includes(m.profile.uid)) {
@@ -351,6 +380,26 @@ export const handleClearSeat = (d: EngineState, m: Member, seat: Seat, ctx: Ctx)
   if (id === null) return reject(ctx, m.id, 'CLEAR_SEAT', 'seat_empty');
   if (id === m.id) return reject(ctx, m.id, 'CLEAR_SEAT', 'own_seat');
   vacateSeat(d, seat, 'removed', ctx);
+};
+
+/**
+ * The host's fix for a room that has gone wrong in real time: anyone but the
+ * host can be sent out, seated or not, connected or stuck reconnecting. A
+ * seated player's game pauses as if they had left, so a kick never decides a
+ * result. The kicked member may come back through the invite link as a new
+ * member.
+ */
+export const handleKickMember = (d: EngineState, m: Member, targetId: string, ctx: Ctx): void => {
+  if (!m.isHost) return reject(ctx, m.id, 'KICK_MEMBER', 'not_host');
+  const target = findMember(d, targetId);
+  if (!target) return reject(ctx, m.id, 'KICK_MEMBER', 'no_target');
+  if (target.id === m.id || target.isHost) return reject(ctx, m.id, 'KICK_MEMBER', 'self');
+  const seat = seatOf(d, target.id);
+  if (seat) vacateSeat(d, seat, 'removed', ctx);
+  if (target.connected) {
+    ctx.replies.push({ to: target.id, message: { type: 'ROOM_CLOSED', payload: { reason: 'kicked', hostName: m.profile.name } } });
+  }
+  removeMember(d, target.id, ctx);
 };
 
 export const handleUpdateSettings = (d: EngineState, m: Member, p: IntentPayloads['UPDATE_SETTINGS'], ctx: Ctx): void => {

@@ -220,6 +220,7 @@ export interface IntentPayloads {
   CLAIM_DISCONNECT_WIN: { gameId: string };
   DISCARD_GAME: { gameId: string };
   CLEAR_SEAT: { seat: Seat };
+  KICK_MEMBER: { memberId: string };
   UPDATE_SETTINGS: { settings: RoomSettings };
   FIRST_MOVE_CHOICE: { gameId: string; choice: 'rock' | 'paper' | 'scissors' };
   COIN_CALL: { gameId: string; call: 'X' | 'O' };
@@ -338,7 +339,7 @@ export interface HostMessagePayloads {
   TEASE: { fromMemberId: string; fromName: string; toMemberId: string; toName: string; at: number };
   PING: { t: number };
   ROOM_FULL: { capacity: number };
-  ROOM_CLOSED: { reason: 'host_left'; hostName: string };
+  ROOM_CLOSED: { reason: 'host_left' | 'kicked'; hostName: string };
   SUPERSEDED: Record<string, never>;
 }
 
@@ -392,6 +393,7 @@ const VALIDATORS: { [K in IntentType]: (p: Record<string, unknown>) => boolean }
   CLAIM_DISCONNECT_WIN: hasGameId,
   DISCARD_GAME: hasGameId,
   CLEAR_SEAT: (p) => isSeat(p.seat),
+  KICK_MEMBER: (p) => isId(p.memberId),
   UPDATE_SETTINGS: (p) =>
     isRecord(p.settings) &&
     typeof p.settings.boardSize === 'number' &&

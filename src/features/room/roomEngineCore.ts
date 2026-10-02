@@ -5,7 +5,7 @@ import { GRACE_MS, LOST_AFTER_MS, MALFORMED_KICK_COUNT, MALFORMED_WINDOW_MS, STA
 import type { EngineEnv, EngineResult, EngineState, RoomState } from './roomEngineTypes';
 import { bothSeatedAndConnected, findMember, liveClocksAt, nextSeat, occupant, otherSeat, seatOf } from './roomEngineHelpers';
 import { abortCountdown, bankClocks, cloneState, endGame, expiredClock, finalize, newCtx, pause, reject, removeMember, sendEvent, vacateSeat } from './roomEngineLifecycle';
-import { handleBuzz, handleChat, handleClaimDisconnectWin, handleClearSeat, handleCoinCall, handleDiscard, handleFirstMoveChoice, handleHello, handleLeaveRoom, handleMove, handleRatingReport, handleRematchAnswer, handleRematchOffer, handleResign, handleTakeSeat, handleTease, handleUndoAnswer, handleUndoRequest, handleUpdateSettings, refundedBankAt } from './roomEngineHandlers';
+import { handleBuzz, handleChat, handleClaimDisconnectWin, handleClearSeat, handleCoinCall, handleDiscard, handleFirstMoveChoice, handleHello, handleKickMember, handleLeaveRoom, handleMove, handleRatingReport, handleRematchAnswer, handleRematchOffer, handleResign, handleTakeSeat, handleTease, handleUndoAnswer, handleUndoRequest, handleUpdateSettings, refundedBankAt } from './roomEngineHandlers';
 export * from './roomEngineTypes';
 export * from './roomEngineHelpers';
 
@@ -192,6 +192,7 @@ export const applyIntent = (state: EngineState, intent: Intent, fromMemberId: st
     case 'CLAIM_DISCONNECT_WIN': handleClaimDisconnectWin(d, m, intent.payload, ctx); break;
     case 'DISCARD_GAME': handleDiscard(d, m, intent.payload, ctx); break;
     case 'CLEAR_SEAT': handleClearSeat(d, m, intent.payload.seat, ctx); break;
+    case 'KICK_MEMBER': handleKickMember(d, m, intent.payload.memberId, ctx); break;
     case 'UPDATE_SETTINGS': handleUpdateSettings(d, m, intent.payload, ctx); break;
     case 'FIRST_MOVE_CHOICE': handleFirstMoveChoice(d, m, intent.payload, ctx); break;
     case 'COIN_CALL': handleCoinCall(d, m, intent.payload, ctx); break;

@@ -441,6 +441,10 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           finish('full', `Room ${r.roomId} is full (${message.payload.capacity} of ${message.payload.capacity}).`);
           return;
         case 'ROOM_CLOSED':
+          if (message.payload.reason === 'kicked') {
+            finish('kicked', `${message.payload.hostName} removed you from room ${r.roomId}. You can join again with the invite link.`);
+            return;
+          }
           finish('host_left', `${message.payload.hostName} was hosting and left, so the game ended for everyone.`);
           return;
         case 'SUPERSEDED':

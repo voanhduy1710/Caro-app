@@ -114,6 +114,21 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     };
   }, [exitRef, requestExit]);
 
+  const requestKick = (member: Member) => {
+    const seated = s ? SEATS.some((seat) => s.seats[seat] === member.id) : false;
+    const midGame = phase === 'opening' || phase === 'playing' || phase === 'paused';
+    setConfirmSpec({
+      title: `Kick ${member.profile.name}?`,
+      body: seated && midGame
+        ? 'They leave the room and their seat opens. The game pauses until someone takes the seat; no result is recorded.'
+        : 'They leave the room and free their place for someone else. They can join again with the invite link.',
+      confirmLabel: 'Kick',
+      cancelLabel: 'Cancel',
+      tone: 'danger',
+      onConfirm: () => room.kickMember(member.id),
+    });
+  };
+
   const requestBecomeViewer = () => {
     if (phase === 'opening' || phase === 'playing' || phase === 'paused' || phase === 'countdown') {
       setConfirmSpec({
@@ -239,6 +254,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       graceSecondsLeft={room.graceSecondsLeft}
       onPassBaton={mySeat ? requestBecomeViewer : undefined}
       onClearSeat={room.isHost ? room.clearSeat : undefined}
+      onKick={room.isHost ? requestKick : undefined}
       onViewProfile={(member) => (member.id === me ? onViewMyProfile() : onViewProfile(memberProfile(member)))}
       onCopyInvite={copyRoomLink}
       collapsible={!isDesktop}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Link2, UserMinus } from 'lucide-react';
+import { ChevronDown, ChevronUp, Link2, UserMinus, UserX } from 'lucide-react';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { formatReconnectDuration } from '../../shared/utils/formatDuration';
 import type { Seat } from './protocol';
@@ -16,6 +16,8 @@ interface RoomRosterProps {
   onPassBaton?: () => void;
   /** The host's way to free a seat held by someone who is not coming back. */
   onClearSeat?: (seat: Seat) => void;
+  /** The host's way to send anyone out of the room, to unstick it in real time. */
+  onKick?: (member: Member) => void;
   onViewProfile?: (member: Member) => void;
   onCopyInvite?: () => void;
   /** Collapsed to one line until opened: a phone has no room for the list by default. */
@@ -34,6 +36,7 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
   graceSecondsLeft,
   onPassBaton,
   onClearSeat,
+  onKick,
   onViewProfile,
   onCopyInvite,
   collapsible = false,
@@ -148,6 +151,17 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
                     aria-label={`Remove ${member.profile.name} from seat ${seat}`}
                   >
                     <UserMinus size={15} strokeWidth={2.25} aria-hidden="true" />
+                  </button>
+                )}
+                {iAmHost && !isMe && !member.isHost && onKick && (
+                  <button
+                    type="button"
+                    onClick={() => onKick(member)}
+                    className="btn btn-ghost btn-icon h-8 w-8 shrink-0 rounded-full text-muted hover:text-danger"
+                    title={`Kick ${member.profile.name} out of the room`}
+                    aria-label={`Kick ${member.profile.name} out of the room`}
+                  >
+                    <UserX size={15} strokeWidth={2.25} aria-hidden="true" />
                   </button>
                 )}
               </li>
