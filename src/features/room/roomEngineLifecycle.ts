@@ -47,6 +47,8 @@ export const cloneState = (state: EngineState): EngineState => {
       lastBuzzAt: { ...h.lastBuzzAt },
       malformedAt,
       chatBacklog: [...h.chatBacklog],
+      // Older saved rooms predate quotes.
+      recentQuotes: [...(h.recentQuotes ?? [])],
       heldImages: [...h.heldImages],
     },
   };

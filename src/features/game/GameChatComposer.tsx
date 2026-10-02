@@ -1,5 +1,7 @@
 import React from 'react';
 import { Bell, ImagePlus, Smile, X } from 'lucide-react';
+import type { ChatMessage } from '../webrtc/types';
+import { quoteSnippet } from './GameControlsShared';
 
 export interface GameChatComposerProps {
   attachedImage: string | null; setAttachedImage: React.Dispatch<React.SetStateAction<string | null>>; reactionRow: React.ReactNode;
@@ -8,12 +10,30 @@ export interface GameChatComposerProps {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>; chatText: string; setChatText: React.Dispatch<React.SetStateAction<string>>;
   handleKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void; handlePaste: (event: React.ClipboardEvent<HTMLTextAreaElement>) => void;
   role: 'player' | 'viewer'; handleBuzzClick: () => void; isBuzzCooldown: boolean;
+  replyingTo?: ChatMessage | null; onCancelReply?: () => void;
 }
 
 export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
-  const { attachedImage, setAttachedImage, reactionRow, handleChatSubmit, isAiMode, isReactionsOpen, setIsReactionsOpen, attachmentInputRef, handleAttachmentChange, textareaRef, chatText, setChatText, handleKeyDown, handlePaste, role, handleBuzzClick, isBuzzCooldown } = props;
+  const { attachedImage, setAttachedImage, reactionRow, handleChatSubmit, isAiMode, isReactionsOpen, setIsReactionsOpen, attachmentInputRef, handleAttachmentChange, textareaRef, chatText, setChatText, handleKeyDown, handlePaste, role, handleBuzzClick, isBuzzCooldown, replyingTo, onCancelReply } = props;
   return (
     <div className="shrink-0">
+      {replyingTo && (
+        <div className="mb-2 flex items-center gap-2 rounded-md border-l-2 border-accent bg-surface-2 px-2 py-1.5 text-[12px]">
+          <button
+            type="button"
+            onClick={onCancelReply}
+            title="Cancel reply"
+            aria-label="Cancel reply"
+            className="btn btn-ghost btn-icon h-6 w-6 shrink-0 rounded-full text-muted"
+          >
+            <X size={13} strokeWidth={2.25} aria-hidden="true" />
+          </button>
+          <span className="min-w-0 flex-1 truncate text-muted">
+            Reply to <span className="font-semibold text-ink">{replyingTo.sender}</span>: {quoteSnippet({ text: replyingTo.text, hasImage: Boolean(replyingTo.image) })}
+          </span>
+        </div>
+      )}
+
       {attachedImage && (
         <div className="pb-2 flex items-center gap-2">
           <div className="relative inline-block">
@@ -83,7 +103,7 @@ export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
           onChange={(e) => setChatText(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder="Type a message..."
+          placeholder={replyingTo ? `Reply to ${replyingTo.sender}...` : 'Type a message...'}
           title="Shift+Enter for a newline, paste an image, or attach an image/GIF"
           aria-label="Chat message"
           rows={1}

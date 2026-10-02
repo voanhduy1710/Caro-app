@@ -20,6 +20,7 @@
 import type { RoomSettings } from '../settings/types';
 import { PROTOCOL_VERSION } from './protocol';
 import type { HostMessage, MemberProfile, Phase, RoomChatMessage, Seat } from './protocol';
+import type { ChatQuote } from '../webrtc/types';
 
 export type { MemberProfile, Phase, Seat } from './protocol';
 export { PROTOCOL_VERSION } from './protocol';
@@ -62,6 +63,10 @@ export const CHAT_IMAGE_MAX = 670_000;
 export const CHAT_MIN_INTERVAL_MS = 400;
 export const ROOM_IMAGE_INTERVAL_MS = 5_000;
 export const CHAT_BACKLOG_SIZE = 50;
+/** How many recent messages, images included, a reply can still quote. */
+export const CHAT_QUOTES_SIZE = 100;
+/** How much of the answered message a reply carries. */
+export const CHAT_QUOTE_MAX = 120;
 /** Images held back from a seated player during a game, per player. */
 export const HELD_IMAGES_PER_MEMBER = 10;
 export const BUZZ_INTERVAL_MS = 2_000;
@@ -222,6 +227,11 @@ export interface HostBook {
   lastBuzzAt: Record<string, number>;
   malformedAt: Record<string, number[]>;
   chatBacklog: RoomChatMessage[];
+  /**
+   * Recent messages as replies quote them. The host builds every quote from
+   * here, so nobody can put words in someone else's mouth with a fake quote.
+   */
+  recentQuotes: ChatQuote[];
   heldImages: Array<{ to: string; message: RoomChatMessage }>;
 }
 

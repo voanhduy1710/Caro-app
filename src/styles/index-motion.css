@@ -59,6 +59,16 @@
   animation-delay: calc(var(--i, 0) * 70ms);
 }
 
+/* chat-flash: a reply's quote was tapped, and this is the message it answers. */
+@keyframes chat-flash {
+  0%, 40% { background-color: var(--color-accent-soft); }
+  100% { background-color: transparent; }
+}
+
+.chat-flash {
+  animation: chat-flash 1.4s ease-out;
+}
+
 /* Mandatory for anything above a static motion level. Infinite loops and
    transforms collapse; the winning line stays marked by brightness alone. */
 @media (prefers-reduced-motion: reduce) {

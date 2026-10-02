@@ -53,6 +53,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
   const [chatText, setChatText] = useState('');
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [isBuzzCooldown, setIsBuzzCooldown] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(() => isDesktop && readStoredChatOpen());
@@ -323,10 +324,11 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const handleChatSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!chatText.trim() && !attachedImage) return;
-    onSendChat(chatText.trim(), attachedImage || undefined);
+    onSendChat(chatText.trim(), attachedImage || undefined, replyingTo ?? undefined);
     playChatSound();
     setChatText('');
     setAttachedImage(null);
+    setReplyingTo(null);
     stickToBottomRef.current = true;
   };
 
@@ -334,6 +336,11 @@ export const GameControls: React.FC<GameControlsProps> = ({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleChatSubmit();
+    } else if (e.key === 'Escape' && replyingTo) {
+      // Cancels the reply only; the window-level Escape must not close the sheet too.
+      e.preventDefault();
+      e.nativeEvent.stopImmediatePropagation();
+      setReplyingTo(null);
     }
   };
 
@@ -380,6 +387,11 @@ export const GameControls: React.FC<GameControlsProps> = ({
     buzzCooldownRef.current = setTimeout(() => setIsBuzzCooldown(false), 2000);
   };
 
+  const startReply = (message: ChatMessage) => {
+    setReplyingTo(message);
+    textareaRef.current?.focus();
+  };
+
   const handleSendReactionToChat = (emoji: string) => {
     onSendChat(emoji);
     playChatSound();
@@ -406,8 +418,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const actionButtons = <GameActionRail {...{ exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs }} />;
   const reactionRow = <GameReactionPicker open={isReactionsOpen} isAiMode={isAiMode} onSend={handleSendReactionToChat} onClose={() => setIsReactionsOpen(false)} />;
 
-  const chatFeed = <GameChatFeed messages={chatMessages} emptyText={chatEmptyText} opponent={opponent} avatarFor={avatarFor} listRef={listRef} onScroll={handleFeedScroll} isOwn={isOwnMessage} onOpenImage={setLightboxImage} hasNewBelow={hasNewBelow} onShowNew={() => scrollFeedToBottom(true)} />;
-  const composer = <GameChatComposer {...{ attachedImage, setAttachedImage, reactionRow, handleChatSubmit, isAiMode, isReactionsOpen, setIsReactionsOpen, attachmentInputRef, handleAttachmentChange, textareaRef, chatText, setChatText, handleKeyDown, handlePaste, role: role ?? 'player', handleBuzzClick, isBuzzCooldown }} />;
+  const chatFeed = <GameChatFeed messages={chatMessages} emptyText={chatEmptyText} opponent={opponent} avatarFor={avatarFor} listRef={listRef} onScroll={handleFeedScroll} isOwn={isOwnMessage} onOpenImage={setLightboxImage} onReply={isAiMode ? undefined : startReply} hasNewBelow={hasNewBelow} onShowNew={() => scrollFeedToBottom(true)} />;
+  const composer = <GameChatComposer {...{ attachedImage, setAttachedImage, reactionRow, handleChatSubmit, isAiMode, isReactionsOpen, setIsReactionsOpen, attachmentInputRef, handleAttachmentChange, textareaRef, chatText, setChatText, handleKeyDown, handlePaste, role: role ?? 'player', handleBuzzClick, isBuzzCooldown, replyingTo, onCancelReply: () => setReplyingTo(null) }} />;
   const chatHeader = <GameChatHeader open={isChatOpen} unreadCount={unreadCount} messageCount={chatMessages.length} preview={lastMessagePreview} onToggle={() => setIsChatOpen((open) => !open)} />;
 
   const lightbox = <GameChatLightbox image={lightboxImage} onClose={() => setLightboxImage(null)} />;

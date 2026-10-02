@@ -1,6 +1,7 @@
 import type { RoomSettings } from '../settings/types';
 import type { ChatMessage } from '../webrtc/types';
-import { CHAT_IMAGE_MAX, CHAT_TEXT_MAX, cryptoEnv, seatOf } from './roomEngine';
+import { CHAT_IMAGE_MAX, CHAT_QUOTE_MAX, CHAT_TEXT_MAX, cryptoEnv, seatOf } from './roomEngine';
+import { cutToCodePoints } from './protocol';
 import type { RoomState } from './roomEngine';
 import type { Intent, MoveCorner, Seat } from './protocol';
 import { noteRequestedMove, noteResigned } from './ratingCheck';
@@ -51,7 +52,7 @@ export const createRoomActions = ({ state, sendIntent, appendChat, notice, setPe
     callCoin: (call: 'X' | 'O') => { const id = gameId(); return id ? sendIntent({ type: 'COIN_CALL', payload: { gameId: id, call } }) : false; },
     buzz: () => sendIntent({ type: 'BUZZ', payload: {} }),
     tease: (targetMemberId: string) => sendIntent({ type: 'TEASE', payload: { targetMemberId } }),
-    sendChat: async (text: string, image?: string) => {
+    sendChat: async (text: string, image?: string, replyTo?: ChatMessage) => {
       const trimmed = text.trim();
       if (!trimmed && !image) return;
       if (Array.from(trimmed).length > CHAT_TEXT_MAX) { notice(`That message is too long. Keep it under ${CHAT_TEXT_MAX} characters.`); return; }
@@ -59,10 +60,11 @@ export const createRoomActions = ({ state, sendIntent, appendChat, notice, setPe
       if (image && !picture) { notice('That image is too large to send. Try a smaller screenshot.'); return; }
       const id = cryptoEnv.randomId(10);
       const member = state.mirror?.members.find((candidate) => candidate.id === state.memberId);
-      const echo: ChatMessage = { id, senderId: state.memberId ?? undefined, sender: member?.profile.name ?? 'You', senderAvatar: member?.profile.avatar ?? null, text: trimmed, ...(picture ? { image: picture } : {}), timestamp: Date.now() };
+      const quote = replyTo && !replyTo.system ? { id: replyTo.id, senderId: replyTo.senderId, sender: replyTo.sender, text: cutToCodePoints(replyTo.text, CHAT_QUOTE_MAX), hasImage: Boolean(replyTo.image) } : undefined;
+      const echo: ChatMessage = { id, senderId: state.memberId ?? undefined, sender: member?.profile.name ?? 'You', senderAvatar: member?.profile.avatar ?? null, text: trimmed, ...(picture ? { image: picture } : {}), ...(quote ? { replyTo: quote } : {}), timestamp: Date.now() };
       state.lastChatEcho = id;
       appendChat(echo);
-      if (!sendIntent({ type: 'CHAT', payload: { id, text: trimmed, ...(picture ? { image: picture } : {}) } })) {
+      if (!sendIntent({ type: 'CHAT', payload: { id, text: trimmed, ...(picture ? { image: picture } : {}), ...(quote ? { replyTo: quote.id } : {}) } })) {
         setChatMessages((messages) => messages.filter((message) => message.id !== id));
         notice('Not connected to the room right now.');
       }

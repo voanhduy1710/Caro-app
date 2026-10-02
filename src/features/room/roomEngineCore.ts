@@ -45,7 +45,7 @@ export const createRoom = (opts: CreateRoomOptions, now: number, env: EngineEnv 
       hostMemberId: hostId, tokens: {}, tabIds: opts.hostTabId ? { [hostId]: opts.hostTabId } : {},
       lastSeenAt: {}, graceEndsAt: {}, runningSince: null, countdownEndsAt: null, teaseBySender: {},
       teaseByPair: {}, lastChatAt: {}, lastImageAt: null, lastBuzzAt: {}, malformedAt: {},
-      chatBacklog: [], heldImages: [],
+      chatBacklog: [], recentQuotes: [], heldImages: [],
     },
   };
 };

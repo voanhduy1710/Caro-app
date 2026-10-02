@@ -224,7 +224,7 @@ export interface IntentPayloads {
   UPDATE_SETTINGS: { settings: RoomSettings };
   FIRST_MOVE_CHOICE: { gameId: string; choice: 'rock' | 'paper' | 'scissors' };
   COIN_CALL: { gameId: string; call: 'X' | 'O' };
-  CHAT: { id: string; text: string; image?: string };
+  CHAT: { id: string; text: string; image?: string; replyTo?: string };
   BUZZ: Record<string, never>;
   TEASE: { targetMemberId: string };
   RATING_REPORT: {
@@ -406,7 +406,7 @@ const VALIDATORS: { [K in IntentType]: (p: Record<string, unknown>) => boolean }
   FIRST_MOVE_CHOICE: (p) => hasGameId(p) && (p.choice === 'rock' || p.choice === 'paper' || p.choice === 'scissors'),
   COIN_CALL: (p) => hasGameId(p) && (p.call === 'X' || p.call === 'O'),
   CHAT: (p) =>
-    isId(p.id) && typeof p.text === 'string' && (p.image === undefined || typeof p.image === 'string'),
+    isId(p.id) && typeof p.text === 'string' && (p.image === undefined || typeof p.image === 'string') && (p.replyTo === undefined || isId(p.replyTo)),
   BUZZ: () => true,
   TEASE: (p) => isId(p.targetMemberId),
   RATING_REPORT: (p) =>

@@ -1,7 +1,7 @@
 import React from 'react';
 import type { DisplayPrefs } from './displayPrefs';
 import type { UserProfile } from '../auth/AuthContext';
-import type { ChatMessage } from '../webrtc/types';
+import type { ChatMessage, ChatQuote } from '../webrtc/types';
 import { Loader2 } from 'lucide-react';
 
 export interface GameControlsProps {
@@ -12,7 +12,7 @@ export interface GameControlsProps {
   opponent: UserProfile | null;
   myUser: UserProfile | null;
   chatMessages: ChatMessage[];
-  onSendChat: (text: string, image?: string) => void;
+  onSendChat: (text: string, image?: string, replyTo?: ChatMessage) => void;
   onSendBuzz?: () => boolean | void;
   onProposeUndo: () => void;
   onProposeRematch: () => void;
@@ -202,3 +202,6 @@ export const RailButton: React.FC<RailButtonProps> = ({
     )}
   </button>
 );
+
+/** One line for a quoted message: its text, or a word for an image-only one. */
+export const quoteSnippet = (quote: Pick<ChatQuote, 'text' | 'hasImage'>): string => quote.text || (quote.hasImage ? '📷 Image' : '…');

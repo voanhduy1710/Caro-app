@@ -554,7 +554,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         opponent={opponent ? memberProfile(opponent) : null}
         myUser={user}
         chatMessages={room.chatMessages}
-        onSendChat={(text, image) => void room.sendChat(text, image)}
+        onSendChat={(text, image, replyTo) => void room.sendChat(text, image, replyTo)}
         onSendBuzz={() => {
           const sent = room.buzz();
           if (sent) playBuzzSound();

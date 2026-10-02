@@ -1,8 +1,9 @@
 import { checkWin } from '../../shared/utils/gomokuLogic';
 import { cutToCodePoints, isAllowedSettings, MAX_NAME_CODE_POINTS, sanitizeProfile } from './protocol';
 import type { IntentPayloads, RatingReportStatus, RoomChatMessage, Seat } from './protocol';
-import { BUZZ_INTERVAL_MS, CHAT_BACKLOG_SIZE, CHAT_IMAGE_MAX, CHAT_MIN_INTERVAL_MS, CHAT_TEXT_MAX, CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, GRACE_MS, HELD_IMAGES_PER_MEMBER, INSTANT_UNDO_MS, MAX_MEMBERS, OFFER_TTL_MS, RATING_DELTA_MAX, REFUND_AFTER_LAST_SEEN_MS, ROOM_IMAGE_INTERVAL_MS, STALE_MOVER_MS, TEASE_PAIR_COOLDOWN_MS, TEASE_SENDER_COOLDOWN_MS } from './roomEngineTypes';
+import { BUZZ_INTERVAL_MS, CHAT_BACKLOG_SIZE, CHAT_IMAGE_MAX, CHAT_QUOTE_MAX, CHAT_QUOTES_SIZE, CHAT_MIN_INTERVAL_MS, CHAT_TEXT_MAX, CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, GRACE_MS, HELD_IMAGES_PER_MEMBER, INSTANT_UNDO_MS, MAX_MEMBERS, OFFER_TTL_MS, RATING_DELTA_MAX, REFUND_AFTER_LAST_SEEN_MS, ROOM_IMAGE_INTERVAL_MS, STALE_MOVER_MS, TEASE_PAIR_COOLDOWN_MS, TEASE_SENDER_COOLDOWN_MS } from './roomEngineTypes';
 import type { EngineEnv, EngineState, Member } from './roomEngineTypes';
+import type { ChatQuote } from '../webrtc/types';
 import { activeSeats, boardFromMoves, bothSeatedAndConnected, findMember, nextSeat, occupant, otherSeat, pieceAt, playerRef, seatOf, turnLimitMs } from './roomEngineHelpers';
 import { appendSeatChange, bankClocks, endGame, expiredClock, pause, reject, removeMember, sendEvent, settleRating, startCountdown, startNewGame, vacateSeat } from './roomEngineLifecycle';
 import type { Ctx } from './roomEngineLifecycle';
@@ -496,6 +497,8 @@ export const handleChat = (d: EngineState, m: Member, p: IntentPayloads['CHAT'],
   }
   host.lastChatAt[m.id] = ctx.now;
   if (image !== undefined) host.lastImageAt = ctx.now;
+  // A reply to a message the host no longer remembers is sent as a plain line.
+  const replyTo = p.replyTo === undefined ? undefined : host.recentQuotes.find((q) => q.id === p.replyTo);
   const message: RoomChatMessage = {
     id: p.id,
     senderId: m.id,
@@ -503,8 +506,11 @@ export const handleChat = (d: EngineState, m: Member, p: IntentPayloads['CHAT'],
     senderAvatar: m.profile.avatar,
     text,
     ...(image !== undefined ? { image } : {}),
+    ...(replyTo ? { replyTo } : {}),
     timestamp: ctx.now,
   };
+  const quote: ChatQuote = { id: p.id, senderId: m.id, sender: m.profile.name, text: cutToCodePoints(text, CHAT_QUOTE_MAX), hasImage: image !== undefined };
+  host.recentQuotes = [...host.recentQuotes.filter((q) => q.id !== p.id), quote].slice(-CHAT_QUOTES_SIZE);
   if (image === undefined) {
     host.chatBacklog = [...host.chatBacklog, message].slice(-CHAT_BACKLOG_SIZE);
   }

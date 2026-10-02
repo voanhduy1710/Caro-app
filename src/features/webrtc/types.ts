@@ -1,4 +1,14 @@
 /** A line in a room's chat. The room host stamps who sent it and when. */
+/** What a reply shows of the message it answers. */
+export interface ChatQuote {
+  id: string;
+  senderId?: string;
+  sender: string;
+  /** Cut short; the whole message is in the feed. */
+  text: string;
+  hasImage: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   /** Stable author id. Display names are not unique, so ownership is keyed on this. */
@@ -11,4 +21,6 @@ export interface ChatMessage {
   timestamp: number;
   /** Locally generated notices (buzz) render as a centred system line. */
   system?: boolean;
+  /** The message this one answers, when it is a reply. */
+  replyTo?: ChatQuote;
 }

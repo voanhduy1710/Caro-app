@@ -75,3 +75,27 @@ describe('KICK_MEMBER', () => {
     expect(atHost.state.room.members.some((m) => m.id === hostId)).toBe(true);
   });
 });
+
+describe('chat replies', () => {
+  const chat = (state: EngineState, from: string, id: string, text: string, replyTo?: string, now = 10) =>
+    applyIntent(state, { type: 'CHAT', payload: { id, text, ...(replyTo ? { replyTo } : {}) } }, from, now);
+  const sent = (result: ReturnType<typeof chat>) => {
+    const event = result.events.find((e) => e.kind === 'broadcast' && e.message.type === 'CHAT');
+    if (!event || event.kind !== 'broadcast' || event.message.type !== 'CHAT') throw new Error('no chat');
+    return event.message.payload.message;
+  };
+
+  it('quotes the answered message as the host saw it', () => {
+    const g = hello(fresh(), guest, 'tabguest', 1);
+    const hostId = g.state.host.hostMemberId;
+    const first = chat(g.state, g.id, 'msg1', 'vl ác =))', undefined, 10);
+    const reply = sent(chat(first.state, hostId, 'msg2', 'haha', 'msg1', 20));
+    expect(reply.replyTo).toEqual({ id: 'msg1', senderId: g.id, sender: 'Guest 5154', text: 'vl ác =))', hasImage: false });
+  });
+
+  it('drops a reply to a message the host does not know', () => {
+    const g = hello(fresh(), guest, 'tabguest', 1);
+    const reply = sent(chat(g.state, g.id, 'msg2', 'haha', 'nosuchmsg'));
+    expect(reply.replyTo).toBeUndefined();
+  });
+});
