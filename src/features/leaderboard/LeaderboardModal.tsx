@@ -8,6 +8,7 @@ import { RankBadge } from '../../shared/components/RankBadge';
 import { getRankTitle } from '../../shared/utils/eloCalculator';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
+import { RankGuideModal } from './RankGuideModal';
 
 interface LeaderboardModalProps {
   isOpen: boolean;
@@ -15,8 +16,16 @@ interface LeaderboardModalProps {
   onSelectPlayer?: (player: UserProfile) => void;
 }
 
-export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onClose, onSelectPlayer }) => {
-  const dialogProps = useModalChrome(isOpen, onClose, 'leaderboard-modal-title');
+export const LeaderboardModal: React.FC<LeaderboardModalProps> = (props) =>
+  props.isOpen ? <OpenLeaderboardModal {...props} /> : null;
+
+const OpenLeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onClose, onSelectPlayer }) => {
+  const [showRankGuide, setShowRankGuide] = useState(false);
+  const closeLeaderboard = () => {
+    setShowRankGuide(false);
+    onClose();
+  };
+  const dialogProps = useModalChrome(isOpen && !showRankGuide, closeLeaderboard, 'leaderboard-modal-title');
   const [players, setPlayers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,17 +43,23 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (showRankGuide) return <RankGuideModal isOpen onClose={() => setShowRankGuide(false)} />;
 
   return (
     <div {...dialogProps} className="modal-scrim">
       <div className="modal-panel max-w-lg max-h-[85vh] relative p-6 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4 border-b border-line pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4 border-b border-line pb-3">
           <div>
             <h2 id="leaderboard-modal-title" className="text-xl text-ink">Leaderboard</h2>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowRankGuide(true)}
+              className="btn btn-tonal btn-sm"
+            >
+              Rank guide
+            </button>
             <button
               onClick={loadLeaderboard}
               className="btn btn-tonal btn-sm"
@@ -52,7 +67,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
               Refresh
             </button>
             <button
-              onClick={onClose}
+              onClick={closeLeaderboard}
               className="btn btn-ghost btn-icon ml-1"
               aria-label="Close">
               <X size={18} strokeWidth={2.25} aria-hidden="true" />
