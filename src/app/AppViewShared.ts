@@ -2,6 +2,7 @@ import type React from 'react';
 import type { ActiveRoomInfo } from '../features/webrtc/roomDiscoveryService';
 import type { BoardCorner } from '../features/game/Board';
 import type { UserProfile } from '../features/auth/AuthContext';
+import type { RoomSettings } from '../features/settings/types';
 import { getAvatarPublicUrl } from '../features/avatar/avatarService';
 
 export type PracticePiece = 'X' | 'O' | 'T';
@@ -20,3 +21,5 @@ export const AI_BOARD_SIZE = 15;
 const AI_MAX_THINK_MS = 900;
 /** Bot think time: 900 ms, or a quarter of the turn timer when that is shorter. */
 export const aiThinkMs = (turnTimeSeconds: number): number => turnTimeSeconds > 0 ? Math.min(AI_MAX_THINK_MS, (turnTimeSeconds * 1000) / 4) : AI_MAX_THINK_MS;
+/** Rules edited during practice must not leak the bot's 15x15 into the online room size. */
+export const settingsUpdateFor = (current: RoomSettings, next: RoomSettings, inPractice: boolean): RoomSettings => inPractice ? { ...next, boardSize: current.boardSize } : next;

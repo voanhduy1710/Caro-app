@@ -20,7 +20,7 @@ import { AppFeedback } from './AppFeedback';
 import { AppModalStack } from './AppModalStack';
 import { AppNavbar } from './AppNavbar';
 import { ActiveMatchStage } from './ActiveMatchStage';
-import { AI_BOARD_SIZE, aiThinkMs, lmaoCornerFor, nextPracticePiece } from './AppViewShared';
+import { AI_BOARD_SIZE, aiThinkMs, lmaoCornerFor, nextPracticePiece, settingsUpdateFor } from './AppViewShared';
 import type { MoveHistoryItem, PracticePiece } from './AppViewShared';
 import type { ConfirmSpec } from './AppViewShared';
 export const App: React.FC = () => {
@@ -614,7 +614,7 @@ export const App: React.FC = () => {
       </main>
 
       <AppFeedback notice={notice} roomClosed={roomClosedDialog} roomError={room.error} onResetRoom={room.reset} confirm={confirmSpec} onDismissConfirm={() => setConfirmSpec(null)} />
-      <AppModalStack settingsOpen={settingsAndThemeOpen} onCloseSettings={() => setSettingsAndThemeOpen(false)} settings={roomActive && room.state ? room.state.settings : isAiMode ? practiceSettings : roomSettings} onUpdateSettings={(next) => { if (roomActive) room.updateSettings(next); else setRoomSettings(next); }} isHost={!roomActive || room.isHost} gameStatus={roomActive ? (roomPhase === 'waiting' || roomPhase === 'ended' ? 'lobby' : 'playing') : gameStatus} myPiece={roomActive ? (room.mySeat ?? undefined) : myPiece} leaderboardOpen={leaderboardOpen} onCloseLeaderboard={() => setLeaderboardOpen(false)} historyOpen={historyOpen} onCloseHistory={() => setHistoryOpen(false)} onSelectOpponent={setSelectedOpponentProfile} opponent={selectedOpponentProfile} onPlayNow={() => { setHistoryOpen(false); if (roomActive) { setConfirmSpec({ title: 'Leave the room and play the bot?', body: room.isHost ? 'The room closes for everyone in it.' : 'If you are playing, the game pauses and your seat opens for someone else.', confirmLabel: 'Leave and play the bot', tone: 'danger', onConfirm: handleStartAiMode }); } else handleStartAiMode(); }} confirmRoomExit={setConfirmSpec} />
+      <AppModalStack settingsOpen={settingsAndThemeOpen} onCloseSettings={() => setSettingsAndThemeOpen(false)} settings={roomActive && room.state ? room.state.settings : isAiMode ? practiceSettings : roomSettings} onUpdateSettings={(next) => { if (roomActive) room.updateSettings(next); else setRoomSettings(settingsUpdateFor(roomSettings, next, isAiMode)); }} isHost={!roomActive || room.isHost} gameStatus={roomActive ? (roomPhase === 'waiting' || roomPhase === 'ended' ? 'lobby' : 'playing') : gameStatus} myPiece={roomActive ? (room.mySeat ?? undefined) : myPiece} leaderboardOpen={leaderboardOpen} onCloseLeaderboard={() => setLeaderboardOpen(false)} historyOpen={historyOpen} onCloseHistory={() => setHistoryOpen(false)} onSelectOpponent={setSelectedOpponentProfile} opponent={selectedOpponentProfile} onPlayNow={() => { setHistoryOpen(false); if (roomActive) { setConfirmSpec({ title: 'Leave the room and play the bot?', body: room.isHost ? 'The room closes for everyone in it.' : 'If you are playing, the game pauses and your seat opens for someone else.', confirmLabel: 'Leave and play the bot', tone: 'danger', onConfirm: handleStartAiMode }); } else handleStartAiMode(); }} confirmRoomExit={setConfirmSpec} />
 
     </div>
   );
