@@ -388,7 +388,8 @@ const VALIDATORS: { [K in IntentType]: (p: Record<string, unknown>) => boolean }
   },
   TAKE_SEAT: (p) => isSeat(p.seat),
   LEAVE_SEAT: () => true,
-  MOVE: (p) => hasGameId(p) && isCount(p.n) && isCount(p.row) && isCount(p.col) && (p.corner === undefined || isMoveCorner(p.corner)),
+  // null is accepted as "no corner": the binary wire encoding turns undefined into null.
+  MOVE: (p) => hasGameId(p) && isCount(p.n) && isCount(p.row) && isCount(p.col) && (p.corner === undefined || p.corner === null || isMoveCorner(p.corner)),
   UNDO_REQUEST: hasGameId,
   UNDO_ANSWER: (p) => hasGameId(p) && typeof p.accept === 'boolean',
   REMATCH_OFFER: hasGameId,

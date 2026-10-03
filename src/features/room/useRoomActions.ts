@@ -36,7 +36,8 @@ export const createRoomActions = ({ state, sendIntent, appendChat, notice, setPe
       const number = game.moves.length;
       noteRequestedMove(game.id, number, row, col);
       setPendingMove([row, col]);
-      const sent = sendIntent({ type: 'MOVE', payload: { gameId: game.id, n: number, row, col, corner } });
+      // An absent corner is left out, not sent as undefined: the wire encoding turns undefined into null.
+      const sent = sendIntent({ type: 'MOVE', payload: { gameId: game.id, n: number, row, col, ...(corner ? { corner } : {}) } });
       if (!sent) setPendingMove(null);
       return sent;
     },

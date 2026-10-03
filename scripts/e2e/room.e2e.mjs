@@ -48,6 +48,12 @@ await new Promise((resolve, reject) => {
 });
 let nextId = 1;
 const waiting = new Map();
+// A lost DevTools socket would leave every pending call hanging and Node
+// would exit mid-run with no result; fail them loudly instead.
+ws.onclose = () => {
+  for (const { reject } of waiting.values()) reject(new Error('Chrome DevTools connection closed'));
+  waiting.clear();
+};
 ws.onmessage = (event) => {
   const msg = JSON.parse(event.data);
   if (msg.id && waiting.has(msg.id)) {
@@ -97,11 +103,28 @@ const openContext = async (label, width = 1440, height = 900) => {
   await cdp('Page.enable', {}, sessionId);
   await cdp('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 600 }, sessionId);
   await cdp('Page.navigate', { url: APP }, sessionId);
-  const ctx = { label, sessionId, targetId };
+  const ctx = { label, sessionId, targetId, browserContextId };
   if (!(await waitFor(ctx, 'Boolean(window.__caro && window.__caro.get)', 20000))) {
     throw new Error(`${label}: window.__caro is missing; is this a dev build?`);
   }
   return ctx;
+};
+
+/** Closes a context's tab and opens a new one in the same browser profile, as a player reopening a link does. */
+const reopenTab = async (ctx, url) => {
+  await cdp('Target.closeTarget', { targetId: ctx.targetId });
+  const { targetId } = await cdp('Target.createTarget', { url: 'about:blank', browserContextId: ctx.browserContextId });
+  const { sessionId } = await cdp('Target.attachToTarget', { targetId, flatten: true });
+  await cdp('Runtime.enable', {}, sessionId);
+  await cdp('Page.enable', {}, sessionId);
+  await cdp('Page.navigate', { url }, sessionId);
+  Object.assign(ctx, { sessionId, targetId });
+  return waitFor(ctx, 'Boolean(window.__caro && window.__caro.get)', 20000);
+};
+
+const setOffline = async (ctx, offline) => {
+  await cdp('Network.enable', {}, ctx.sessionId);
+  await cdp('Network.emulateNetworkConditions', { offline, latency: 0, downloadThroughput: -1, uploadThroughput: -1 }, ctx.sessionId);
 };
 
 const get = (ctx) => ev(ctx, 'JSON.parse(JSON.stringify(window.__caro.get()))');
@@ -159,9 +182,14 @@ try {
   check('a second tease is cooled down', (await get(A)).lastRejected?.reason === 'cooldown');
 
   // ------------------------------------------------ moves
+  // X opens. Each player moves only once their own screen shows the previous
+  // move, or the move is refused as out of turn.
   await act(B, 'move(7, 7)');
+  await sleep(300);
+  check('moving out of turn is refused', (await get(B)).state.game.moves.length === 0);
   await act(A, 'move(7, 3)');
   check('a move lands everywhere', await waitFor(C, `${S}.state.game.moves.length === 1 && ${S}.state.game.turn === 'O'`, 5000));
+  await waitFor(B, `${S}.state.game.moves.length === 1`, 5000);
   await act(B, 'move(0, 0)');
   await waitFor(A, `${S}.state.game.moves.length === 2`, 5000);
   await act(A, 'move(7, 4)');
@@ -180,19 +208,21 @@ try {
   await ev(C, "[...document.querySelectorAll('.tease-toast button')].find((b) => b.innerText.includes('Take seat O')).click()");
   check('the viewer sits and the game resumes', await waitFor(A, `${S}.state.phase === 'playing' && ${S}.state.seats.O === ${JSON.stringify(cId)}`, 8000));
   a = await get(A);
-  check('the position is kept', a.state.game.moves.length === 3 && a.state.game.turn === 'O');
+  check('the position is kept', a.state.game.moves.length === 3 && a.state.game.turn === 'O', `${a.state.game.moves.length} moves, ${a.state.game.turn} to move, opening ${a.state.game.openingSeat}`);
   check('the seat log records the handoff', a.state.game.seatLog.map((s) => s.reason).join(',') === 'stood,sat', a.state.game.seatLog.map((s) => s.reason).join(','));
   await act(B, "takeSeat('O')");
   await sleep(300);
   check('who stood up cannot sit back in this game', ['seat_taken', 'gave_up_seat'].includes((await get(B)).lastRejected?.reason));
 
   // ------------------------------------------------ take-back
+  await waitFor(C, `${S}.state.game.moves.length === 3 && ${S}.state.game.turn === 'O'`, 5000);
   await act(C, 'move(0, 1)');
-  await waitFor(A, `${S}.state.game.moves.length === 4`, 5000);
+  await waitFor(C, `${S}.state.game.moves.length === 4`, 5000);
   await act(C, 'requestUndo()');
   check('an instant take-back', await waitFor(A, `${S}.state.game.moves.length === 3 && ${S}.state.game.turn === 'O'`, 5000));
+  await waitFor(C, `${S}.state.game.moves.length === 3`, 5000);
   await act(C, 'move(0, 1)');
-  await waitFor(A, `${S}.state.game.moves.length === 4`, 5000);
+  check('the board has four moves', await waitFor(A, `${S}.state.game.moves.length === 4`, 5000));
 
   // ------------------------------------------------ discovery
   check('the lobby lists the room with its viewers', await waitFor(D, `document.body.innerText.includes(${JSON.stringify(roomId)}) && document.body.innerText.includes('watching')`, 12000));
@@ -209,6 +239,20 @@ try {
   check('play resumes once the host is back', await waitFor(C, `${S}.status === 'connected' && ${S}.state.phase === 'playing'`, 40000));
   a = await get(A);
   check('seats and rules survive the host refresh', a.state.seats.O === cId && a.state.isPublic === true && a.state.settings.turnTimeSeconds === 30);
+  const hostId = a.memberId;
+
+  // The host closes the tab and opens the invite link again in a new one:
+  // sessionStorage is gone, so only the localStorage backup can bring it back.
+  check('the reopened tab loads', await reopenTab(A, `${APP}/?room=${roomId}`));
+  check('the host takes its room back from a new tab', await waitFor(A, `${S}.status === 'connected' && ${S}.memberId === ${JSON.stringify(hostId)} && ${S}.mySeat === 'X' && ${S}.state.game.moves.length === 4`, 90000));
+  check('play resumes after the host reopened the tab', await waitFor(C, `${S}.status === 'connected' && ${S}.state.phase === 'playing'`, 60000));
+
+  // The host's network drops for a while and comes back.
+  await setOffline(A, true);
+  await sleep(10000);
+  await setOffline(A, false);
+  check('the room survives the host going offline', await waitFor(A, `${S}.status === 'connected' && ${S}.state && ${S}.state.game && ${S}.state.game.moves.length === 4`, 60000));
+  check('players are back with the host after the outage', await waitFor(C, `${S}.status === 'connected' && ${S}.state.phase === 'playing'`, 90000));
 
   // ------------------------------------------------ result and rematch
   await act(C, 'resign()');

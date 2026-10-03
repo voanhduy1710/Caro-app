@@ -53,6 +53,7 @@ import {
   rejectionText,
   rememberToken,
   send,
+  writeHostBackup,
   writeJson,
 } from './useRoomUtilities';
 
@@ -79,7 +80,7 @@ const SNAPSHOT_EVERY_MS = 1_000;
 const HELLO_TIMEOUT_MS = 5_000;
 /** After a refresh the old peer id lingers on the signalling server for a while. */
 const ID_RETRY_MS = 2_000;
-const ID_RETRY_WINDOW_MS = 20_000;
+const ID_RETRY_WINDOW_MS = 90_000;
 /** The host pings every 2 s, so this much silence means it is gone. */
 const HOST_SILENT_MS = 8_000;
 const HOST_RETRY_MS = 2_000;
@@ -88,6 +89,8 @@ const PEER_RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000];
 /** A first join that has not been welcomed retries this often, then gives up. */
 const JOIN_RETRY_MS = 8_000;
 const JOIN_GIVE_UP_MS = 30_000;
+/** A fresh join to a room that is not there keeps trying this long, in case its host is reloading. */
+const JOIN_NOT_FOUND_GRACE_MS = 15_000;
 
 // ---------------------------------------------------------------------------
 // The hook
@@ -206,7 +209,11 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       state: r,
       setMirror,
       receive: (message) => receive(message),
-      writeSnapshot: (engine, now) => writeJson(sessionStorage, HOST_SNAPSHOT_KEY, snapshot(engine, now)),
+      writeSnapshot: (engine, now) => {
+        const snap = snapshot(engine, now);
+        writeJson(sessionStorage, HOST_SNAPSHOT_KEY, snap);
+        writeHostBackup(engine.room.roomId, snap);
+      },
       helloTimeoutMs: HELLO_TIMEOUT_MS,
       clockSyncMs: CLOCK_SYNC_MS,
       snapshotEveryMs: SNAPSHOT_EVERY_MS,
@@ -219,6 +226,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
     const announce = host.announce;
 
     let finish: (reason: ClosedReason | null, message: string) => void = () => {};
+    let usableMemberPeer: () => Peer | null = () => null;
 
     // ---------------------------------------------------------------- member
 
@@ -267,8 +275,11 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
     };
 
     const connectToHost = () => {
-      const peer = r.peer;
-      if (!peer || peer.destroyed || r.terminal || !r.roomId) return;
+      if (r.terminal || !r.roomId) return;
+      // A peer that lost the signalling server cannot dial; this gets it back,
+      // and its 'open' event dials once it is.
+      const peer = usableMemberPeer();
+      if (!peer) return;
       const previous = r.hostConn;
       r.hostConn = null;
       if (previous) {
@@ -281,7 +292,15 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       if (r.connectAttempts === 0) r.joinStartedAt = Date.now();
       r.connectAttempts += 1;
       r.lastRetryAt = Date.now();
-      const conn = peer.connect(PEER_PREFIX + r.roomId, { reliable: true, metadata: { caro: PROTOCOL_VERSION } });
+      let conn: DataConnection | undefined;
+      try {
+        conn = peer.connect(PEER_PREFIX + r.roomId, { reliable: true, metadata: { caro: PROTOCOL_VERSION } });
+      } catch {
+        conn = undefined;
+      }
+      // PeerJS returns nothing when the peer dropped off the server in between;
+      // the loop dials again on its next turn.
+      if (!conn) return;
       r.hostConn = conn;
       conn.on('open', () => {
         if (r.hostConn !== conn) return;
@@ -486,6 +505,8 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       idRetryMs: ID_RETRY_MS,
       idRetryWindowMs: ID_RETRY_WINDOW_MS,
       peerReconnectDelaysMs: PEER_RECONNECT_DELAYS_MS,
+      joinNotFoundGraceMs: JOIN_NOT_FOUND_GRACE_MS,
+      joinRetryMs: JOIN_RETRY_MS,
       hostLoop,
       memberLoop,
       connectToHost,
@@ -508,6 +529,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       setSeatOpened,
     });
     finish = lifecycle.finish;
+    usableMemberPeer = lifecycle.usableMemberPeer;
 
     const actions = createRoomActions({
       state: r,
@@ -530,13 +552,21 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
        requestTickets: ratings.requestTickets,
        dispose: lifecycle.dispose,
        onPageHide: lifecycle.onPageHide,
+       nudge: lifecycle.nudge,
     };
   }, []);
 
   useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') core.nudge();
+    };
     window.addEventListener('pagehide', core.onPageHide);
+    window.addEventListener('online', core.nudge);
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       window.removeEventListener('pagehide', core.onPageHide);
+      window.removeEventListener('online', core.nudge);
+      document.removeEventListener('visibilitychange', onVisible);
       core.dispose();
     };
   }, [core]);

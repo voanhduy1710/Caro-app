@@ -4,7 +4,7 @@ import type { ChatMessage } from '../webrtc/types';
 import { PROTOCOL_VERSION, parseRoomCode } from './protocol';
 import type { HostMessagePayloads, RejectReason } from './protocol';
 import { cryptoEnv } from './roomEngine';
-import type { RoomState } from './roomEngine';
+import type { HostSnapshot, RoomState } from './roomEngine';
 import type { LastRoom } from './useRoomTypes';
 
 const TOKENS_KEY = 'caro_room_tokens';
@@ -113,6 +113,67 @@ export interface SavedSession {
   memberId?: string;
   token?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Host backup
+// ---------------------------------------------------------------------------
+
+/**
+ * The host's room, kept in localStorage as well as the tab's sessionStorage.
+ * sessionStorage dies with the tab, so a host who closed the tab, had it
+ * killed by a phone, or opened the invite link in a new tab used to come back
+ * as a member of their own room, which no longer existed. With this copy any
+ * tab of the same browser can take the room back, seats and all.
+ */
+const HOST_BACKUP_KEY = 'caro_room_host_backup';
+/** A live host tab writes this every second, so a second tab does not steal the room. */
+const HOST_ALIVE_KEY = 'caro_room_host_alive';
+/** Matches the room engine's seat grace: after that there is nothing left to resume. */
+const HOST_BACKUP_TTL_MS = 5 * 60 * 60_000;
+const HOST_ALIVE_FRESH_MS = 3_000;
+
+interface HostBackup {
+  roomId: string;
+  savedAt: number;
+  snap: HostSnapshot;
+}
+
+export const writeHostBackup = (roomId: string, snap: HostSnapshot) =>
+  writeJson(localStorage, HOST_BACKUP_KEY, { roomId, savedAt: Date.now(), snap } satisfies HostBackup);
+
+/** The backed-up room for this code, unless it is stale or belongs to another signed-in account. */
+export const readHostBackup = (roomId: string, user: UserProfile | null): HostSnapshot | null => {
+  const backup = readJson<HostBackup>(localStorage, HOST_BACKUP_KEY);
+  if (!backup || backup.roomId !== roomId || Date.now() - backup.savedAt > HOST_BACKUP_TTL_MS) return null;
+  const host = backup.snap?.state?.room?.members?.[0]?.profile;
+  if (!host || backup.snap.state.room.roomId !== roomId) return null;
+  if (user && !user.isGuest && !host.guest && host.uid !== user.uid) return null;
+  return backup.snap;
+};
+
+export const forgetHostBackup = (roomId: string | null) => {
+  if (!roomId || readJson<HostBackup>(localStorage, HOST_BACKUP_KEY)?.roomId !== roomId) return;
+  removeKey(localStorage, HOST_BACKUP_KEY);
+  removeKey(localStorage, HOST_ALIVE_KEY);
+};
+
+export const beatHostAlive = (roomId: string) =>
+  writeJson(localStorage, HOST_ALIVE_KEY, { roomId, tabId: TAB_ID, at: Date.now() });
+
+/** A closing host tab says so, so a tab opened right after does not wait for the beat to go stale. */
+export const endHostAlive = (roomId: string) => {
+  const alive = readJson<{ roomId?: string; tabId?: string }>(localStorage, HOST_ALIVE_KEY);
+  if (alive?.roomId === roomId && alive.tabId === TAB_ID) removeKey(localStorage, HOST_ALIVE_KEY);
+};
+
+/** How long a tab waits for a host beat to go stale before deciding another tab really hosts the room. */
+export const HOST_ALIVE_STALE_WAIT_MS = HOST_ALIVE_FRESH_MS + 500;
+
+/** Whether another tab of this browser is hosting the room right now. */
+export const hostLiveElsewhere = (roomId: string): boolean => {
+  const alive = readJson<{ roomId?: string; tabId?: string; at?: number }>(localStorage, HOST_ALIVE_KEY);
+  return Boolean(alive && alive.roomId === roomId && alive.tabId !== TAB_ID && typeof alive.at === 'number' && Date.now() - alive.at < HOST_ALIVE_FRESH_MS);
+};
 
 type SavedTokens = Record<string, { memberId: string; token: string; savedAt: number }>;
 
