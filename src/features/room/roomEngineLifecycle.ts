@@ -408,7 +408,7 @@ export const finalize = (before: EngineState, d: EngineState, ctx: Ctx): EngineR
       kind: 'broadcast',
       message: {
         type: 'MOVE_APPLIED',
-        payload: { ...ctx.moveApplied, gameId: game.id, turn: game.turn, clocks: { ...game.clocks }, rev: d.room.rev },
+        payload: { ...ctx.moveApplied, gameId: game.id, turn: game.turn, clocks: { ...game.clocks }, ...(game.doubleDown ? { doubleDown: { ...game.doubleDown } } : {}), rev: d.room.rev },
       },
       except: [],
     });

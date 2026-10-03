@@ -369,6 +369,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           moveCorners: [...(game.moveCorners ?? []), p.corner ?? 'center'],
           turn: p.turn,
           clocks: p.clocks,
+          doubleDown: p.doubleDown ?? game.doubleDown,
           lastMove: { by, at: Date.now() },
         },
       });

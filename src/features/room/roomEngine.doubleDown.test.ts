@@ -106,4 +106,14 @@ describe('double down', () => {
     const valid = move(invalid.state, gameId, 2, 0, 6_200);
     expect(valid.state.room.game!.doubleDown).toMatchObject({ pending: seatOf(state.room, hostId), answerMovesLeft: 4 });
   });
+
+  it('sends the updated offer counter with each compact move message', () => {
+    const { state, hostId, gameId } = playing();
+    const offered = offer(state, hostId, gameId);
+    const first = move(offered.state, gameId, 0, 0, 6_000);
+    const second = move(first.state, gameId, 2, 0, 6_100);
+    const update = second.events.find((event) => event.kind === 'broadcast' && event.message.type === 'MOVE_APPLIED');
+    expect(update?.kind === 'broadcast' && update.message.type === 'MOVE_APPLIED' ? update.message.payload.doubleDown : null)
+      .toMatchObject({ pending: seatOf(state.room, hostId), answerMovesLeft: 4 });
+  });
 });

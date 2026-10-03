@@ -12,7 +12,7 @@
 import type { RoomSettings } from '../settings/types';
 import type { ChatMessage } from '../webrtc/types';
 import { getChampionId, isRagnarokAvatar } from '../avatar/avatarService';
-import type { Clocks, RoomState } from './roomEngine';
+import type { Clocks, DoubleDown, RoomState } from './roomEngine';
 
 // The room code rule has exactly one home. Join and the public lobby already
 // read it from there, and a copy here would drift the moment either changed.
@@ -333,6 +333,8 @@ export interface HostMessagePayloads {
     corner?: MoveCorner;
     turn: Seat;
     clocks: Clocks;
+    /** Offer state can change on the responder's move even when no full room snapshot is sent. */
+    doubleDown?: DoubleDown;
     rev: number;
   };
   CLOCK_SYNC: { gameId: string; clocks: Clocks; rev: number };
