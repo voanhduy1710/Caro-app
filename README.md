@@ -34,6 +34,7 @@ A real-time **Caro (Gomoku / Five-in-a-Row)** web application built with **React
 ### Double down
 - Either player can offer a **Double down** once per game, from the orange dice button next to the settings gear
 - The offer appears in the chat with **Accept** and **Reject**. Rejecting changes nothing and the game carries on
+- The player receiving the offer has five of their own moves to answer; after their fifth move, it is automatically rejected
 - When accepted, the dice **burns** for the rest of the game, and the winner gains and the loser loses an extra **20 rating points**
 - The bonus is applied on the server and only when both players agreed through their own signed-in session, so nobody can impose it on the other
 - Available in online 1v1 games; not shown to viewers, in practice mode, or in 1v1v1

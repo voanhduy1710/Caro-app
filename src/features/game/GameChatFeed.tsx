@@ -31,7 +31,7 @@ export const GameChatFeed: React.FC<GameChatFeedProps> = ({ messages, emptyText,
   if (m.doubleDownOffer) return <div key={m.id} data-chat-id={m.id} className="flex justify-center animate-pop-in">
     <div role="group" aria-label="Double down offer" className="w-full max-w-[17rem] rounded-md border border-orange-500/50 bg-orange-500/10 px-3 py-2.5 text-center">
       <div className="flex items-center justify-center gap-1.5 text-[13px] font-semibold text-ink"><Dices size={16} strokeWidth={2.25} className="shrink-0 text-orange-500" aria-hidden="true" /><span className="min-w-0 break-words">{m.text}</span></div>
-      <p className="mt-0.5 text-[11px] text-muted">The winner gains and the loser loses 20 extra points.</p>
+      <p className="mt-0.5 text-[11px] text-muted">The winner gains and the loser loses 20 extra points. {m.doubleDownOffer.canAnswer ? 'You have' : 'The recipient has'} {m.doubleDownOffer.movesLeft} of {m.doubleDownOffer.canAnswer ? 'your' : 'their'} moves left to answer.</p>
       {m.doubleDownOffer.canAnswer && onAnswerDoubleDown
         ? <div className="mt-2 flex gap-2"><button type="button" onClick={() => onAnswerDoubleDown(true)} className="btn btn-sm flex-1 border-orange-500 bg-orange-500 text-white hover:bg-orange-600">Accept</button><button type="button" onClick={() => onAnswerDoubleDown(false)} className="btn btn-secondary btn-sm flex-1">Reject</button></div>
         : <p className="mt-1.5 text-[11px] font-medium text-orange-600">Waiting for an answer…</p>}

@@ -217,7 +217,7 @@ const Seat: React.FC<SeatProps> = ({
           </span>
         )}
         {!away && clock <= 0 && isTurn && !hasMoveClock && (
-          <span className={`${clockPill(true)} lg:min-w-[4.5rem]`}>Turn</span>
+          <span className={`${clockPill(true)} lg:min-w-[4.5rem]`} style={{ backgroundColor: color, color: readableInk(color) }}>Playing</span>
         )}
       </span>
     </span>
@@ -301,7 +301,7 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({ seats, score, announce
       {/* Rounds won in this sitting. It is the only number both players watch
           between games, so it belongs between them rather than in a panel. */}
       <div className="flex shrink-0 flex-col items-center">
-        <div className="mb-1 rounded-sm bg-accent px-2 py-0.5 font-display text-xs font-extrabold tracking-wider text-accent-fg shadow-[0_2px_0_var(--ui-accent-shadow)] lg:mb-2 lg:px-4 lg:py-1 lg:text-base lg:shadow-[0_3px_0_var(--ui-accent-shadow)]">
+        <div className="mb-1 font-display text-[11px] font-extrabold tracking-wider text-muted lg:mb-2 lg:text-xs">
           VS
         </div>
         <div className="flex shrink-0 items-center gap-1 font-mono text-sm font-bold tabular-nums text-subtle lg:gap-2.5 lg:text-2xl">

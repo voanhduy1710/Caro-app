@@ -14,7 +14,7 @@ import { RockPaperScissorsModal } from '../minigames/RockPaperScissorsModal';
 import { OnlineRoomLobby } from './OnlineRoomLobby';
 import { HostLostStrip, OnlineRoomConnecting, RoomConfirmDialog } from './OnlineRoomOverlays';
 import type { Seat } from './protocol';
-import { CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, DOUBLE_DOWN_BONUS, GRACE_MS, MAX_MEMBERS, SEATS, activeSeats, boardFromMoves, latestResult, otherSeat, pieceAt } from './roomEngine';
+import { CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, DOUBLE_DOWN_ANSWER_MOVES, DOUBLE_DOWN_BONUS, GRACE_MS, MAX_MEMBERS, SEATS, activeSeats, boardFromMoves, latestResult, otherSeat, pieceAt } from './roomEngine';
 import type { Member } from './roomEngine';
 import type { ChatMessage } from '../webrtc/types';
 import { describeRating } from './roomRating';
@@ -73,12 +73,12 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       sender: doubleDownOfferer?.profile.name ?? 'Your opponent',
       text: `${doubleDownOfferer?.profile.name ?? 'Your opponent'} has offered to Double down`,
       timestamp: Date.now(),
-      doubleDownOffer: { canAnswer: canAnswerDoubleDown },
+      doubleDownOffer: { canAnswer: canAnswerDoubleDown, movesLeft: game.doubleDown?.answerMovesLeft ?? DOUBLE_DOWN_ANSWER_MOVES },
     };
     return [...room.chatMessages, offer];
     // The offer is rebuilt only when something it shows changes, so the feed does not re-scroll on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room.chatMessages, game?.id, doubleDownFrom, doubleDownOfferer?.id, doubleDownOfferer?.profile.name, canAnswerDoubleDown]);
+  }, [room.chatMessages, game?.id, game?.doubleDown?.answerMovesLeft, doubleDownFrom, doubleDownOfferer?.id, doubleDownOfferer?.profile.name, canAnswerDoubleDown]);
   const placementCorners = useMemo<Record<string, BoardCorner>>(
     () =>
       Object.fromEntries(

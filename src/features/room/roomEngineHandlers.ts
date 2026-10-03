@@ -1,7 +1,7 @@
 import { checkWin } from '../../shared/utils/gomokuLogic';
 import { cutToCodePoints, isAllowedSettings, MAX_NAME_CODE_POINTS, sanitizeProfile } from './protocol';
 import type { IntentPayloads, RatingReportStatus, RoomChatMessage, Seat } from './protocol';
-import { BUZZ_INTERVAL_MS, CHAT_BACKLOG_SIZE, CHAT_IMAGE_MAX, CHAT_QUOTE_MAX, CHAT_QUOTES_SIZE, CHAT_MIN_INTERVAL_MS, CHAT_TEXT_MAX, CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, GRACE_MS, HELD_IMAGES_PER_MEMBER, INSTANT_UNDO_MS, MAX_MEMBERS, OFFER_TTL_MS, RATING_DELTA_MAX, REFUND_AFTER_LAST_SEEN_MS, ROOM_IMAGE_INTERVAL_MS, STALE_MOVER_MS, TEASE_PAIR_COOLDOWN_MS, TEASE_SENDER_COOLDOWN_MS } from './roomEngineTypes';
+import { BUZZ_INTERVAL_MS, CHAT_BACKLOG_SIZE, CHAT_IMAGE_MAX, CHAT_QUOTE_MAX, CHAT_QUOTES_SIZE, CHAT_MIN_INTERVAL_MS, CHAT_TEXT_MAX, CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, DOUBLE_DOWN_ANSWER_MOVES, GRACE_MS, HELD_IMAGES_PER_MEMBER, INSTANT_UNDO_MS, MAX_MEMBERS, OFFER_TTL_MS, RATING_DELTA_MAX, REFUND_AFTER_LAST_SEEN_MS, ROOM_IMAGE_INTERVAL_MS, STALE_MOVER_MS, TEASE_PAIR_COOLDOWN_MS, TEASE_SENDER_COOLDOWN_MS } from './roomEngineTypes';
 import type { EngineEnv, EngineState, Member } from './roomEngineTypes';
 import type { ChatQuote } from '../webrtc/types';
 import { activeSeats, boardFromMoves, bothSeatedAndConnected, findMember, nextSeat, occupant, otherSeat, pieceAt, playerRef, seatOf, turnLimitMs } from './roomEngineHelpers';
@@ -217,6 +217,14 @@ export const handleMove = (
   (game.moveCorners ??= []).push(game.settings.placementMode === 'lmao' ? p.corner ?? 'center' : 'center');
   game.moveBy.push(m.id);
   game.lastMove = { by: m.id, at: ctx.now };
+  const doubleDown = game.doubleDown;
+  if (doubleDown?.pending && seat === otherSeat(doubleDown.pending)) {
+    doubleDown.answerMovesLeft = Math.max(0, (doubleDown.answerMovesLeft ?? DOUBLE_DOWN_ANSWER_MOVES) - 1);
+    if (doubleDown.answerMovesLeft === 0) {
+      doubleDown.pending = null;
+      doubleDown.expired = true;
+    }
+  }
   board[p.row][p.col] = seat;
   const win = checkWin(board, p.row, p.col, size, game.settings.playerMode === 'oneVsOneVsOne' ? 4 : 5);
   if (win) return endGame(d, win.winner, '5_in_a_row', win.line, ctx);
@@ -293,7 +301,7 @@ export const handleDoubleDownOffer = (d: EngineState, m: Member, p: IntentPayloa
   if (doubleDown.accepted) return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'already_doubled');
   if (doubleDown.pending) return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'offer_pending');
   if (doubleDown.offered.includes(seat)) return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'already_offered');
-  game.doubleDown = { offered: [...doubleDown.offered, seat], pending: seat, accepted: false };
+  game.doubleDown = { offered: [...doubleDown.offered, seat], pending: seat, accepted: false, answerMovesLeft: DOUBLE_DOWN_ANSWER_MOVES, expired: false };
 };
 
 export const handleDoubleDownAnswer = (d: EngineState, m: Member, p: IntentPayloads['DOUBLE_DOWN_ANSWER'], ctx: Ctx): void => {
@@ -305,7 +313,7 @@ export const handleDoubleDownAnswer = (d: EngineState, m: Member, p: IntentPaylo
   if (!game.doubleDown || !from) return reject(ctx, m.id, 'DOUBLE_DOWN_ANSWER', 'no_offer');
   if (seatOf(d, m.id) !== otherSeat(from)) return reject(ctx, m.id, 'DOUBLE_DOWN_ANSWER', 'not_addressed');
   // Everyone sees the answer as a chat line built from the state change, so no event is needed.
-  game.doubleDown = { ...game.doubleDown, pending: null, accepted: p.accept };
+  game.doubleDown = { ...game.doubleDown, pending: null, accepted: p.accept, expired: false };
 };
 
 export const handleRematchOffer = (d: EngineState, m: Member, p: IntentPayloads['REMATCH_OFFER'], ctx: Ctx): void => {

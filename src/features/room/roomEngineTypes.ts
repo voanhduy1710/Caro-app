@@ -37,6 +37,7 @@ export const CLAIM_DISCONNECT_WIN_MS = 2 * 60_000;
 export const COUNTDOWN_MS = 3_000;
 export const INSTANT_UNDO_MS = 5_000;
 export const OFFER_TTL_MS = 30_000; // undo requests and rematch offers
+export const DOUBLE_DOWN_ANSWER_MOVES = 5;
 /** The hub pings this often; any inbound message counts as a sign of life. */
 export const PING_INTERVAL_MS = 2_000;
 /** A connected member silent for longer than this is treated as dropped. */
@@ -159,6 +160,10 @@ export interface DoubleDown {
   /** The seat whose offer is waiting on an answer. */
   pending: Seat | null;
   accepted: boolean;
+  /** Valid moves made by the answering seat before an unanswered offer expires. Optional for older snapshots. */
+  answerMovesLeft?: number;
+  /** Distinguishes an automatic rejection from a player's answer in the chat. */
+  expired?: boolean;
 }
 
 export interface Game {

@@ -23,12 +23,17 @@ const answer = (state: EngineState, from: string, gameId: string, accept: boolea
   applyIntent(state, { type: 'DOUBLE_DOWN_ANSWER', payload: { gameId, accept } }, from, now);
 const rejected = (result: ReturnType<typeof offer>) =>
   result.replies.find((r) => r.message.type === 'REJECTED')?.message.payload;
+const move = (state: EngineState, gameId: string, row: number, col: number, now: number) => {
+  const game = state.room.game!;
+  const moverId = state.room.seats[game.turn]!;
+  return applyIntent(state, { type: 'MOVE', payload: { gameId, n: game.moves.length, row, col } }, moverId, now);
+};
 
 describe('double down', () => {
   it('becomes active once the opponent accepts, and marks the result', () => {
     const { state, hostId, friendId, gameId } = playing();
     const offered = offer(state, hostId, gameId);
-    expect(offered.state.room.game!.doubleDown).toEqual({ offered: [seatOf(state.room, hostId)], pending: seatOf(state.room, hostId), accepted: false });
+    expect(offered.state.room.game!.doubleDown).toEqual({ offered: [seatOf(state.room, hostId)], pending: seatOf(state.room, hostId), accepted: false, answerMovesLeft: 5, expired: false });
     const accepted = answer(offered.state, friendId, gameId, true);
     expect(accepted.state.room.game!.doubleDown).toMatchObject({ pending: null, accepted: true });
     const resigned = applyIntent(accepted.state, { type: 'RESIGN', payload: { gameId } }, friendId, 6_000);
@@ -66,5 +71,39 @@ describe('double down', () => {
     const accepted = answer(offer(state, hostId, gameId).state, friendId, gameId, true);
     const stood = applyIntent(accepted.state, { type: 'LEAVE_SEAT', payload: {} }, friendId, 6_000);
     expect(stood.state.room.game!.doubleDown).toMatchObject({ accepted: false, pending: null });
+  });
+
+  it('expires after five valid moves by the answering player, not five moves total', () => {
+    const { state, hostId, friendId, gameId } = playing();
+    let current = offer(state, hostId, gameId).state;
+    const positions = [[0, 0], [2, 0], [0, 2], [2, 2], [0, 4], [2, 4], [0, 6], [2, 6], [0, 8], [2, 8]];
+    for (let i = 0; i < 9; i += 1) {
+      current = move(current, gameId, positions[i][0], positions[i][1], 6_000 + i * 100).state;
+    }
+    expect(current.room.game!.doubleDown).toMatchObject({ pending: seatOf(state.room, hostId), answerMovesLeft: 1 });
+    expect(rejected(answer(current, friendId, gameId, true, 7_000))).toBeUndefined();
+
+    current = move(current, gameId, positions[9][0], positions[9][1], 7_000).state;
+    expect(current.room.game!.doubleDown).toMatchObject({ pending: null, accepted: false, answerMovesLeft: 0, expired: true });
+    expect(rejected(answer(current, friendId, gameId, true, 7_100))).toMatchObject({ reason: 'no_offer' });
+  });
+
+  it('starts a new five move window for the other player after rejection', () => {
+    const { state, hostId, friendId, gameId } = playing();
+    const first = answer(offer(state, hostId, gameId).state, friendId, gameId, false);
+    const second = offer(first.state, friendId, gameId);
+    expect(second.state.room.game!.doubleDown).toMatchObject({ pending: seatOf(state.room, friendId), answerMovesLeft: 5, expired: false });
+    expect(rejected(answer(second.state, hostId, gameId, true))).toBeUndefined();
+  });
+
+  it('does not count a rejected move attempt', () => {
+    const { state, hostId, friendId, gameId } = playing();
+    const offered = offer(state, hostId, gameId);
+    const hostMoved = move(offered.state, gameId, 0, 0, 6_000);
+    const invalid = applyIntent(hostMoved.state, { type: 'MOVE', payload: { gameId, n: 1, row: 0, col: 0 } }, friendId, 6_100);
+    expect(rejected(invalid)).toMatchObject({ reason: 'occupied' });
+    expect(invalid.state.room.game!.doubleDown).toMatchObject({ pending: seatOf(state.room, hostId), answerMovesLeft: 5 });
+    const valid = move(invalid.state, gameId, 2, 0, 6_200);
+    expect(valid.state.room.game!.doubleDown).toMatchObject({ pending: seatOf(state.room, hostId), answerMovesLeft: 4 });
   });
 });

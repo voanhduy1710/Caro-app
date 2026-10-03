@@ -27,6 +27,7 @@ import type {
 import {
   applyIntent,
   cryptoEnv,
+  DOUBLE_DOWN_ANSWER_MOVES,
   DOUBLE_DOWN_BONUS,
   liveClocks,
   pieceAt,
@@ -179,6 +180,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       const answerer = next.members.find((m) => m.id === next.seats[before.pending === 'X' ? 'O' : 'X']);
       const name = answerer?.profile.name ?? 'The opponent';
       if (after.accepted) systemLine(`${name} accepted the Double down. This game is worth ±${DOUBLE_DOWN_BONUS} extra points.`);
+      else if (after.expired) systemLine(`The Double down offer was automatically rejected after ${DOUBLE_DOWN_ANSWER_MOVES} moves.`);
       else if (next.phase === 'playing' || next.phase === 'paused') systemLine(`${name} rejected the Double down.`);
     };
 
