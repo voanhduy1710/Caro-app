@@ -20,7 +20,7 @@ import { AppFeedback } from './AppFeedback';
 import { AppModalStack } from './AppModalStack';
 import { AppNavbar } from './AppNavbar';
 import { ActiveMatchStage } from './ActiveMatchStage';
-import { lmaoCornerFor, nextPracticePiece } from './AppViewShared';
+import { AI_BOARD_SIZE, aiThinkMs, lmaoCornerFor, nextPracticePiece } from './AppViewShared';
 import type { MoveHistoryItem, PracticePiece } from './AppViewShared';
 import type { ConfirmSpec } from './AppViewShared';
 export const App: React.FC = () => {
@@ -69,6 +69,8 @@ export const App: React.FC = () => {
 
   // Practice game state. Online games live in the room.
   const [roomSettings, setRoomSettings] = useState<RoomSettings>(DEFAULT_ROOM_SETTINGS);
+  /** The bot always plays 15x15; online rooms keep the chosen size. */
+  const practiceSettings = useMemo(() => ({ ...roomSettings, boardSize: AI_BOARD_SIZE }), [roomSettings]);
   const [gameStatus, setGameStatus] = useState<'lobby' | 'playing' | 'ended'>('lobby');
   const [board, setBoard] = useState<BoardMatrix>(() => createEmptyBoard(DEFAULT_ROOM_SETTINGS.boardSize));
   const [lastMove, setLastMove] = useState<[number, number] | null>(null);
@@ -268,7 +270,7 @@ export const App: React.FC = () => {
           player2Name: 'AI Bot',
           winnerUid: winner === 'DRAW' ? 'DRAW' : iWon ? user.uid : 'ai_bot',
           winnerName: winner === 'DRAW' ? 'DRAW' : iWon ? user.displayName : 'AI Bot',
-          boardSize: roomSettings.boardSize,
+          boardSize: AI_BOARD_SIZE,
           timerConfig: `${roomSettings.totalTimeMinutes}m / ${roomSettings.turnTimeSeconds}s`,
           eloDeltaPlayer1: 0,
           eloDeltaPlayer2: 0,
@@ -305,7 +307,7 @@ export const App: React.FC = () => {
   const executeUndoMove = useCallback((targetHistory: MoveHistoryItem[]) => {
     practiceGameGenerationRef.current += 1;
     cancelAiMove();
-    const size = roomSettings.boardSize;
+    const size = AI_BOARD_SIZE;
     const newBoard = createEmptyBoard(size);
 
     targetHistory.forEach((item) => {
@@ -324,7 +326,7 @@ export const App: React.FC = () => {
       setCurrentTurn('X');
     }
     setTurnTimeLeft(roomSettings.turnTimeSeconds);
-  }, [cancelAiMove, roomSettings.boardSize, roomSettings.turnTimeSeconds]);
+  }, [cancelAiMove, roomSettings.turnTimeSeconds]);
 
   const makeAiMove = useCallback(async (
     currentBoard: BoardMatrix,
@@ -332,14 +334,14 @@ export const App: React.FC = () => {
     gameGeneration: number,
     aiPiece: 'O' | 'T',
   ) => {
-    const size = roomSettings.boardSize;
+    const size = AI_BOARD_SIZE;
 
     setIsAiThinking(true);
     let aiRow: number;
     let aiCol: number;
     try {
       if (aiPiece === 'O') {
-        [aiRow, aiCol] = await requestAiMove(currentBoard, size, aiPiece);
+        [aiRow, aiCol] = await requestAiMove(currentBoard, size, aiPiece, aiThinkMs(roomSettings.turnTimeSeconds));
       } else {
         const empty: Array<[number, number]> = [];
         currentBoard.forEach((line, row) => line.forEach((cell, col) => {
@@ -375,7 +377,7 @@ export const App: React.FC = () => {
       setCurrentTurn(nextPracticePiece(aiPiece, roomSettings.playerMode === 'oneVsOneVsOne'));
       setTurnTimeLeft(roomSettings.turnTimeSeconds);
     }
-  }, [roomSettings.boardSize, roomSettings.turnTimeSeconds, roomSettings.playerMode, playMoveSound, handleGameOver, requestAiMove]);
+  }, [roomSettings.turnTimeSeconds, roomSettings.playerMode, playMoveSound, handleGameOver, requestAiMove]);
 
   useEffect(() => {
     if (!isAiMode || gameStatus !== 'playing' || currentTurn === myPiece || isAiThinking) return;
@@ -408,7 +410,7 @@ export const App: React.FC = () => {
     setCurrentTurn(nextTurn);
     setTurnTimeLeft(roomSettings.turnTimeSeconds);
 
-    const win = checkWin(nextBoard, row, col, roomSettings.boardSize);
+    const win = checkWin(nextBoard, row, col, AI_BOARD_SIZE);
     if (win) {
       handleGameOver(myPiece, win.line, '5_in_a_row');
     } else if (isBoardFull(nextBoard)) {
@@ -461,7 +463,7 @@ export const App: React.FC = () => {
     setRatingNote(null);
     setMyPiece('X');
     setCurrentTurn('X');
-    setBoard(createEmptyBoard(roomSettings.boardSize));
+    setBoard(createEmptyBoard(AI_BOARD_SIZE));
     setMoveHistory([]);
     setLastMove(null);
     setWinningLine(null);
@@ -607,12 +609,12 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        <ActiveMatchStage roomActive={roomActive} room={room} user={user} onRules={() => setSettingsAndThemeOpen(true)} onMyProfile={openProfileModal} onOpponent={setSelectedOpponentProfile} exitRef={roomExitRef} practice={practiceInMatch ? { user, openProfileModal, settings: roomSettings, board, placementCorners: practicePlacementCorners, onCellClick: handleCellClick, lastMove, winningLine, currentTurn, myPiece, gameStatus, gameResult, ratingNote, p1TotalTime, p2TotalTime, p1ElapsedTime, p2ElapsedTime, turnTimeLeft, isAiThinking, elapsedGameTime, moveHistory, sessionScore, onUndo: handleUndoButtonClick, onRematch: handleRematchButtonClick, onExit: requestExitMatch, setOpponent: setSelectedOpponentProfile } : null} />
+        <ActiveMatchStage roomActive={roomActive} room={room} user={user} onRules={() => setSettingsAndThemeOpen(true)} onMyProfile={openProfileModal} onOpponent={setSelectedOpponentProfile} exitRef={roomExitRef} practice={practiceInMatch ? { user, openProfileModal, settings: practiceSettings, board, placementCorners: practicePlacementCorners, onCellClick: handleCellClick, lastMove, winningLine, currentTurn, myPiece, gameStatus, gameResult, ratingNote, p1TotalTime, p2TotalTime, p1ElapsedTime, p2ElapsedTime, turnTimeLeft, isAiThinking, elapsedGameTime, moveHistory, sessionScore, onUndo: handleUndoButtonClick, onRematch: handleRematchButtonClick, onExit: requestExitMatch, setOpponent: setSelectedOpponentProfile } : null} />
 
       </main>
 
       <AppFeedback notice={notice} roomClosed={roomClosedDialog} roomError={room.error} onResetRoom={room.reset} confirm={confirmSpec} onDismissConfirm={() => setConfirmSpec(null)} />
-      <AppModalStack settingsOpen={settingsAndThemeOpen} onCloseSettings={() => setSettingsAndThemeOpen(false)} settings={roomActive && room.state ? room.state.settings : roomSettings} onUpdateSettings={(next) => { if (roomActive) room.updateSettings(next); else setRoomSettings(next); }} isHost={!roomActive || room.isHost} gameStatus={roomActive ? (roomPhase === 'waiting' || roomPhase === 'ended' ? 'lobby' : 'playing') : gameStatus} myPiece={roomActive ? (room.mySeat ?? undefined) : myPiece} leaderboardOpen={leaderboardOpen} onCloseLeaderboard={() => setLeaderboardOpen(false)} historyOpen={historyOpen} onCloseHistory={() => setHistoryOpen(false)} onSelectOpponent={setSelectedOpponentProfile} opponent={selectedOpponentProfile} onPlayNow={() => { setHistoryOpen(false); if (roomActive) { setConfirmSpec({ title: 'Leave the room and play the bot?', body: room.isHost ? 'The room closes for everyone in it.' : 'If you are playing, the game pauses and your seat opens for someone else.', confirmLabel: 'Leave and play the bot', tone: 'danger', onConfirm: handleStartAiMode }); } else handleStartAiMode(); }} confirmRoomExit={setConfirmSpec} />
+      <AppModalStack settingsOpen={settingsAndThemeOpen} onCloseSettings={() => setSettingsAndThemeOpen(false)} settings={roomActive && room.state ? room.state.settings : isAiMode ? practiceSettings : roomSettings} onUpdateSettings={(next) => { if (roomActive) room.updateSettings(next); else setRoomSettings(next); }} isHost={!roomActive || room.isHost} gameStatus={roomActive ? (roomPhase === 'waiting' || roomPhase === 'ended' ? 'lobby' : 'playing') : gameStatus} myPiece={roomActive ? (room.mySeat ?? undefined) : myPiece} leaderboardOpen={leaderboardOpen} onCloseLeaderboard={() => setLeaderboardOpen(false)} historyOpen={historyOpen} onCloseHistory={() => setHistoryOpen(false)} onSelectOpponent={setSelectedOpponentProfile} opponent={selectedOpponentProfile} onPlayNow={() => { setHistoryOpen(false); if (roomActive) { setConfirmSpec({ title: 'Leave the room and play the bot?', body: room.isHost ? 'The room closes for everyone in it.' : 'If you are playing, the game pauses and your seat opens for someone else.', confirmLabel: 'Leave and play the bot', tone: 'danger', onConfirm: handleStartAiMode }); } else handleStartAiMode(); }} confirmRoomExit={setConfirmSpec} />
 
     </div>
   );

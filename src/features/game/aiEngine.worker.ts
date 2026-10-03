@@ -7,6 +7,8 @@ export interface AiRequest {
   board: BoardMatrix;
   size: number;
   aiPiece: 'X' | 'O';
+  /** Wall-clock budget for the search; the engine default applies when absent. */
+  timeLimitMs?: number;
 }
 
 export interface AiResponse {
@@ -15,13 +17,12 @@ export interface AiResponse {
 }
 
 /**
- * Runs the minimax search off the main thread. The search cost grows with the
- * number of stones on the board, so on a 50x50 grid it would otherwise freeze
- * the UI mid-match.
+ * Runs the search off the main thread so the board stays responsive while the
+ * bot uses its whole think budget.
  */
 self.onmessage = (event: MessageEvent<AiRequest>) => {
-  const { id, board, size, aiPiece } = event.data;
-  const move = getBestAiMove(board, size, aiPiece);
+  const { id, board, size, aiPiece, timeLimitMs } = event.data;
+  const move = getBestAiMove(board, size, aiPiece, { timeLimitMs });
   const response: AiResponse = { id, move };
   (self as unknown as Worker).postMessage(response);
 };

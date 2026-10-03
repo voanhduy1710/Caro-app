@@ -42,10 +42,10 @@ export const useAiEngine = () => {
   }, []);
 
   /** Resolves with the chosen move, or never resolves if a newer request wins. */
-  const requestMove = useCallback((board: BoardMatrix, size: number, aiPiece: 'X' | 'O') => {
+  const requestMove = useCallback((board: BoardMatrix, size: number, aiPiece: 'X' | 'O', timeLimitMs?: number) => {
     const worker = workerRef.current;
     if (!worker) {
-      return Promise.resolve(getBestAiMove(board, size, aiPiece));
+      return Promise.resolve(getBestAiMove(board, size, aiPiece, { timeLimitMs }));
     }
 
     // Abandon every earlier search: only the latest board matters.
@@ -54,7 +54,7 @@ export const useAiEngine = () => {
     const id = ++requestIdRef.current;
     return new Promise<[number, number]>((resolve) => {
       pendingRef.current.set(id, resolve);
-      const request: AiRequest = { id, board, size, aiPiece };
+      const request: AiRequest = { id, board, size, aiPiece, timeLimitMs };
       worker.postMessage(request);
     });
   }, []);

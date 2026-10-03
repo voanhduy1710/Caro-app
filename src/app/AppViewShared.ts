@@ -15,3 +15,8 @@ export const stagger = (i: number) => ({ '--i': i }) as React.CSSProperties;
 export type ConfirmSpec = { title: string; body: string; confirmLabel: string; tone?: 'danger' | 'default'; onConfirm: () => void; };
 export const BOT_USER: UserProfile = { uid: 'ai_bot', displayName: 'AI Bot 🤖', photoURL: getAvatarPublicUrl('Blitzcrank'), email: '', elo: 1350, wins: 50, losses: 50, draws: 10, streak: 0 };
 export const TRIANGLE_BOT_USER: UserProfile = { uid: 'ai_triangle_bot', displayName: 'AI Triangle 🤖', photoURL: getAvatarPublicUrl('Leona'), email: '', elo: 1350, wins: 50, losses: 50, draws: 10, streak: 0 };
+/** The practice bot always plays on 15x15: small enough to search deeply in the browser. */
+export const AI_BOARD_SIZE = 15;
+const AI_MAX_THINK_MS = 900;
+/** Bot think time: 900 ms, or a quarter of the turn timer when that is shorter. */
+export const aiThinkMs = (turnTimeSeconds: number): number => turnTimeSeconds > 0 ? Math.min(AI_MAX_THINK_MS, (turnTimeSeconds * 1000) / 4) : AI_MAX_THINK_MS;
