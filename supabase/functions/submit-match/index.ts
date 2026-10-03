@@ -32,6 +32,8 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
  */
 
 const K_FACTOR = 32;
+/** Extra rating a decisive game is worth when both players doubled down. */
+const DOUBLE_DOWN_BONUS = 20;
 const SAFE_UID = /^[A-Za-z0-9_-]{1,128}$/;
 const GAME_ID = /^[A-Za-z0-9_-]{8,40}$/;
 const DUPLICATE_WINDOW_MS = 5000;
@@ -255,8 +257,21 @@ Deno.serve(async (req: Request) => {
   const score1 = winnerUid === 'DRAW' ? 0.5 : winnerUid === player1Uid ? 1 : 0;
   const score2 = 1 - score1;
 
-  const delta1 = Math.round(K_FACTOR * (score1 - expectedScore(elo1, elo2)));
-  const delta2 = Math.round(K_FACTOR * (score2 - expectedScore(elo2, elo1)));
+  // A double down counts only when both players consented through their own
+  // session (see seat-ticket), so neither side can impose it on the other.
+  let bonus = 0;
+  if (gameId && winnerUid !== 'DRAW') {
+    const { data: consents } = await admin
+      .from('gomoku_game_seats')
+      .select('uid')
+      .eq('game_id', gameId)
+      .eq('double_down', true)
+      .in('uid', [player1Uid, player2Uid]);
+    if ((consents ?? []).length === 2) bonus = DOUBLE_DOWN_BONUS;
+  }
+
+  const delta1 = Math.round(K_FACTOR * (score1 - expectedScore(elo1, elo2))) + (score1 === 1 ? bonus : -bonus);
+  const delta2 = Math.round(K_FACTOR * (score2 - expectedScore(elo2, elo1))) + (score2 === 1 ? bonus : -bonus);
 
   // A result that favours the caller is only ever a claim, and only against a
   // player who really sat in this game.

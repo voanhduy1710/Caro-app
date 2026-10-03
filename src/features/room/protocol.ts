@@ -217,6 +217,8 @@ export interface IntentPayloads {
   REMATCH_OFFER: { gameId: string };
   REMATCH_ANSWER: { gameId: string; accept: boolean };
   RESIGN: { gameId: string };
+  DOUBLE_DOWN_OFFER: { gameId: string };
+  DOUBLE_DOWN_ANSWER: { gameId: string; accept: boolean };
   CLAIM_DISCONNECT_WIN: { gameId: string };
   DISCARD_GAME: { gameId: string };
   CLEAR_SEAT: { seat: Seat };
@@ -288,6 +290,8 @@ export type RejectReason =
   | 'no_undo'
   | 'offer_pending'
   | 'no_offer'
+  | 'already_offered'
+  | 'already_doubled'
   | 'not_addressed'
   | 'not_host'
   | 'reconnect_grace'
@@ -390,6 +394,8 @@ const VALIDATORS: { [K in IntentType]: (p: Record<string, unknown>) => boolean }
   REMATCH_OFFER: hasGameId,
   REMATCH_ANSWER: (p) => hasGameId(p) && typeof p.accept === 'boolean',
   RESIGN: hasGameId,
+  DOUBLE_DOWN_OFFER: hasGameId,
+  DOUBLE_DOWN_ANSWER: (p) => hasGameId(p) && typeof p.accept === 'boolean',
   CLAIM_DISCONNECT_WIN: hasGameId,
   DISCARD_GAME: hasGameId,
   CLEAR_SEAT: (p) => isSeat(p.seat),

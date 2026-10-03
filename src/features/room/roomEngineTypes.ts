@@ -73,6 +73,8 @@ export const BUZZ_INTERVAL_MS = 2_000;
 export const MALFORMED_WINDOW_MS = 10_000;
 export const MALFORMED_KICK_COUNT = 3;
 export const RATING_DELTA_MAX = 64;
+/** The extra rating a won or lost game is worth once both players doubled down. */
+export const DOUBLE_DOWN_BONUS = 20;
 
 // ---------------------------------------------------------------------------
 // State types
@@ -142,7 +144,21 @@ export interface GameResult {
   reason: ResultReason;
   players: { X: PlayerRef; O: PlayerRef; T: PlayerRef }; // T mirrors X in a 1v1 result and is ignored there.
   rating: RatingState;
+  /** Both players agreed to a double down: the result is worth DOUBLE_DOWN_BONUS more either way. */
+  doubleDown?: boolean;
   endedAt: number;
+}
+
+/**
+ * A 1v1 side bet on the game's rating. Each seat may offer it once per game,
+ * and once accepted it holds for the rest of the game.
+ */
+export interface DoubleDown {
+  /** Seats that have already used their one offer this game. */
+  offered: Seat[];
+  /** The seat whose offer is waiting on an answer. */
+  pending: Seat | null;
+  accepted: boolean;
 }
 
 export interface Game {
@@ -182,6 +198,8 @@ export interface Game {
   lastMove: { by: string; at: number } | null;
   undo: { from: Seat; expiresAt: number } | null;
   rematch: { from: Seat; expiresAt: number } | null; // only while phase = ended
+  /** Optional so a host snapshot from before double downs still restores. */
+  doubleDown?: DoubleDown;
 }
 
 export interface RoomState {

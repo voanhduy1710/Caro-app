@@ -75,6 +75,9 @@ export const createRoomRatings = ({ state, userRef, handlersRef, sendIntent, set
       if (isSubmitter) report(result.gameId, 'skipped', 'unverified');
       return;
     }
+    // The consent was written when the double down was accepted; repeating it
+    // here only closes the race with a game that ended moments later.
+    if (result.doubleDown && seat !== 'T' && state.mirror) await requestSeatTicket(result.gameId, seat, state.mirror.roomId, true);
     const body = buildRatedBody(result, game);
     if (verdict === 'contradicted') body.dispute = true;
     let outcome: RatedSubmitOutcome = await submitRatedResult(body);
@@ -130,10 +133,11 @@ export const createRoomRatings = ({ state, userRef, handlersRef, sendIntent, set
     const seat = seatOf(room, memberId);
     const member = room.members.find((candidate) => candidate.id === memberId);
     if (!seat || !member?.profile.rated || seat === 'T') return;
-    const key = `${game.id}:${seat}`;
+    const doubleDown = game.doubleDown?.accepted === true;
+    const key = `${game.id}:${seat}${doubleDown ? ':dd' : ''}`;
     if (state.tickets.has(key) || state.ticketRequests.has(key)) return;
     state.ticketRequests.add(key);
-    void requestSeatTicket(game.id, seat, room.roomId)
+    void requestSeatTicket(game.id, seat, room.roomId, doubleDown)
       .then((saved) => saved ? (state.tickets.add(key), resendPendingRatedResults().then(() => handlersRef.current.onRated?.())) : undefined)
       .finally(() => {
         state.ticketRequests.delete(key);

@@ -1,18 +1,18 @@
 import React from 'react';
-import { Armchair, Crosshair, Eraser, Flag, LogOut, RefreshCw, Settings, Undo2 } from 'lucide-react';
+import { Armchair, Crosshair, Dices, Eraser, Flag, Flame, Loader2, LogOut, RefreshCw, Settings, Undo2 } from 'lucide-react';
 import { setDisplayPref } from './displayPrefs';
 import type { DisplayPrefs } from './displayPrefs';
 import { PREF_ROWS, RailButton } from './GameControlsShared';
 import type { GameControlsProps } from './GameControlsShared';
 
-export interface GameActionRailProps extends Pick<GameControlsProps, 'exitLabel' | 'isAiMode' | 'onExitMatch' | 'role' | 'openSeat' | 'onTakeSeat' | 'onProposeUndo' | 'allowUndo' | 'gameStatus' | 'canUndo' | 'undoPending' | 'onProposeRematch' | 'rematchPending' | 'onResign' | 'canResign'> {
+export interface GameActionRailProps extends Pick<GameControlsProps, 'exitLabel' | 'isAiMode' | 'onExitMatch' | 'role' | 'openSeat' | 'onTakeSeat' | 'onProposeUndo' | 'allowUndo' | 'gameStatus' | 'canUndo' | 'undoPending' | 'onProposeRematch' | 'rematchPending' | 'onResign' | 'canResign' | 'doubleDown' | 'onOfferDoubleDown'> {
   simulationCount: number; undoTitle: string; rematchDisabled: boolean; prefs: DisplayPrefs;
   gearRef: React.RefObject<HTMLButtonElement | null>; prefsRef: React.RefObject<HTMLDivElement | null>;
   isPrefsOpen: boolean; setIsPrefsOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
-  const { exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs } = props;
+  const { exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown } = props;
   return (
     <div className="flex flex-wrap items-center justify-center gap-0.5">
       <RailButton
@@ -148,6 +148,41 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
           </div>
         )}
       </div>
+
+      {doubleDown && role !== 'viewer' && !isAiMode && (
+        <DoubleDownButton doubleDown={doubleDown} onOffer={onOfferDoubleDown} />
+      )}
     </div>
+  );
+};
+
+const DoubleDownButton: React.FC<{ doubleDown: NonNullable<GameActionRailProps['doubleDown']>; onOffer?: () => void }> = ({ doubleDown, onOffer }) => {
+  const { canOffer, pending, active, title } = doubleDown;
+  const label = active ? 'Double down is on' : 'Double down';
+  return (
+    <button
+      type="button"
+      onClick={onOffer}
+      disabled={!canOffer || pending || active || !onOffer}
+      title={`${label} — ${title}`}
+      aria-label={label}
+      aria-pressed={active}
+      className={`btn btn-ghost btn-icon relative h-10 w-10 rounded-full text-orange-500 hover:text-orange-600 ${
+        active ? 'dice-on-fire bg-orange-500/10 disabled:cursor-default disabled:opacity-100' : ''
+      }`}
+    >
+      {active && (
+        <>
+          <Flame className="dice-flame dice-flame-outer" fill="currentColor" strokeWidth={1.5} aria-hidden="true" />
+          <Flame className="dice-flame dice-flame-mid" fill="currentColor" strokeWidth={1.5} aria-hidden="true" />
+          <Flame className="dice-flame dice-flame-inner" fill="currentColor" strokeWidth={1.5} aria-hidden="true" />
+        </>
+      )}
+      {pending ? (
+        <Loader2 size={17} strokeWidth={2.25} className="animate-spin" aria-hidden="true" />
+      ) : (
+        <Dices size={18} strokeWidth={2.25} className="dice-core relative" aria-hidden="true" />
+      )}
+    </button>
   );
 };

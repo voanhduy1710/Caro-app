@@ -14,8 +14,9 @@ import { RockPaperScissorsModal } from '../minigames/RockPaperScissorsModal';
 import { OnlineRoomLobby } from './OnlineRoomLobby';
 import { HostLostStrip, OnlineRoomConnecting, RoomConfirmDialog } from './OnlineRoomOverlays';
 import type { Seat } from './protocol';
-import { CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, GRACE_MS, MAX_MEMBERS, SEATS, activeSeats, boardFromMoves, latestResult, otherSeat, pieceAt } from './roomEngine';
+import { CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, DOUBLE_DOWN_BONUS, GRACE_MS, MAX_MEMBERS, SEATS, activeSeats, boardFromMoves, latestResult, otherSeat, pieceAt } from './roomEngine';
 import type { Member } from './roomEngine';
+import type { ChatMessage } from '../webrtc/types';
 import { describeRating } from './roomRating';
 import { LEFT_HOW, resultReason } from './roomCopy';
 import { memberProfile } from './OnlineRoomTypes';
@@ -60,6 +61,24 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   // the loading view before it ran made React see an extra hook once a room
   // state arrived, crashing every player-vs-player room.
   const moves = game?.moves ?? [];
+  // A live double-down offer rides at the bottom of the chat until it is answered.
+  const doubleDownFrom = game && (phase === 'playing' || phase === 'paused') ? game.doubleDown?.pending ?? null : null;
+  const doubleDownOfferer = doubleDownFrom ? occupantOf(doubleDownFrom) : null;
+  const canAnswerDoubleDown = Boolean(doubleDownFrom && mySeat && mySeat === otherSeat(doubleDownFrom));
+  const chatMessages = useMemo<ChatMessage[]>(() => {
+    if (!doubleDownFrom || !game) return room.chatMessages;
+    const offer: ChatMessage = {
+      id: `double-down-${game.id}-${doubleDownFrom}`,
+      senderId: doubleDownOfferer?.id,
+      sender: doubleDownOfferer?.profile.name ?? 'Your opponent',
+      text: `${doubleDownOfferer?.profile.name ?? 'Your opponent'} has offered to Double down`,
+      timestamp: Date.now(),
+      doubleDownOffer: { canAnswer: canAnswerDoubleDown },
+    };
+    return [...room.chatMessages, offer];
+    // The offer is rebuilt only when something it shows changes, so the feed does not re-scroll on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.chatMessages, game?.id, doubleDownFrom, doubleDownOfferer?.id, doubleDownOfferer?.profile.name, canAnswerDoubleDown]);
   const placementCorners = useMemo<Record<string, BoardCorner>>(
     () =>
       Object.fromEntries(
@@ -492,6 +511,30 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   const undoFrom = phase === 'playing' ? game?.undo?.from ?? null : null;
   const rematchFrom = phase === 'ended' ? game?.rematch?.from ?? null : null;
   const opponent = mySeat ? occupantOf(otherSeat(mySeat)) : null;
+  const doubleDownState = game?.doubleDown;
+  const doubleDownActive = Boolean(doubleDownState?.accepted);
+  const doubleDownMine = Boolean(mySeat && doubleDownState?.pending === mySeat);
+  const doubleDownUsed = Boolean(mySeat && doubleDownState?.offered.includes(mySeat));
+  const doubleDownCanOffer =
+    phase === 'playing' && connected && bothSeated && Boolean(mySeat) && !doubleDownActive && !doubleDownState?.pending && !doubleDownUsed;
+  const doubleDown = game && settings?.playerMode !== 'oneVsOneVsOne'
+    ? {
+        canOffer: doubleDownCanOffer,
+        pending: doubleDownMine,
+        active: doubleDownActive,
+        title: doubleDownActive
+          ? `this game is worth ±${DOUBLE_DOWN_BONUS} extra points`
+          : doubleDownMine
+          ? 'waiting for your opponent to answer'
+          : doubleDownUsed
+          ? 'you have already used your one offer this game'
+          : doubleDownState?.pending
+          ? 'your opponent has an offer waiting for you in the chat'
+          : phase !== 'playing'
+          ? 'available while a game is being played'
+          : `offer your opponent ±${DOUBLE_DOWN_BONUS} extra points on this game (once per game)`,
+      }
+    : undefined;
 
   return (
     <>
@@ -553,7 +596,10 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         }
         opponent={opponent ? memberProfile(opponent) : null}
         myUser={user}
-        chatMessages={room.chatMessages}
+        chatMessages={chatMessages}
+        doubleDown={doubleDown}
+        onOfferDoubleDown={() => room.offerDoubleDown()}
+        onAnswerDoubleDown={(accept) => room.answerDoubleDown(accept)}
         onSendChat={(text, image, replyTo) => void room.sendChat(text, image, replyTo)}
         onSendBuzz={() => {
           const sent = room.buzz();

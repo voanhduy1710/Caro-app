@@ -285,11 +285,15 @@ export const resendPendingRatedResults = (): Promise<void> => {
  * Records that this signed-in player sits in a game, so a win against them can
  * be claimed if they walk away. Quietly retried; a guest simply has no ticket.
  */
-export const requestSeatTicket = async (gameId: string, seat: 'X' | 'O', roomId: string): Promise<boolean> => {
+/**
+ * `doubleDown` also records this player's consent to the game's double down.
+ * The server only applies the bonus when both players have consented this way.
+ */
+export const requestSeatTicket = async (gameId: string, seat: 'X' | 'O', roomId: string, doubleDown = false): Promise<boolean> => {
   if (!isSupabaseConfigured || !supabase) return false;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      const { error } = await supabase.functions.invoke('seat-ticket', { body: { gameId, seat, roomId } });
+      const { error } = await supabase.functions.invoke('seat-ticket', { body: { gameId, seat, roomId, ...(doubleDown ? { doubleDown: true } : {}) } });
       if (!error) return true;
       const status = ((error as { context?: unknown }).context as Response | undefined)?.status;
       // A guest, a bad request or a missing session: retrying cannot change it.

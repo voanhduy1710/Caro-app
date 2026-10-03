@@ -42,6 +42,8 @@ export const createRoomActions = ({ state, sendIntent, appendChat, notice, setPe
     },
     requestUndo: () => { const id = gameId(); return id ? sendIntent({ type: 'UNDO_REQUEST', payload: { gameId: id } }) : false; },
     answerUndo: (accept: boolean) => { const id = gameId(); return id ? sendIntent({ type: 'UNDO_ANSWER', payload: { gameId: id, accept } }) : false; },
+    offerDoubleDown: () => { const id = gameId(); return id ? sendIntent({ type: 'DOUBLE_DOWN_OFFER', payload: { gameId: id } }) : false; },
+    answerDoubleDown: (accept: boolean) => { const id = gameId(); return id ? sendIntent({ type: 'DOUBLE_DOWN_ANSWER', payload: { gameId: id, accept } }) : false; },
     offerRematch: () => { const id = gameId(); return id ? sendIntent({ type: 'REMATCH_OFFER', payload: { gameId: id } }) : false; },
     answerRematch: (accept: boolean) => { const id = gameId(); return id ? sendIntent({ type: 'REMATCH_ANSWER', payload: { gameId: id, accept } }) : false; },
     resign: () => { const id = gameId(); if (!id) return false; noteResigned(id); return sendIntent({ type: 'RESIGN', payload: { gameId: id } }); },

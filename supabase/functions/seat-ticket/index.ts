@@ -8,6 +8,10 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
  * that game, so no result can ever be recorded against an account that did not
  * play it. The ticket is written through the player's own session, which is
  * the whole proof: nobody can write one on someone else's behalf.
+ *
+ * With `doubleDown: true` the ticket also records that this player agreed to
+ * the game's double down. submit-match applies the bonus only when both
+ * players' tickets carry it.
  */
 
 const GAME_ID = /^[A-Za-z0-9_-]{8,40}$/;
@@ -58,9 +62,16 @@ Deno.serve(async (req: Request) => {
   const { data: profile } = await admin.from('gomoku_users').select('uid').eq('uid', callerId).maybeSingle();
   if (!profile) return json({ error: 'Only a registered player holds a seat ticket', code: 'caller_not_rated' }, 403);
 
-  const { error } = await admin
-    .from('gomoku_game_seats')
-    .upsert({ game_id: gameId, uid: callerId, seat, room_id: roomId }, { onConflict: 'game_id,uid', ignoreDuplicates: true });
+  // A double down is consent to risk this player's own rating, so it can only
+  // ever be switched on through their own session, and never back off.
+  const doubleDown = body.doubleDown === true;
+  const { error } = doubleDown
+    ? await admin
+        .from('gomoku_game_seats')
+        .upsert({ game_id: gameId, uid: callerId, seat, room_id: roomId, double_down: true }, { onConflict: 'game_id,uid' })
+    : await admin
+        .from('gomoku_game_seats')
+        .upsert({ game_id: gameId, uid: callerId, seat, room_id: roomId }, { onConflict: 'game_id,uid', ignoreDuplicates: true });
   if (error) return json({ error: 'Could not record the seat', detail: error.message }, 500);
 
   return json({ ok: true });

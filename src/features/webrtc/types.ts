@@ -23,4 +23,6 @@ export interface ChatMessage {
   system?: boolean;
   /** The message this one answers, when it is a reply. */
   replyTo?: ChatQuote;
+  /** A live double-down offer, drawn as a card with answer buttons for the addressed player. */
+  doubleDownOffer?: { canAnswer: boolean };
 }

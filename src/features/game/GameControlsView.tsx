@@ -43,6 +43,9 @@ export const GameControls: React.FC<GameControlsProps> = ({
   canResign,
   chatEmptyText,
   elapsedGameTime = 0,
+  doubleDown,
+  onOfferDoubleDown,
+  onAnswerDoubleDown,
 }) => {
   const isDesktop = useIsDesktop();
   const prefs = useDisplayPrefs();
@@ -123,6 +126,12 @@ export const GameControls: React.FC<GameControlsProps> = ({
     }
     if (receivedMessage) playChatSound();
   }, [chatMessages, isOwnMessage, playChatSound]);
+
+  // A double-down offer waits on an answer, so it opens the chat where its buttons are.
+  const answerableOfferId = chatMessages.find((message) => message.doubleDownOffer?.canAnswer)?.id;
+  useEffect(() => {
+    if (answerableOfferId) setIsChatOpen(true);
+  }, [answerableOfferId]);
 
   /**
    * Scroll the feed itself, never `scrollIntoView`: that walks every scrollable
@@ -415,10 +424,10 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const rematchDisabled = rematchPending || (!isAiMode && gameStatus !== 'ended');
   // One row of icons rather than a wrap of labelled buttons: every action here
   // is either rare or destructive, and none of them should out-shout the board.
-  const actionButtons = <GameActionRail {...{ exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs }} />;
+  const actionButtons = <GameActionRail {...{ exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown }} />;
   const reactionRow = <GameReactionPicker open={isReactionsOpen} isAiMode={isAiMode} onSend={handleSendReactionToChat} onClose={() => setIsReactionsOpen(false)} />;
 
-  const chatFeed = <GameChatFeed messages={chatMessages} emptyText={chatEmptyText} opponent={opponent} avatarFor={avatarFor} listRef={listRef} onScroll={handleFeedScroll} isOwn={isOwnMessage} onOpenImage={setLightboxImage} onReply={isAiMode ? undefined : startReply} hasNewBelow={hasNewBelow} onShowNew={() => scrollFeedToBottom(true)} />;
+  const chatFeed = <GameChatFeed messages={chatMessages} emptyText={chatEmptyText} opponent={opponent} avatarFor={avatarFor} listRef={listRef} onScroll={handleFeedScroll} isOwn={isOwnMessage} onOpenImage={setLightboxImage} onReply={isAiMode ? undefined : startReply} onAnswerDoubleDown={onAnswerDoubleDown} hasNewBelow={hasNewBelow} onShowNew={() => scrollFeedToBottom(true)} />;
   const composer = <GameChatComposer {...{ attachedImage, setAttachedImage, reactionRow, handleChatSubmit, isAiMode, isReactionsOpen, setIsReactionsOpen, attachmentInputRef, handleAttachmentChange, textareaRef, chatText, setChatText, handleKeyDown, handlePaste, role: role ?? 'player', handleBuzzClick, isBuzzCooldown, replyingTo, onCancelReply: () => setReplyingTo(null) }} />;
   const chatHeader = <GameChatHeader open={isChatOpen} unreadCount={unreadCount} messageCount={chatMessages.length} preview={lastMessagePreview} onToggle={() => setIsChatOpen((open) => !open)} />;
 

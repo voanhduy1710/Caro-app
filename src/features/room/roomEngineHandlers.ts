@@ -281,6 +281,33 @@ export const handleUndoAnswer = (d: EngineState, m: Member, p: IntentPayloads['U
   sendEvent(ctx, occupant(d, from), 'undo_declined');
 };
 
+export const handleDoubleDownOffer = (d: EngineState, m: Member, p: IntentPayloads['DOUBLE_DOWN_OFFER'], ctx: Ctx): void => {
+  const { room } = d;
+  const game = room.game;
+  if (room.phase !== 'playing' || !game) return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'not_playing');
+  if (p.gameId !== game.id) return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'wrong_game');
+  if (game.settings.playerMode === 'oneVsOneVsOne') return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'not_addressed');
+  const seat = seatOf(d, m.id);
+  if (!seat) return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'not_seated');
+  const doubleDown = game.doubleDown ?? { offered: [], pending: null, accepted: false };
+  if (doubleDown.accepted) return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'already_doubled');
+  if (doubleDown.pending) return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'offer_pending');
+  if (doubleDown.offered.includes(seat)) return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'already_offered');
+  game.doubleDown = { offered: [...doubleDown.offered, seat], pending: seat, accepted: false };
+};
+
+export const handleDoubleDownAnswer = (d: EngineState, m: Member, p: IntentPayloads['DOUBLE_DOWN_ANSWER'], ctx: Ctx): void => {
+  const { room } = d;
+  const game = room.game;
+  if (room.phase !== 'playing' || !game) return reject(ctx, m.id, 'DOUBLE_DOWN_ANSWER', 'not_playing');
+  if (p.gameId !== game.id) return reject(ctx, m.id, 'DOUBLE_DOWN_ANSWER', 'wrong_game');
+  const from = game.doubleDown?.pending;
+  if (!game.doubleDown || !from) return reject(ctx, m.id, 'DOUBLE_DOWN_ANSWER', 'no_offer');
+  if (seatOf(d, m.id) !== otherSeat(from)) return reject(ctx, m.id, 'DOUBLE_DOWN_ANSWER', 'not_addressed');
+  // Everyone sees the answer as a chat line built from the state change, so no event is needed.
+  game.doubleDown = { ...game.doubleDown, pending: null, accepted: p.accept };
+};
+
 export const handleRematchOffer = (d: EngineState, m: Member, p: IntentPayloads['REMATCH_OFFER'], ctx: Ctx): void => {
   const { room } = d;
   const game = room.game;

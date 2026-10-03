@@ -47,6 +47,21 @@ export interface GameControlsProps {
   chatEmptyText?: string;
   /** Overall elapsed time, shown at the end of the action rail. */
   elapsedGameTime?: number;
+  /** The double-down side bet, online 1v1 only. Without it the dice is not shown. */
+  doubleDown?: DoubleDownView;
+  onOfferDoubleDown?: () => void;
+  onAnswerDoubleDown?: (accept: boolean) => void;
+}
+
+export interface DoubleDownView {
+  /** This player still has their one offer and nothing stands in the way. */
+  canOffer: boolean;
+  /** This player's offer is waiting on the opponent. */
+  pending: boolean;
+  /** Both players agreed: the dice burns for the rest of the game. */
+  active: boolean;
+  /** Why the dice cannot be used right now. */
+  title: string;
 }
 
 export const REACTION_ICONS = [

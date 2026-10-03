@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowDown, Reply } from 'lucide-react';
+import { ArrowDown, Dices, Reply } from 'lucide-react';
 import type { ChatMessage } from '../webrtc/types';
 import type { UserProfile } from '../auth/AuthContext';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
@@ -11,6 +11,8 @@ export interface GameChatFeedProps {
   onOpenImage: (image: string | null) => void; hasNewBelow: boolean; onShowNew: () => void;
   /** Starts a reply to one message; without it the feed offers no reply button. */
   onReply?: (message: ChatMessage) => void;
+  /** Answers a live double-down offer drawn in the feed. */
+  onAnswerDoubleDown?: (accept: boolean) => void;
 }
 
 /** Brings the answered message into view and flashes it, when it is still in the feed. */
@@ -23,9 +25,18 @@ const jumpTo = (list: HTMLDivElement | null, id: string) => {
   target.classList.add('chat-flash');
 };
 
-export const GameChatFeed: React.FC<GameChatFeedProps> = ({ messages, emptyText, opponent, avatarFor, listRef, onScroll, isOwn, onOpenImage, hasNewBelow, onShowNew, onReply }) => <div className="relative flex-1 min-h-0"><div ref={listRef} onScroll={onScroll} className="chat-message-list h-full overflow-y-auto overscroll-contain space-y-2 pr-1 text-xs">{messages.length === 0 ? <p className="py-10 text-center text-[13px] text-subtle">{emptyText ?? 'No messages yet. Say hello to your opponent.'}</p> : messages.map((m) => {
+export const GameChatFeed: React.FC<GameChatFeedProps> = ({ messages, emptyText, opponent, avatarFor, listRef, onScroll, isOwn, onOpenImage, hasNewBelow, onShowNew, onReply, onAnswerDoubleDown }) => <div className="relative flex-1 min-h-0"><div ref={listRef} onScroll={onScroll} className="chat-message-list h-full overflow-y-auto overscroll-contain space-y-2 pr-1 text-xs">{messages.length === 0 ? <p className="py-10 text-center text-[13px] text-subtle">{emptyText ?? 'No messages yet. Say hello to your opponent.'}</p> : messages.map((m) => {
   const mine = isOwn(m);
   if (m.system) return <div key={m.id} className="flex justify-center"><span className="chip text-[11px]">{m.text}</span></div>;
+  if (m.doubleDownOffer) return <div key={m.id} data-chat-id={m.id} className="flex justify-center animate-pop-in">
+    <div role="group" aria-label="Double down offer" className="w-full max-w-[17rem] rounded-md border border-orange-500/50 bg-orange-500/10 px-3 py-2.5 text-center">
+      <div className="flex items-center justify-center gap-1.5 text-[13px] font-semibold text-ink"><Dices size={16} strokeWidth={2.25} className="shrink-0 text-orange-500" aria-hidden="true" /><span className="min-w-0 break-words">{m.text}</span></div>
+      <p className="mt-0.5 text-[11px] text-muted">The winner gains and the loser loses 20 extra points.</p>
+      {m.doubleDownOffer.canAnswer && onAnswerDoubleDown
+        ? <div className="mt-2 flex gap-2"><button type="button" onClick={() => onAnswerDoubleDown(true)} className="btn btn-sm flex-1 border-orange-500 bg-orange-500 text-white hover:bg-orange-600">Accept</button><button type="button" onClick={() => onAnswerDoubleDown(false)} className="btn btn-secondary btn-sm flex-1">Reject</button></div>
+        : <p className="mt-1.5 text-[11px] font-medium text-orange-600">Waiting for an answer…</p>}
+    </div>
+  </div>;
   const replyButton = onReply && (
     <button type="button" onClick={() => onReply(m)} title="Reply" aria-label={`Reply to ${m.sender}`} className="btn btn-ghost btn-icon mb-1 h-7 w-7 shrink-0 rounded-full text-muted opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-60">
       <Reply size={14} strokeWidth={2.25} aria-hidden="true" />

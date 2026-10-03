@@ -151,6 +151,7 @@ export const startNewGame = (d: EngineState, ctx: Ctx): void => {
     lastMove: null,
     undo: null,
     rematch: null,
+    doubleDown: { offered: [], pending: null, accepted: false },
   };
   d.host.runningSince = null;
   d.room.autoStartArmed = false;
@@ -202,6 +203,8 @@ export const vacate = (d: EngineState, seat: Seat, reason: SeatChange['reason'],
   if (game) {
     game.undo = null;
     game.rematch = null;
+    // The bet was made between two people; whoever sits down next never agreed to it.
+    if (game.doubleDown) game.doubleDown = { ...game.doubleDown, pending: null, accepted: false };
     if (member && (room.phase === 'countdown' || room.phase === 'playing' || room.phase === 'paused')) {
       appendSeatChange(game, {
         seat,
@@ -323,6 +326,7 @@ export const endGame = (
   stopClocks(d, ctx.now);
   game.undo = null;
   game.rematch = null;
+  if (game.doubleDown) game.doubleDown = { ...game.doubleDown, pending: null };
   room.phase = 'ended';
   room.countdown = null;
   d.host.countdownEndsAt = null;
@@ -351,6 +355,7 @@ export const endGame = (
     reason,
     players,
     rating,
+    ...(game.doubleDown?.accepted && game.settings.playerMode !== 'oneVsOneVsOne' ? { doubleDown: true } : {}),
     endedAt: ctx.now,
   });
   // Evict the oldest settled results first. A pending one is kept: its

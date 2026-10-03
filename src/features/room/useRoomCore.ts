@@ -27,6 +27,7 @@ import type {
 import {
   applyIntent,
   cryptoEnv,
+  DOUBLE_DOWN_BONUS,
   liveClocks,
   pieceAt,
   seatOf,
@@ -165,6 +166,19 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
     const systemLine = (text: string) =>
       appendChat({ id: cryptoEnv.randomId(10), sender: 'System', text, timestamp: Date.now(), system: true });
 
+    /** Turns an answered double-down offer into a chat line everyone in the room sees. */
+    const announceDoubleDown = (prev: RoomState | null, next: RoomState) => {
+      const before = prev?.game?.doubleDown;
+      const after = next.game?.doubleDown;
+      if (!prev || !before?.pending || !after || after.pending || prev.game?.id !== next.game?.id) return;
+      // An offer dropped because someone stood up was never answered.
+      if (prev.seats.X !== next.seats.X || prev.seats.O !== next.seats.O) return;
+      const answerer = next.members.find((m) => m.id === next.seats[before.pending === 'X' ? 'O' : 'X']);
+      const name = answerer?.profile.name ?? 'The opponent';
+      if (after.accepted) systemLine(`${name} accepted the Double down. This game is worth ±${DOUBLE_DOWN_BONUS} extra points.`);
+      else if (next.phase === 'playing' || next.phase === 'paused') systemLine(`${name} rejected the Double down.`);
+    };
+
     /** Replaces the mirror, noting what the ending game's clocks looked like here. */
     const setMirror = (next: RoomState) => {
       const prev = r.mirror;
@@ -177,6 +191,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           r.resultClocks.set(result.gameId, prev.phase === 'playing' ? shown : null);
         }
       }
+      announceDoubleDown(prev, next);
       if (next.game) {
         r.games.set(next.game.id, next.game);
         if (r.games.size > 4) r.games.delete(r.games.keys().next().value as string);
