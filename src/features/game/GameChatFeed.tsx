@@ -27,7 +27,7 @@ const jumpTo = (list: HTMLDivElement | null, id: string) => {
 
 export const GameChatFeed: React.FC<GameChatFeedProps> = ({ messages, emptyText, opponent, avatarFor, listRef, onScroll, isOwn, onOpenImage, hasNewBelow, onShowNew, onReply, onAnswerDoubleDown }) => <div className="relative flex-1 min-h-0"><div ref={listRef} onScroll={onScroll} className="chat-message-list h-full overflow-y-auto overscroll-contain space-y-2 pr-1 text-xs">{messages.length === 0 ? <p className="py-10 text-center text-[13px] text-subtle">{emptyText ?? 'No messages yet. Say hello to your opponent.'}</p> : messages.map((m) => {
   const mine = isOwn(m);
-  if (m.system) return <div key={m.id} className="flex justify-center"><span className="chip text-[11px]">{m.text}</span></div>;
+  if (m.system) return <div key={m.id} className="flex justify-center"><span className="chip max-w-full min-w-0 whitespace-normal break-words text-center text-[11px]">{m.text}</span></div>;
   if (m.doubleDownOffer) return <div key={m.id} data-chat-id={m.id} className="flex justify-center animate-pop-in">
     <div role="group" aria-label="Double down offer" className="w-full max-w-[17rem] rounded-md border border-orange-500/50 bg-orange-500/10 px-3 py-2.5 text-center">
       <div className="flex items-center justify-center gap-1.5 text-[13px] font-semibold text-ink"><Dices size={16} strokeWidth={2.25} className="shrink-0 text-orange-500" aria-hidden="true" /><span className="min-w-0 break-words">{m.text}</span></div>
