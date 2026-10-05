@@ -335,7 +335,9 @@ export const endGame = (
   if (winner !== 'DRAW') room.score[winner] += 1;
   const players = { X: playerRef(x), O: playerRef(o), T: playerRef(t ?? x) };
   let rating: RatingState;
-  if (game.settings.playerMode === 'oneVsOneVsOne') {
+  if (room.mode === 'casual') {
+    rating = { status: 'unrated', why: 'casual', guestSeats: [] };
+  } else if (game.settings.playerMode === 'oneVsOneVsOne') {
     rating = { status: 'unrated', why: 'three_player', guestSeats: [] };
   } else {
     const decision = ratingDecision({ winner, players: { X: players.X, O: players.O, T: players.T } });

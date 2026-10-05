@@ -8,4 +8,4 @@ export interface TeaseNotice { fromMemberId: string; fromName: string; at: numbe
 export interface SeatOpenedNotice { seat: Seat; at: number; }
 export interface LastRoom { roomId: string; hostName: string; leftAt: number; reason: 'left' | 'dropped'; }
 export interface RoomHandlers { onNotice?: (text: string) => void; onMoveApplied?: () => void; onBuzzed?: () => void; onTeased?: () => void; onRated?: () => void; }
-export interface CreateRoomInput { code?: string; isPublic: boolean; settings: RoomSettings; }
+export interface CreateRoomInput { code?: string; isPublic: boolean; mode?: 'casual' | 'ranked'; settings: RoomSettings; }

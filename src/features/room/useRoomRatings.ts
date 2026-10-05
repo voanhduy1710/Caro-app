@@ -111,6 +111,7 @@ export const createRoomRatings = ({ state, userRef, handlersRef, sendIntent, set
     for (const result of room.results) {
       const seat = SEATS.find((candidate) => result.players[candidate].memberId === memberId);
       if (!seat) continue;
+      if (room.mode === 'casual') continue;
       if (result.rating.status === 'saved' && !state.ratedRefreshed.has(result.gameId)) {
         state.ratedRefreshed.add(result.gameId);
         handlersRef.current.onRated?.();
@@ -128,7 +129,7 @@ export const createRoomRatings = ({ state, userRef, handlersRef, sendIntent, set
     const memberId = state.memberId;
     const user = userRef.current;
     const game = room?.game;
-    if (!room || !game || !memberId || !user || user.isGuest) return;
+    if (!room || room.mode === 'casual' || !game || !memberId || !user || user.isGuest) return;
     if (!['opening', 'countdown', 'playing', 'paused'].includes(room.phase)) return;
     const seat = seatOf(room, memberId);
     const member = room.members.find((candidate) => candidate.id === memberId);

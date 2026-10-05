@@ -294,6 +294,7 @@ export const handleDoubleDownOffer = (d: EngineState, m: Member, p: IntentPayloa
   const game = room.game;
   if (room.phase !== 'playing' || !game) return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'not_playing');
   if (p.gameId !== game.id) return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'wrong_game');
+  if (room.mode === 'casual') return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'not_addressed');
   if (game.settings.playerMode === 'oneVsOneVsOne') return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'not_addressed');
   const seat = seatOf(d, m.id);
   if (!seat) return reject(ctx, m.id, 'DOUBLE_DOWN_OFFER', 'not_seated');

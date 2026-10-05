@@ -155,6 +155,48 @@
     background-color: var(--ui-accent-hover);
   }
 
+  .btn-ranked {
+    background: linear-gradient(180deg, #f2c65d 0%, #d99b22 38%, #bc7810 100%);
+    color: #fff;
+    --btn-shadow: #81500b;
+    padding-inline: 40px;
+    text-shadow: 0 1px 2px #5e3907, 0 0 5px #5e3907;
+  }
+
+  .btn-ranked:not(:disabled):hover {
+    background: linear-gradient(180deg, #f8d275 0%, #e5a936 38%, #ca8618 100%);
+  }
+
+  .btn-ranked__swords {
+    position: absolute;
+    top: 50%;
+    width: 27px;
+    height: 27px;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  .btn-ranked__swords--left {
+    left: -12px;
+  }
+
+  .btn-ranked__swords--right {
+    right: -12px;
+  }
+
+  .btn-ranked.btn-sm .btn-ranked__swords {
+    width: 22px;
+    height: 22px;
+  }
+
+  .btn-ranked.btn-sm .btn-ranked__swords--left {
+    left: -10px;
+  }
+
+  .btn-ranked.btn-sm .btn-ranked__swords--right {
+    right: -10px;
+  }
+
   /* A blue face needs a non-blue focus ring. */
   .btn-primary:focus-visible,
   .btn-inverse:focus-visible,

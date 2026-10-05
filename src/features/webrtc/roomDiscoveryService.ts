@@ -12,6 +12,7 @@ export interface ActiveRoomInfo {
   hostName: string;
   hostAvatar?: string;
   boardSize: number;
+  mode: 'casual' | 'ranked';
   createdAt: number;
   lastHeartbeat: number;
   seatsFilled: 0 | 1 | 2;
@@ -73,6 +74,7 @@ const parseAnnouncedRoom = (value: unknown, now: number): ActiveRoomInfo | null 
     hostName,
     hostAvatar,
     boardSize,
+    mode,
     createdAt,
     lastHeartbeat,
     seatsFilled,
@@ -89,6 +91,7 @@ const parseAnnouncedRoom = (value: unknown, now: number): ActiveRoomInfo | null 
   if (typeof roomId !== 'string' || !ROOM_CODE_PATTERN.test(roomId)) return null;
   if (typeof hostName !== 'string') return null;
   if (typeof boardSize !== 'number' || !BOARD_SIZES.includes(boardSize)) return null;
+  if (mode !== undefined && mode !== 'casual' && mode !== 'ranked') return null;
   if (hostAvatar !== undefined && typeof hostAvatar !== 'string') return null;
   if (typeof lastHeartbeat !== 'number' || !Number.isFinite(lastHeartbeat)) return null;
   if (!isCount(capacity, MAX_CAPACITY) || capacity < 2) return null;
@@ -106,6 +109,7 @@ const parseAnnouncedRoom = (value: unknown, now: number): ActiveRoomInfo | null 
     // viewer's address, so only our own avatars and Google photos survive.
     hostAvatar: sanitizeAvatar(hostAvatar) ?? undefined,
     boardSize,
+    mode: mode === 'casual' ? 'casual' : 'ranked',
     // Another device's clock is not ours. A heartbeat stamped in the future
     // kept its room listed until that moment came round, so neither time may
     // be later than now. createdAt only orders the list, so a missing one just

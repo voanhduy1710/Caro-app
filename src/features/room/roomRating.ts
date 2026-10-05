@@ -16,6 +16,8 @@ export const describeRating = (result: GameResult, mine: Seat | null, local: str
   switch (rating.status) {
     case 'pending': return 'Saving the rating…';
     case 'unrated': {
+      if (rating.why === 'casual') return 'Casual game — no stats recorded.';
+      if (rating.why === 'three_player') return 'Casual three-player match.';
       const names = rating.guestSeats.map((seat) => result.players[seat].name);
       const who = names.join(' and ');
       return rating.why === 'guest' ? `Unrated: ${who} ${names.length > 1 ? 'are' : 'is'} playing as a guest.` : `Unrated: ${who} ${names.length > 1 ? 'are' : 'is'} not using an online account.`;

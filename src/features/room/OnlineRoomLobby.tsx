@@ -71,12 +71,12 @@ export const OnlineRoomLobby: React.FC<OnlineRoomLobbyProps> = ({ room, s, me, i
                 {s.isPublic ? (
                   <>
                     <Globe size={13} strokeWidth={2.25} aria-hidden="true" />
-                    <span>Public room</span>
+                    <span>Public {s.mode === 'casual' ? 'Casual' : 'Ranked'} room</span>
                   </>
                 ) : (
                   <>
                     <Lock size={13} strokeWidth={2.25} aria-hidden="true" />
-                    <span>Private room</span>
+                    <span>Private {s.mode === 'casual' ? 'Casual' : 'Ranked'} room</span>
                   </>
                 )}
               </span>

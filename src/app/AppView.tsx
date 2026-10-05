@@ -541,10 +541,10 @@ export const App: React.FC = () => {
     setGameStatus('lobby');
   };
 
-  const handleCreateRoom = (isPublic: boolean) => {
+  const handleCreateRoom = (isPublic: boolean, mode: 'casual' | 'ranked' = 'ranked') => {
     leavePractice();
     setRejoinCode(null);
-    room.createRoom({ isPublic, settings: roomSettings });
+    room.createRoom({ isPublic, mode, settings: roomSettings });
   };
 
   const handleJoinRoom = (roomCode: string) => {
@@ -605,7 +605,7 @@ export const App: React.FC = () => {
           <div className="home-lobby w-full max-w-6xl">
             <HomeLobbyMeta user={user} error={homeError} onDismissError={room.reset} lastRoom={lastRoom} onRejoin={handleRejoin} onDismissLast={() => { clearLastRoom(); setLastRoom(null); }} settings={roomSettings} onOpenRules={() => setSettingsAndThemeOpen(true)} />
             <HomePlayActions {...{ isRoomPublic, setIsRoomPublic, onStartBot: handleStartAiMode, onCreate: handleCreateRoom, inputRoomCode, setInputRoomCode, onJoin: handleJoinRoom }} />
-            <PublicRoomList rooms={availableRooms} scanDone={roomScanDone} onCreate={() => handleCreateRoom(true)} onJoin={handleJoinRoom} />
+            <PublicRoomList rooms={availableRooms} scanDone={roomScanDone} onCreate={(mode) => handleCreateRoom(true, mode)} onJoin={handleJoinRoom} />
           </div>
         )}
 

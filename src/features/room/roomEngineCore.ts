@@ -23,6 +23,7 @@ export const cryptoEnv: EngineEnv = {
 export interface CreateRoomOptions {
   roomId: string;
   isPublic: boolean;
+  mode?: 'casual' | 'ranked';
   settings: RoomSettings;
   hostProfile: unknown;
   hostTabId?: string;
@@ -35,7 +36,7 @@ export const createRoom = (opts: CreateRoomOptions, now: number, env: EngineEnv 
   const hostId = env.randomId(10);
   return {
     room: {
-      v: PROTOCOL_VERSION, roomId: opts.roomId, rev: 1, isPublic: opts.isPublic, createdAt: now,
+      v: PROTOCOL_VERSION, roomId: opts.roomId, rev: 1, isPublic: opts.isPublic, mode: opts.mode ?? 'ranked', createdAt: now,
       settings: { ...opts.settings, playerMode: opts.settings.playerMode ?? 'oneVsOne' },
       members: [{ id: hostId, profile, isHost: true, connected: true, graceMsLeft: null, joinedAt: now }],
       seats: { X: hostId, O: null, T: null }, phase: 'waiting', countdown: null, autoStartArmed: true,
@@ -83,6 +84,7 @@ export const snapshot = (state: EngineState, now: number): HostSnapshot => {
 export const restore = (snap: HostSnapshot, now: number): EngineState => {
   const d = cloneState(snap.state);
   const { room, host } = d;
+  room.mode ??= 'ranked';
   room.settings.playerMode ??= 'oneVsOne';
   room.settings.firstMoveMethod ??= 'default';
   room.seats.T ??= null;

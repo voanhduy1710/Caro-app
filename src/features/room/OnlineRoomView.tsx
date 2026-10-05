@@ -517,7 +517,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   const doubleDownUsed = Boolean(mySeat && doubleDownState?.offered.includes(mySeat));
   const doubleDownCanOffer =
     phase === 'playing' && connected && bothSeated && Boolean(mySeat) && !doubleDownActive && !doubleDownState?.pending && !doubleDownUsed;
-  const doubleDown = game && settings?.playerMode !== 'oneVsOneVsOne'
+  const doubleDown = game && s?.mode !== 'casual' && settings?.playerMode !== 'oneVsOneVsOne'
     ? {
         canOffer: doubleDownCanOffer,
         pending: doubleDownMine,

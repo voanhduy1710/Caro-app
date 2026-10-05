@@ -122,7 +122,7 @@ export interface Clocks {
 export type RatingOutcome = { status: 'failed' | 'skipped' | 'unknown'; why: string | null };
 
 export type RatingState =
-  | { status: 'unrated'; why: 'guest' | 'local_account' | 'three_player'; guestSeats: Seat[] }
+  | { status: 'unrated'; why: 'guest' | 'local_account' | 'three_player' | 'casual'; guestSeats: Seat[] }
   | {
       status: 'pending';
       /** The seats whose clients attempt the submission: the loser, or both on a draw. */
@@ -212,6 +212,7 @@ export interface RoomState {
   roomId: string;
   rev: number;
   isPublic: boolean;
+  mode: 'casual' | 'ranked';
   createdAt: number;
   settings: RoomSettings;
   members: Member[]; // host first, then join order

@@ -137,7 +137,7 @@ export const createRoomLifecycle = (options: Options) => {
     const fromSession = saved?.isHost && saved.roomId === code && session?.state?.room?.roomId === code ? session : null;
     // A host that lost its tab still has the localStorage copy.
     const stored = fromSession ?? (input.code ? readHostBackup(code, userRef.current) : null);
-    const fresh = () => createEngineRoom({ roomId: code, isPublic: input.isPublic, settings: input.settings, hostProfile: profileClaim(userRef.current), hostTabId: TAB_ID }, now);
+    const fresh = () => createEngineRoom({ roomId: code, isPublic: input.isPublic, mode: input.mode, settings: input.settings, hostProfile: profileClaim(userRef.current), hostTabId: TAB_ID }, now);
     let engine: EngineState; let restored = false;
     try { engine = stored ? restore(stored, now) : fresh(); restored = Boolean(stored); } catch { engine = fresh(); }
     state.engine = engine; state.memberId = engine.host.hostMemberId; state.idRetryUntil = restored ? now + idRetryWindowMs : 0; writeJson(sessionStorage, sessionKey, { roomId: code, isHost: true, memberId: state.memberId });
@@ -158,7 +158,7 @@ export const createRoomLifecycle = (options: Options) => {
   const joinRoom = (input: string, recheck = false): string | null => {
     const code = parseRoomCode(input); if (!code) { options.setError('That does not look like a room code. Enter the code your friend sent, or paste their invite link.'); return null; }
     const backup = shouldResumeAsHost(code);
-    if (backup) return createRoom({ code, isPublic: backup.state.room.isPublic, settings: backup.state.room.settings });
+    if (backup) return createRoom({ code, isPublic: backup.state.room.isPublic, mode: backup.state.room.mode, settings: backup.state.room.settings });
     // This browser has the room, but a host beat is still fresh. It may be the
     // tab that was just closed without saying so: wait for the beat to go
     // stale and look again before settling for a guest seat.

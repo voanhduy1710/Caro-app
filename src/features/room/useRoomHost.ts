@@ -69,7 +69,7 @@ export const createRoomHost = ({ state, setMirror, receive, writeSnapshot, hello
     const seatsFilled = activeSeats(room.settings).filter((seat) => room.seats[seat] !== null).length;
     const host = room.members[0];
     const info: HostedRoomInfo = {
-      hostName: host.profile.name, hostAvatar: host.profile.avatar ?? undefined, boardSize: room.settings.boardSize,
+      hostName: host.profile.name, hostAvatar: host.profile.avatar ?? undefined, boardSize: room.settings.boardSize, mode: room.mode ?? 'ranked',
       createdAt: room.createdAt, seatsFilled: seatsFilled as 0 | 1 | 2, viewers: room.members.length - seatsFilled,
       members: room.members.length, capacity: MAX_MEMBERS, status: room.phase === 'countdown' || room.phase === 'opening' ? 'playing' : room.phase,
       openSeat: seatsFilled < activeSeats(room.settings).length && room.phase !== 'countdown' && room.phase !== 'opening',

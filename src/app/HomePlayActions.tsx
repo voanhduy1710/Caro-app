@@ -1,9 +1,10 @@
 import React from 'react';
 import { Bot, Globe, Lock } from 'lucide-react';
 import { stagger } from './AppViewShared';
+import { RankedRoomSwords } from './RankedRoomSwords';
 
 export interface HomePlayActionsProps {
-  isRoomPublic: boolean; setIsRoomPublic: React.Dispatch<React.SetStateAction<boolean>>; onStartBot: () => void; onCreate: (isPublic: boolean) => void;
+  isRoomPublic: boolean; setIsRoomPublic: React.Dispatch<React.SetStateAction<boolean>>; onStartBot: () => void; onCreate: (isPublic: boolean, mode?: 'casual' | 'ranked') => void;
   inputRoomCode: string; setInputRoomCode: React.Dispatch<React.SetStateAction<string>>; onJoin: (code: string) => void;
 }
 
@@ -68,12 +69,19 @@ export const HomePlayActions: React.FC<HomePlayActionsProps> = ({ isRoomPublic, 
                   </p>
                 </div>
 
-                <button
-                  onClick={() => onCreate(isRoomPublic)}
-                  className="btn btn-primary btn-lg w-full"
-                >
-                  {`Create a ${isRoomPublic ? 'public' : 'private'} room`}
-                </button>
+                {isRoomPublic ? (
+                  <div className="grid gap-2">
+                    <button onClick={() => onCreate(true, 'casual')} className="btn btn-secondary btn-lg w-full">Create a Casual room</button>
+                    <button onClick={() => onCreate(true, 'ranked')} className="btn btn-ranked btn-lg w-full">
+                      <RankedRoomSwords side="left" />
+                      <span>Create a Ranked room</span>
+                      <RankedRoomSwords side="right" />
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => onCreate(false, 'ranked')} className="btn btn-primary btn-lg w-full">Create a private room</button>
+                )}
+                {isRoomPublic && <p className="field-hint">Casual games are unrecorded. Ranked games affect your rating and stats.</p>}
 
                 <div className="relative flex items-center py-1">
                   <div className="flex-grow border-t border-line"></div>
