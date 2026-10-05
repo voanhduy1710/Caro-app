@@ -8,7 +8,7 @@ export interface GameControlsProps {
   headerNode?: React.ReactNode;
   boardNode?: React.ReactNode;
   /** Individual total-time clocks drawn beside the board action toolbar. */
-  playerTimers?: Array<{ piece: 'X' | 'O' | 'T'; seconds: number; isTurn: boolean }>;
+  playerTimers?: Array<{ piece: 'X' | 'O' | 'T'; seconds: number; isTurn: boolean; moves: number }>;
   opponent: UserProfile | null;
   myUser: UserProfile | null;
   chatMessages: ChatMessage[];
@@ -47,6 +47,8 @@ export interface GameControlsProps {
   chatEmptyText?: string;
   /** Overall elapsed time, shown at the end of the action rail. */
   elapsedGameTime?: number;
+  /** Number of placed pieces in the current game. */
+  moveCount?: number;
   /** The double-down side bet, online 1v1 only. Without it the dice is not shown. */
   doubleDown?: DoubleDownView;
   onOfferDoubleDown?: () => void;

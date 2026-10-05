@@ -309,6 +309,8 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   }
   const lastMove: [number, number] | null =
     room.pendingMove ?? (moves.length ? [moves[moves.length - 1][0], moves[moves.length - 1][1]] : null);
+  const moveCounts = { X: 0, O: 0, T: 0 };
+  moves.forEach((_, index) => { moveCounts[pieceAt(index, game?.openingSeat, game?.settings)] += 1; });
   const turn = game?.turn ?? 'X';
   const mover = occupantOf(turn);
   const moverName = mover?.profile.name ?? `Seat ${turn}`;
@@ -545,6 +547,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
                 piece,
                 seconds: Math.max(0, Math.ceil((settings.totalTimeMinutes > 0 ? clocks[piece] : clocks.elapsedBySeat[piece]) / 1000)),
                 isTurn: phase === 'playing' && turn === piece,
+                moves: moveCounts[piece],
               }))
             : []
         }
@@ -615,6 +618,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         allowUndo={settings?.allowUndo ?? false}
         isAiMode={false}
         elapsedGameTime={Math.floor((clocks?.elapsed ?? 0) / 1000)}
+        moveCount={moves.length}
         canUndo={phase === 'playing' && Boolean(mySeat) && moves.some((_, i) => pieceAt(i, game?.openingSeat, game?.settings) === mySeat)}
         undoPending={undoFrom !== null && undoFrom === mySeat}
         rematchPending={rematchFrom !== null && rematchFrom === mySeat}

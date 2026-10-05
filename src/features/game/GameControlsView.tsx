@@ -43,6 +43,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
   canResign,
   chatEmptyText,
   elapsedGameTime = 0,
+  moveCount = 0,
   doubleDown,
   onOfferDoubleDown,
   onAnswerDoubleDown,
@@ -441,7 +442,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
     <div className="area-actions relative flex min-h-12 items-center justify-center p-1.5">
       {playerTimers.length > 0 && (
         <div className="absolute left-3 hidden items-start gap-7 xl:flex" aria-label="Player clocks">
-          {playerTimers.map(({ piece, seconds, isTurn }) => {
+          {playerTimers.map(({ piece, seconds, isTurn, moves }) => {
             const color = piece === 'X' ? theme.xColor : piece === 'O' ? theme.oColor : '#7c3aed';
             return (
               <div
@@ -452,7 +453,10 @@ export const GameControls: React.FC<GameControlsProps> = ({
                 style={{ color }}
                 title={`${piece} time remaining: ${formatElapsed(seconds)}`}
               >
-                <span className="font-display text-base font-extrabold leading-4">{piece === 'T' ? '△' : piece}</span>
+                <span className="flex items-center gap-2 font-display text-base font-extrabold leading-4">
+                  <span>{piece === 'T' ? '△' : piece}</span>
+                  <span className="font-mono text-xs font-semibold tabular-nums">{moves}</span>
+                </span>
                 <span className="mt-0.5 flex items-center gap-1.5 whitespace-nowrap">
                   <Timer size={15} strokeWidth={2.5} aria-hidden="true" />
                   <span>{formatElapsed(seconds)}</span>
@@ -464,11 +468,14 @@ export const GameControls: React.FC<GameControlsProps> = ({
       )}
       {actionButtons}
       <div
-        className="absolute right-2 flex items-center gap-2 px-2 py-1 font-mono text-sm font-semibold text-muted tabular-nums"
-        title="Match elapsed time"
+        className="absolute right-2 flex flex-col items-end px-2 py-1 font-mono font-semibold text-muted tabular-nums"
+        title={`${moveCount} moves; match elapsed time`}
       >
-        <Timer size={16} strokeWidth={2.5} aria-hidden="true" />
-        <span>{formatElapsed(elapsedGameTime)}</span>
+        <span className="text-[10px] leading-3">{moveCount} {moveCount === 1 ? 'move' : 'moves'}</span>
+        <span className="flex items-center gap-2 text-sm">
+          <Timer size={16} strokeWidth={2.5} aria-hidden="true" />
+          <span>{formatElapsed(elapsedGameTime)}</span>
+        </span>
       </div>
     </div>
   );
