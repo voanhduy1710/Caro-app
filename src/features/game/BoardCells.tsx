@@ -206,6 +206,9 @@ export const BoardCell = memo<BoardCellProps>(({
   <button
     type="button"
     onClick={(event) => {
+      // Space/Enter on a focused cell fires a click with detail 0; only
+      // pointer clicks may place a move.
+      if (event.detail === 0) return;
       const corner = clickCorner(event);
       // LMAO has eight peripheral slots; the centre is deliberately blank.
       if (lmaoMode && corner === 'center') return;
