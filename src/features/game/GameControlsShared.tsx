@@ -68,17 +68,6 @@ export interface DoubleDownView {
   title: string;
 }
 
-export const REACTION_ICONS = [
-  { id: 'smirk', label: 'Smirk', emoji: '😏' },
-  { id: 'laugh', label: 'Laugh', emoji: '😂' },
-  { id: 'smile', label: 'Smile', emoji: '😊' },
-  { id: 'grin', label: ':D', emoji: '😃' },
-  { id: 'tongue', label: ':P', emoji: '😛' },
-  { id: 'gasp', label: ':O', emoji: '😮' },
-  { id: 'lmao', label: 'Lmao', emoji: '🤣' },
-  { id: 'gg', label: 'GG', emoji: '🤝' },
-];
-
 /** The three board settings worth reaching for without leaving the match. */
 export const PREF_ROWS: Array<{ key: keyof DisplayPrefs; label: string }> = [
   { key: 'showCoordinates', label: 'Show coordinates' },

@@ -2,19 +2,20 @@ import React from 'react';
 import { Bell, ImagePlus, Smile, X } from 'lucide-react';
 import type { ChatMessage } from '../webrtc/types';
 import { quoteSnippet } from './GameControlsShared';
+import { EmoteInput } from './EmoteInput';
 
 export interface GameChatComposerProps {
   attachedImage: string | null; setAttachedImage: React.Dispatch<React.SetStateAction<string | null>>; reactionRow: React.ReactNode;
   handleChatSubmit: (event?: React.FormEvent) => void; isAiMode: boolean; isReactionsOpen: boolean; setIsReactionsOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  attachmentInputRef: React.RefObject<HTMLInputElement | null>; handleAttachmentChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>; chatText: string; setChatText: React.Dispatch<React.SetStateAction<string>>;
-  handleKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void; handlePaste: (event: React.ClipboardEvent<HTMLTextAreaElement>) => void;
+  attachmentInputRef: React.RefObject<HTMLInputElement | null>; emoteButtonRef: React.RefObject<HTMLButtonElement | null>; handleAttachmentChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  textareaRef: React.RefObject<HTMLDivElement | null>; chatText: string; setChatText: React.Dispatch<React.SetStateAction<string>>;
+  handleKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void; handlePaste: (event: React.ClipboardEvent<HTMLDivElement>) => void;
   role: 'player' | 'viewer'; handleBuzzClick: () => void; isBuzzCooldown: boolean;
   replyingTo?: ChatMessage | null; onCancelReply?: () => void;
 }
 
 export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
-  const { attachedImage, setAttachedImage, reactionRow, handleChatSubmit, isAiMode, isReactionsOpen, setIsReactionsOpen, attachmentInputRef, handleAttachmentChange, textareaRef, chatText, setChatText, handleKeyDown, handlePaste, role, handleBuzzClick, isBuzzCooldown, replyingTo, onCancelReply } = props;
+  const { attachedImage, setAttachedImage, reactionRow, handleChatSubmit, isAiMode, isReactionsOpen, setIsReactionsOpen, attachmentInputRef, handleAttachmentChange, emoteButtonRef, textareaRef, chatText, setChatText, handleKeyDown, handlePaste, role, handleBuzzClick, isBuzzCooldown, replyingTo, onCancelReply } = props;
   return (
     <div className="shrink-0">
       {replyingTo && (
@@ -66,11 +67,12 @@ export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
       <form onSubmit={handleChatSubmit} className="flex items-end gap-1.5 border-t border-line pt-2">
         {!isAiMode && (
           <button
+            ref={emoteButtonRef}
             type="button"
             onClick={() => setIsReactionsOpen((open) => !open)}
             aria-expanded={isReactionsOpen}
-            aria-label="Reactions"
-            title="Send a reaction"
+            aria-label="Emoticons"
+            title="Emoticons"
             className="btn btn-ghost btn-icon h-9 w-9 shrink-0"
           >
             <Smile size={16} strokeWidth={2.25} aria-hidden="true" />
@@ -97,18 +99,16 @@ export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
             </button>
           </>
         )}
-        <textarea
-          ref={textareaRef}
+        <EmoteInput
+          inputRef={textareaRef}
           value={chatText}
-          onChange={(e) => setChatText(e.target.value)}
+          onChange={setChatText}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder={replyingTo ? `Reply to ${replyingTo.sender}...` : 'Type a message...'}
-          title="Shift+Enter for a newline, paste an image, or attach an image/GIF"
+          title="Shift+Enter for a newline, paste an image, or attach an image/GIF. Emote shortcuts such as =)) turn into pictures as you type."
           aria-label="Chat message"
-          rows={1}
-          className="min-w-0 flex-1 resize-none overflow-y-auto rounded-md border border-line-strong bg-surface px-3 py-2 text-[13px] leading-snug text-ink focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none"
-          style={{ height: '38px', maxHeight: '78px' }}
+          className="min-h-[38px] max-h-[78px] min-w-0 flex-1 overflow-y-auto rounded-md border border-line-strong bg-surface px-3 py-2 text-[13px] leading-snug text-ink focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none"
         />
         <button
           type="submit"

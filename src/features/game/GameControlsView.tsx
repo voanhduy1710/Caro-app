@@ -76,12 +76,13 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const [hasNewBelow, setHasNewBelow] = useState(false);
   /** Reactions are a burst action, not a permanent band across the rail. */
   const [isReactionsOpen, setIsReactionsOpen] = useState(false);
+  const emoteButtonRef = useRef<HTMLButtonElement>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [simulationCount, setSimulationCount] = useState(0);
   const { playChatSound } = useSound();
 
   const listRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   /** The phone's chat bar, which opens the sheet and takes focus back from it. */
   const chatBarRef = useRef<HTMLButtonElement>(null);
@@ -221,14 +222,6 @@ export const GameControls: React.FC<GameControlsProps> = ({
     }
   }, [isChatOpen, isDesktop]);
 
-  // Auto-expand the composer from 1 line up to ~3 lines.
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = '38px';
-    el.style.height = `${Math.min(Math.max(el.scrollHeight, 38), 78)}px`;
-  }, [chatText]);
-
   useEffect(() => () => {
     if (buzzCooldownRef.current) clearTimeout(buzzCooldownRef.current);
   }, []);
@@ -343,7 +336,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
     stickToBottomRef.current = true;
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleChatSubmit();
@@ -355,7 +348,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
     }
   };
 
-  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+  const handlePaste = async (e: React.ClipboardEvent<HTMLDivElement>) => {
     const items = e.clipboardData?.items;
     if (!items) return;
 
@@ -403,10 +396,21 @@ export const GameControls: React.FC<GameControlsProps> = ({
     textareaRef.current?.focus();
   };
 
-  const handleSendReactionToChat = (emoji: string) => {
-    onSendChat(emoji);
-    playChatSound();
-    stickToBottomRef.current = true;
+  // Drops an emoticon's shortcut into the draft at the caret; EmoteInput then
+  // draws it as its picture, and the person can keep typing around it.
+  const handlePickEmote = (code: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    if (document.activeElement !== el) {
+      el.focus();
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+    document.execCommand('insertText', false, `${code} `);
   };
 
   /* ------------------------------- sub-views ------------------------------- */
@@ -427,10 +431,10 @@ export const GameControls: React.FC<GameControlsProps> = ({
   // One row of icons rather than a wrap of labelled buttons: every action here
   // is either rare or destructive, and none of them should out-shout the board.
   const actionButtons = <GameActionRail {...{ exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown }} />;
-  const reactionRow = <GameReactionPicker open={isReactionsOpen} isAiMode={isAiMode} onSend={handleSendReactionToChat} onClose={() => setIsReactionsOpen(false)} />;
+  const reactionRow = <GameReactionPicker open={isReactionsOpen} isAiMode={isAiMode} anchorRef={emoteButtonRef} onPick={handlePickEmote} onClose={() => setIsReactionsOpen(false)} />;
 
   const chatFeed = <GameChatFeed messages={chatMessages} emptyText={chatEmptyText} opponent={opponent} avatarFor={avatarFor} listRef={listRef} onScroll={handleFeedScroll} isOwn={isOwnMessage} onOpenImage={setLightboxImage} onReply={isAiMode ? undefined : startReply} onAnswerDoubleDown={onAnswerDoubleDown} hasNewBelow={hasNewBelow} onShowNew={() => scrollFeedToBottom(true)} />;
-  const composer = <GameChatComposer {...{ attachedImage, setAttachedImage, reactionRow, handleChatSubmit, isAiMode, isReactionsOpen, setIsReactionsOpen, attachmentInputRef, handleAttachmentChange, textareaRef, chatText, setChatText, handleKeyDown, handlePaste, role: role ?? 'player', handleBuzzClick, isBuzzCooldown, replyingTo, onCancelReply: () => setReplyingTo(null) }} />;
+  const composer = <GameChatComposer {...{ attachedImage, setAttachedImage, reactionRow, handleChatSubmit, isAiMode, isReactionsOpen, setIsReactionsOpen, attachmentInputRef, handleAttachmentChange, emoteButtonRef, textareaRef, chatText, setChatText, handleKeyDown, handlePaste, role: role ?? 'player', handleBuzzClick, isBuzzCooldown, replyingTo, onCancelReply: () => setReplyingTo(null) }} />;
   const chatHeader = <GameChatHeader open={isChatOpen} unreadCount={unreadCount} messageCount={chatMessages.length} preview={lastMessagePreview} onToggle={() => setIsChatOpen((open) => !open)} />;
 
   const lightbox = <GameChatLightbox image={lightboxImage} onClose={() => setLightboxImage(null)} />;
