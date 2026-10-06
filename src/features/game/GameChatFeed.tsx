@@ -4,6 +4,7 @@ import type { ChatMessage } from '../webrtc/types';
 import type { UserProfile } from '../auth/AuthContext';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { formatTime, quoteSnippet } from './GameControlsShared';
+import { renderWithEmotes } from './chatEmotes';
 
 export interface GameChatFeedProps {
   messages: ChatMessage[]; emptyText?: string; opponent: UserProfile | null; avatarFor?: (message: ChatMessage) => string | null | undefined;
@@ -51,7 +52,7 @@ export const GameChatFeed: React.FC<GameChatFeedProps> = ({ messages, emptyText,
         <span className="block truncate font-semibold">{m.replyTo.sender}</span>
         <span className="block truncate">{quoteSnippet(m.replyTo)}</span>
       </button>}
-      {m.text && <div className="text-[13px] leading-snug whitespace-pre-wrap break-words">{m.text}</div>}
+      {m.text && <div className="text-[13px] leading-snug whitespace-pre-wrap break-words">{renderWithEmotes(m.text)}</div>}
       {m.image && <button type="button" onClick={() => onOpenImage(m.image || null)} className="mt-1.5 block cursor-pointer" title="Open image"><img src={m.image} alt="Attachment" className="max-h-44 rounded-sm border border-line object-cover hover:opacity-95 transition" /></button>}
       <div className={`mt-1 font-mono text-[10px] tabular-nums ${mine ? 'text-accent-fg/70' : 'text-subtle'}`}>{formatTime(m.timestamp)}</div>
     </div>
