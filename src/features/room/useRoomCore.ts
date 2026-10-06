@@ -199,6 +199,16 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
         }
       }
       announceDoubleDown(prev, next);
+      // A move that ends the game arrives as a full ROOM_STATE, not MOVE_APPLIED,
+      // so the optimistic stone would otherwise outlive its game and be painted
+      // onto the rematch board until the next click replaced it.
+      if (
+        next.phase !== 'playing' ||
+        next.game?.id !== prev?.game?.id ||
+        next.game?.moves.length !== prev?.game?.moves.length
+      ) {
+        setPendingMove(null);
+      }
       if (next.game) {
         r.games.set(next.game.id, next.game);
         if (r.games.size > 4) r.games.delete(r.games.keys().next().value as string);
