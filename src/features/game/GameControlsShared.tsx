@@ -31,6 +31,8 @@ export interface GameControlsProps {
   undoPending: boolean;
   /** A rematch has been offered and the opponent has not answered. */
   rematchPending: boolean;
+  /** The room connection is gone, so another match cannot be started. */
+  rematchUnavailable?: boolean;
   /** A viewer watches and chats; only a player gets the game's actions. */
   role?: 'player' | 'viewer';
   /** Everyone in the room, shown under the seats. */

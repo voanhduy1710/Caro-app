@@ -36,7 +36,7 @@ export const GRACE_MS = 5 * 60 * 60_000;
 export const CLAIM_DISCONNECT_WIN_MS = 2 * 60_000;
 export const COUNTDOWN_MS = 3_000;
 export const INSTANT_UNDO_MS = 5_000;
-export const OFFER_TTL_MS = 30_000; // undo requests and rematch offers
+export const OFFER_TTL_MS = 30_000; // undo requests
 export const DOUBLE_DOWN_ANSWER_MOVES = 5;
 /** The hub pings this often; any inbound message counts as a sign of life. */
 export const PING_INTERVAL_MS = 2_000;
@@ -202,7 +202,7 @@ export interface Game {
   vacatedAt: { X: number | null; O: number | null; T: number | null };
   lastMove: { by: string; at: number } | null;
   undo: { from: Seat; expiresAt: number } | null;
-  rematch: { from: Seat; expiresAt: number } | null; // only while phase = ended
+  rematch: { from: Seat; expiresAt?: number } | null; // only while phase = ended; legacy snapshots may have expiresAt
   /** Optional so a host snapshot from before double downs still restores. */
   doubleDown?: DoubleDown;
 }

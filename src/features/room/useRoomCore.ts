@@ -26,6 +26,7 @@ import type {
 } from './protocol';
 import {
   applyIntent,
+  CLAIM_DISCONNECT_WIN_MS,
   cryptoEnv,
   DOUBLE_DOWN_ANSWER_MOVES,
   DOUBLE_DOWN_BONUS,
@@ -34,6 +35,7 @@ import {
   seatOf,
   snapshot,
 } from './roomEngine';
+import { claimLostHost } from './hostLossClaim';
 import type { Clocks, EngineState, Game, RoomState } from './roomEngine';
 import { createRoomActions } from './useRoomActions';
 import { createRoomHost } from './useRoomHost';
@@ -447,7 +449,6 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
               p.why === 'rules_changed'
                 ? 'The rules changed, so the rematch offer was withdrawn.'
                 : 'Your opponent declined the rematch.',
-            rematch_expired: 'Your rematch offer expired.',
           };
           if (texts[p.kind]) notice(texts[p.kind]);
           return;
@@ -543,9 +544,22 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       setChatMessages,
     });
 
+    const claimLostHostWin = () => {
+      if (r.role !== 'member' || r.terminal || !r.mirror || !r.memberId || r.hostLostSince === null) return false;
+      const next = claimLostHost(r.mirror, r.memberId, r.hostLostSince, Date.now());
+      if (!next) return false;
+      lifecycle.stopAfterLocalClaim();
+      r.hostLostSince = null;
+      setHostLostSince(null);
+      setMirror(next);
+      setStatus('claimed');
+      return true;
+    };
+
     return {
       r,
       actions,
+      claimLostHostWin,
        createRoom: lifecycle.createRoom,
        joinRoom: lifecycle.joinRoom,
        leaveRoom: lifecycle.leaveRoom,
@@ -600,6 +614,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
     hostNow,
     hostGraceSecondsLeft,
   } = useRoomTiming(core.r, state, hostLostSince, HOST_LOST_GIVE_UP_MS);
+  const hostClaimSecondsLeft = hostLostSince === null ? null : Math.max(0, Math.ceil((CLAIM_DISCONNECT_WIN_MS - (Date.now() - hostLostSince)) / 1000));
 
   const dismissTease = useCallback(() => setTease(null), []);
   const dismissSeatOpened = useCallback(() => setSeatOpened(null), []);
@@ -627,6 +642,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
         createRoom: core.createRoom,
         joinRoom: core.joinRoom,
         leaveRoom: core.leaveRoom,
+        claimLostHostWin: core.claimLostHostWin,
       },
     };
   });
@@ -643,6 +659,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
     closedReason,
     pendingMove,
     hostGraceSecondsLeft,
+    hostClaimSecondsLeft,
     hostNow,
     countdownSecondsLeft,
     teaseNotice: tease,
@@ -656,6 +673,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
     createRoom: core.createRoom,
     joinRoom: core.joinRoom,
     leaveRoom: core.leaveRoom,
+    claimLostHostWin: core.claimLostHostWin,
     reset: core.reset,
     resumeFromUrl: core.resumeFromUrl,
     ...core.actions,

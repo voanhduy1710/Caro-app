@@ -56,6 +56,16 @@ export const createRoomLifecycle = (options: Options) => {
     if (wasHost && reason !== 'id_taken') { removeKey(sessionStorage, snapshotKey); forgetHostBackup(code); } forgetToken(code); setUrlRoom(null);
     options.setStatus(reason ? 'closed' : 'error'); options.setClosedReason(reason); options.setError(message); options.setHostLostSince(null); options.setPendingMove(null);
   };
+  const stopAfterLocalClaim = () => {
+    state.terminal = true;
+    stopTimers();
+    if (state.hostConn) closeConn(state.hostConn);
+    state.hostConn = null;
+    dropPeer();
+    removeKey(sessionStorage, sessionKey);
+    forgetToken(state.roomId);
+    setUrlRoom(null);
+  };
 
   /**
    * Gets a peer that lost the signalling server back onto it. The data
@@ -240,5 +250,5 @@ export const createRoomLifecycle = (options: Options) => {
     const old = readJson<{ roomId?: string; isHost?: boolean }>(sessionStorage, 'caro_active_session'); const oldHost = old?.isHost && old.roomId === code; removeKey(sessionStorage, 'caro_active_session'); removeKey(sessionStorage, 'caro_game_snapshot');
     if (!code) return false; const saved = readJson<SavedSession>(sessionStorage, sessionKey); if ((saved?.isHost && saved.roomId === code) || oldHost) createRoom({ code, isPublic: true, settings }); else joinRoom(code); return true;
   };
-  return { teardown, finish, createRoom, joinRoom, leaveRoom, reset, resumeFromUrl, usableMemberPeer, nudge, dispose: () => { if (state.role) teardown(false); }, onPageHide: () => { if (state.role === 'host') { options.saveSnapshot(Date.now()); if (state.roomId) endHostAlive(state.roomId); } } };
+  return { teardown, finish, stopAfterLocalClaim, createRoom, joinRoom, leaveRoom, reset, resumeFromUrl, usableMemberPeer, nudge, dispose: () => { if (state.role) teardown(false); }, onPageHide: () => { if (state.role === 'host') { options.saveSnapshot(Date.now()); if (state.roomId) endHostAlive(state.roomId); } } };
 };

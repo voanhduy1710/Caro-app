@@ -250,11 +250,6 @@ export const tick = (state: EngineState, now: number, env: EngineEnv = cryptoEnv
     game.undo = null;
     sendEvent(ctx, requester, 'undo_expired');
   }
-  if (game?.rematch && now >= game.rematch.expiresAt) {
-    const offerer = occupant(d, game.rematch.from);
-    game.rematch = null;
-    sendEvent(ctx, offerer, 'rematch_expired');
-  }
   completeCountdown(d, ctx);
   for (const m of [...d.room.members]) if (!m.connected) expireGrace(d, m.id, ctx);
   const expired = d.room.phase === 'playing' ? expiredClock(d, now) : null;

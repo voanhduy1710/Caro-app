@@ -326,7 +326,7 @@ export const handleRematchOffer = (d: EngineState, m: Member, p: IntentPayloads[
   if (!seat) return reject(ctx, m.id, 'REMATCH_OFFER', 'not_seated');
   if (!bothSeatedAndConnected(d)) return reject(ctx, m.id, 'REMATCH_OFFER', 'seat_empty');
   if (game.rematch) return reject(ctx, m.id, 'REMATCH_OFFER', 'offer_pending');
-  game.rematch = { from: seat, expiresAt: ctx.now + OFFER_TTL_MS };
+  game.rematch = { from: seat };
 };
 
 export const handleRematchAnswer = (d: EngineState, m: Member, p: IntentPayloads['REMATCH_ANSWER'], ctx: Ctx): void => {

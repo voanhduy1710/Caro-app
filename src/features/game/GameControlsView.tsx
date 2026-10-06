@@ -34,6 +34,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
   canUndo,
   undoPending,
   rematchPending,
+  rematchUnavailable = false,
   role = 'player',
   rosterNode,
   myChatId,
@@ -422,7 +423,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
   // A rematch restarts the board, so it is only offered once the match is over.
   // Practice keeps a "New game" button, which asks before discarding a live game.
-  const rematchDisabled = rematchPending || (!isAiMode && gameStatus !== 'ended');
+  const rematchDisabled = rematchUnavailable || rematchPending || (!isAiMode && gameStatus !== 'ended');
   // One row of icons rather than a wrap of labelled buttons: every action here
   // is either rare or destructive, and none of them should out-shout the board.
   const actionButtons = <GameActionRail {...{ exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown }} />;

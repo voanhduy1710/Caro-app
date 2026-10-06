@@ -57,7 +57,7 @@ export const App: React.FC = () => {
     onRated: () => void refreshUserProfile(),
   });
   const roomActive =
-    room.status === 'opening' || room.status === 'joining' || room.status === 'connected' || room.status === 'host_lost';
+    room.status === 'opening' || room.status === 'joining' || room.status === 'connected' || room.status === 'host_lost' || room.status === 'claimed';
   /** The room's own exit flow, which knows whether leaving pauses a game or closes the room. */
   const roomExitRef = useRef<(() => void) | null>(null);
 

@@ -285,7 +285,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     return <OnlineRoomConnecting status={room.status} roomId={room.roomId} seconds={room.hostGraceSecondsLeft} onCancel={leaveNow} />;
   }
 
-  const hostLostStrip = room.status === 'host_lost' ? <HostLostStrip seconds={room.hostGraceSecondsLeft} /> : null;
+  const hostLostStrip = room.status === 'host_lost' ? <HostLostStrip seconds={phase === 'playing' || phase === 'paused' ? room.hostClaimSecondsLeft : room.hostGraceSecondsLeft} /> : null;
   /* ----------------------------- waiting room ----------------------------- */
 
   if (phase === 'waiting') {
@@ -374,10 +374,21 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
 
   // ---- the paused overlay
   let paused: { title: string; body?: string; actions?: React.ReactNode } | null = null;
-  if (room.status === 'host_lost') {
+  if (room.status === 'host_lost' && (phase === 'playing' || phase === 'paused')) {
+    const host = members.find((member) => member.isHost);
+    const canClaimWin = Boolean(game && game.settings.playerMode === 'oneVsOne' && mySeat && host && occupantOf(otherSeat(mySeat))?.id === host.id);
     paused = {
-      title: `Waiting for the host… ${formatReconnectTime(room.hostGraceSecondsLeft)}`,
-      body: 'The clocks are stopped. The room closes if the host does not come back.',
+      title: 'Waiting for the host…',
+      body: 'The clocks are stopped. You can claim the win after the host has been gone for 120 seconds.',
+      actions: canClaimWin ? (
+        <button
+          onClick={room.claimLostHostWin}
+          disabled={room.hostClaimSecondsLeft === null || room.hostClaimSecondsLeft > 0}
+          className="btn btn-primary"
+        >
+          {room.hostClaimSecondsLeft && room.hostClaimSecondsLeft > 0 ? `Claim win in ${room.hostClaimSecondsLeft}s` : 'Claim disconnect win'}
+        </button>
+      ) : undefined,
     };
   } else if (phase === 'paused' && game) {
     const away = SEATS.map(occupantOf).find((m) => m && !m.connected) ?? null;
@@ -622,6 +633,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         canUndo={phase === 'playing' && Boolean(mySeat) && moves.some((_, i) => pieceAt(i, game?.openingSeat, game?.settings) === mySeat)}
         undoPending={undoFrom !== null && undoFrom === mySeat}
         rematchPending={rematchFrom !== null && rematchFrom === mySeat}
+        rematchUnavailable={!connected}
         role={isViewer ? 'viewer' : 'player'}
         myChatId={me}
         avatarFor={(m) => members.find((member) => member.id === m.senderId)?.profile.avatar}

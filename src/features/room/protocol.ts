@@ -260,7 +260,6 @@ export type EventKind =
   | 'undo_declined'
   | 'undo_expired'
   | 'rematch_declined'
-  | 'rematch_expired'
   | 'seat_opened';
 
 export type RejectReason =
