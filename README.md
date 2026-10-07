@@ -84,6 +84,8 @@ A real-time **Caro (Gomoku / Five-in-a-Row)** web application built with **React
 
 ![Preview 3](public/preview_images/Preview_3.png)
 
+![Preview 4: the Spreadsheet disguise with the comments panel open](public/preview_images/Preview_4.png)
+
 ---
 
 ## Quick Start
