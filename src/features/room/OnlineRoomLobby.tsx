@@ -11,7 +11,7 @@ export interface OnlineRoomLobbyProps {
   room: RoomApi; s: RoomState; me: string | null; isViewer: boolean; connected: boolean;
   occupantOf: (seat: Seat) => Member | null;
   copyState: 'idle' | 'copied' | 'failed'; roomLink: string;
-  copyRoomLink: () => Promise<void>; shareRoomLink: () => Promise<void>; onOpenRules: () => void; requestExit: () => void;
+  copyRoomLink: () => Promise<unknown>; shareRoomLink: () => Promise<void>; onOpenRules: () => void; requestExit: () => void;
   roster: React.ReactNode; hostLostStrip: React.ReactNode; confirmDialog: React.ReactNode; teaseToast: React.ReactNode;
 }
 

@@ -4,6 +4,8 @@ import { useAuth } from '../../features/auth/AuthContext';
 import { RankBadge } from './RankBadge';
 import { getRankTitle } from '../utils/eloCalculator';
 import { getAvatarPublicUrl } from '../../features/avatar/avatarService';
+import { useTheme } from '../../features/theme/ThemeContext';
+import { useDisguiseMode } from '../../features/game/disguiseMode';
 
 interface NavbarProps {
   onOpenLeaderboard: () => void;
@@ -36,6 +38,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { user, openAuthModal, openProfileModal, signOut } = useAuth();
   const rank = user ? getRankTitle(user.elo) : getRankTitle(1200);
   const isSignedIn = Boolean(user && !user.isGuest);
+
+  // The boss-key disguise hides this bar too: "Caro League" at the top would
+  // give the game away regardless of what the board itself looks like. The
+  // board's own chrome stays the one way back in, via its star toggle.
+  const { theme } = useTheme();
+  const disguised = useDisguiseMode();
+  if (inMatch && theme.boardTheme === 'spreadsheet' && disguised) return null;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-line bg-surface/90 backdrop-blur-md">

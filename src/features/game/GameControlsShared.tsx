@@ -3,6 +3,7 @@ import type { DisplayPrefs } from './displayPrefs';
 import type { UserProfile } from '../auth/AuthContext';
 import type { ChatMessage, ChatQuote } from '../webrtc/types';
 import { Loader2 } from 'lucide-react';
+import type { SheetMatch } from './sheetBridge';
 
 export interface GameControlsProps {
   headerNode?: React.ReactNode;
@@ -55,6 +56,12 @@ export interface GameControlsProps {
   doubleDown?: DoubleDownView;
   onOfferDoubleDown?: () => void;
   onAnswerDoubleDown?: (accept: boolean) => void;
+  /**
+   * The seats, clocks and score as the Spreadsheet disguise shows them. The
+   * caller builds it next to its MatchHeader; this component only publishes it,
+   * because it is the one piece both practice and rooms mount for a match.
+   */
+  sheetMatch?: SheetMatch | null;
 }
 
 export interface DoubleDownView {

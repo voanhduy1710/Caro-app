@@ -197,6 +197,14 @@
   outline-color: #ffffff;  /* 20.23:1 on the grid, and not a piece colour */
 }
 
+/* Spreadsheet stays white regardless of app theme, like the other three fixed
+   materials, so its ring is pinned too: --ui-text can land near-white in dark
+   mode, which would vanish on this board's own white cells. */
+.board-theme-spreadsheet .board-cell:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: -2px;
+}
+
 .board-grid-inner {
   display: grid;
   gap: 0 !important;
@@ -322,6 +330,235 @@
   background: rgba(230, 150, 90, 0.95) !important;
   border-color: #ffffff !important;
   box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+/* 5. Spreadsheet - the "boss key" skin. Not a board on a page but the page
+      itself: a real sheet's grid with pinned letter and number headers that
+      runs on past the board. Fixed to Sheets' own palette rather than the app
+      theme, same as the other three materials above. */
+.board-scroll-container.board-theme-spreadsheet {
+  background-color: #ffffff;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  /* Sheets' own scrollbars: wide, pale, no track. */
+  scrollbar-width: auto;
+  scrollbar-color: #dadce0 transparent;
+}
+
+.board-scroll-container.board-theme-spreadsheet::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.board-scroll-container.board-theme-spreadsheet::-webkit-scrollbar-thumb {
+  background: #dadce0;
+  border: 2px solid #ffffff;
+  border-radius: 9999px;
+}
+
+.board-scroll-container.board-theme-spreadsheet::-webkit-scrollbar-thumb:hover {
+  background: #bdc1c6;
+}
+
+/* Anchored top-left; the template sizes come from Board. */
+.sheet-grid {
+  display: grid;
+  width: max-content;
+}
+
+/* The pinned headers. Each spans the whole grid on its cross axis (see
+   Board), so its sticky range is the full scroll and not one grid track. */
+.sheet-corner,
+.sheet-col-header,
+.sheet-row-header {
+  position: sticky;
+}
+
+.sheet-corner {
+  top: 0;
+  left: 0;
+  z-index: 42;
+  background: #f1f3f4;
+  border-right: 1px solid #c4c7c5;
+  border-bottom: 1px solid #c4c7c5;
+  box-sizing: border-box;
+}
+
+.sheet-col-header {
+  top: 0;
+  z-index: 41;
+  display: flex;
+}
+
+.sheet-row-header {
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet-header-cell {
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+  background: #f8f9fa;
+  color: #5f6368;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.sheet-col-header .sheet-header-cell {
+  height: 24px;
+  border-right: 1px solid #e0e0e0;
+  border-bottom: 1px solid #c4c7c5;
+}
+
+.sheet-row-header .sheet-header-cell {
+  width: 46px;
+  border-right: 1px solid #c4c7c5;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+/* The active cell's own letter and number light up, as in Sheets. */
+.sheet-header-cell.sheet-header-cell--active {
+  background: #d3e3fd;
+  color: #041e49;
+  font-weight: 700;
+}
+
+/* The empty sheet beyond the board is a painted pattern, its lines on each
+   tile's right and bottom edge so they continue the cells' own borders. */
+.sheet-body {
+  position: relative;
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(to right, transparent calc(100% - 1px), #e1e3e1 calc(100% - 1px)),
+    linear-gradient(to bottom, transparent calc(100% - 1px), #e1e3e1 calc(100% - 1px));
+}
+
+.board-theme-spreadsheet .board-cell {
+  background: #ffffff;
+  border-right: 1px solid #e1e3e1;
+  border-bottom: 1px solid #e1e3e1;
+  border-radius: 0 !important;
+  cursor: cell;
+  /* Sheets moves its selection instantly; an eased fill reads as an app. */
+  transition: none;
+}
+
+.board-theme-spreadsheet .board-cell.board-cell--filled:hover {
+  background: #ffffff;
+  cursor: cell;
+}
+
+/* Hover is Sheets' active cell: a blue box and the fill handle at its
+   bottom-right corner, lifted over the neighbours it overlaps. */
+.board-theme-spreadsheet .board-cell:hover {
+  outline: 2px solid #1a73e8;
+  outline-offset: -2px;
+  z-index: 15;
+}
+
+.board-theme-spreadsheet .board-cell:hover::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 6px;
+  height: 6px;
+  background: #1a73e8;
+  border: 1px solid #ffffff;
+  pointer-events: none;
+}
+
+/* The collaborator cursor's colour is set inline from the piece played. */
+.board-theme-spreadsheet .board-cell.board-cell--sheet-last {
+  z-index: 10;
+}
+
+/* The winning line as conditional formatting, not a glowing game effect. */
+.board-theme-spreadsheet .board-cell.board-cell--sheet-win,
+.board-theme-spreadsheet .board-cell.board-cell--sheet-win:hover {
+  background: #b7e1cd;
+}
+
+/* The count-in, as Sheets' own yellow loading notice. */
+.sheet-notice {
+  padding: 6px 16px;
+  border: 1px solid #fbbc04;
+  border-radius: 4px;
+  background: #fef7e0;
+  color: #3c4043;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+}
+
+.sheet-dialog {
+  background: #ffffff;
+  border-radius: 8px;
+  color: #202124;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  text-align: left;
+  box-shadow: 0 4px 8px 3px rgba(60, 64, 67, 0.15), 0 1px 3px rgba(60, 64, 67, 0.3);
+}
+
+.sheet-dialog__title {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 400;
+  color: #202124;
+}
+
+.sheet-dialog__body {
+  font-size: 14px;
+  line-height: 20px;
+  color: #5f6368;
+}
+
+/* Whatever buttons the paused state hands in become Sheets text buttons, with
+   the room's primary choice as the one filled button. */
+.sheet-dialog-actions .btn {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 20px;
+  background: transparent;
+  color: #0b57d0;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: 0.25px;
+  box-shadow: none;
+  transform: none;
+}
+
+.sheet-dialog-actions .btn:not(:disabled):hover {
+  background: rgba(11, 87, 208, 0.08);
+  transform: none;
+}
+
+.sheet-dialog-actions .btn.btn-primary,
+.sheet-dialog-actions .btn.btn-danger-solid,
+.sheet-dialog-actions .btn.btn-inverse {
+  background: #0b57d0;
+  color: #ffffff;
+}
+
+.sheet-dialog-actions .btn.btn-primary:not(:disabled):hover,
+.sheet-dialog-actions .btn.btn-danger-solid:not(:disabled):hover,
+.sheet-dialog-actions .btn.btn-inverse:not(:disabled):hover {
+  background: #0842a0;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
 }
 
 /* 3D go stones */

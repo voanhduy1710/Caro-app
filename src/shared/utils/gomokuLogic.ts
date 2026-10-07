@@ -13,6 +13,18 @@ export const createEmptyBoard = (size: number): BoardMatrix => {
   return Array.from({ length: size }, () => Array(size).fill(null));
 };
 
+/** Spreadsheet-style column label: 0 → A, 25 → Z, 26 → AA. */
+export const columnLabel = (index: number): string => {
+  let value = index + 1;
+  let label = '';
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    label = String.fromCharCode(65 + remainder) + label;
+    value = Math.floor((value - 1) / 26);
+  }
+  return label;
+};
+
 /**
  * Checks for the requested number (or more) in a row horizontally, vertically,
  * or diagonally. Standard games use five; three-player rooms use four.

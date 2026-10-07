@@ -29,6 +29,28 @@ html, body {
   }
 }
 
+/* Peeking at the real UI with the disguise's star, the Sheets chrome and tab
+   strip still sit above and below the grid inside the match stage, so the
+   frame gives up their height rather than pushing the tab strip out of the
+   stage's clipped box. */
+@media (min-width: 1024px) {
+  .sheet-board .board-frame {
+    height: max(300px, calc(100dvh - 335px));
+  }
+}
+
+/* Disguised, the sheet IS the page: the frame takes whatever the column
+   between the Sheets chrome and the tab strip leaves, instead of the viewport
+   budget above. Safe from the feedback loop described there because that
+   column's height comes from the window, never from the grid inside it. */
+.board-frame.board-frame--fill,
+html[data-sheet-disguise="on"] .sheet-board .board-frame {
+  height: auto;
+  flex: 1 1 0%;
+  min-height: 0;
+  max-height: none;
+}
+
 /* Keep the chat's scrollbar inside its fixed-height feed, never the game row. */
 .chat-message-list {
   scrollbar-gutter: stable;
@@ -308,4 +330,163 @@ html, body {
   .rps-clash__doors, .rps-clash__hand, .rps-clash__impact, .stone-slab__flame {
     animation: none;
   }
+}
+
+/* =============================================================================
+   Sheets disguise
+
+   While the boss key is on, Board sets <html data-sheet-disguise="on">. Every
+   rule here hangs off that flag, so anything that opens on top of the sheet
+   (a confirm, Settings, a toast) looks like part of Google Sheets rather than
+   the game, and nothing changes the moment the disguise comes off.
+   ========================================================================== */
+
+/* The app's tokens swap to Sheets' light palette as a set. html:root outranks
+   both the dark-mode media rule and the explicit [data-ui-theme] choice in
+   tokens.css: a dark navy dialog over a white spreadsheet would give the game
+   away no matter which theme the player picked. */
+html:root[data-sheet-disguise="on"] {
+  color-scheme: light;
+
+  --font-sans: 'Google Sans', Roboto, Arial, sans-serif;
+  --font-display: 'Google Sans', Roboto, Arial, sans-serif;
+
+  --ui-bg: #ffffff;
+  --ui-surface: #ffffff;
+  --ui-surface-2: #f8f9fa;
+  --ui-surface-3: #f1f3f4;
+  --ui-border: #dadce0;
+  --ui-border-strong: #c4c7c5;
+
+  --ui-text: #202124;
+  --ui-text-muted: #5f6368;
+  --ui-text-subtle: #5f6368;
+
+  --ui-accent: #0b57d0;
+  --ui-accent-hover: #0842a0;
+  --ui-accent-fg: #ffffff;
+  --ui-accent-text: #0b57d0;
+  --ui-accent-soft: #d3e3fd;
+  --ui-accent-soft-hover: #c2d7fb;
+  --ui-accent-text-hover: #041e49;
+  --ui-accent-ring: rgb(11 87 208 / 0.4);
+  --ui-accent-shadow: transparent;
+
+  --ui-brand: #0f9d58;
+  --ui-brand-fg: #ffffff;
+  --ui-brand-text: #137333;
+
+  --ui-inverse: #323232;
+  --ui-inverse-fg: #ffffff;
+  --ui-inverse-shadow: transparent;
+
+  --ui-danger: #d93025;
+  --ui-danger-soft: #fce8e6;
+  --ui-danger-soft-hover: #fad2cf;
+  --ui-danger-text-hover: #a50e0e;
+  --ui-danger-solid: #d93025;
+  --ui-danger-fg: #ffffff;
+  --ui-danger-shadow: transparent;
+  --ui-warning: #b06000;
+  --ui-warning-soft: #fef7e0;
+  --ui-info: #1a73e8;
+  --ui-info-soft: #e8f0fe;
+
+  --ui-lift: transparent;
+  --ui-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  --ui-shadow-lg: 0 4px 8px 3px rgba(60, 64, 67, 0.15), 0 1px 3px rgba(60, 64, 67, 0.3);
+  --ui-scrim: rgba(32, 33, 36, 0.4);
+}
+
+html[data-sheet-disguise="on"] body {
+  background-color: #ffffff;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+/* Dialogs become Sheets dialogs: no blur, no bounce, a flat grey scrim. */
+html[data-sheet-disguise="on"] .modal-scrim {
+  background-color: rgba(32, 33, 36, 0.4);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-sheet-disguise="on"] .modal-panel {
+  background-color: #ffffff;
+  color: #202124;
+  border-radius: 8px;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  box-shadow: 0 4px 8px 3px rgba(60, 64, 67, 0.15), 0 1px 3px rgba(60, 64, 67, 0.3);
+  animation: scrim-in 0.12s var(--ease-out-quart);
+}
+
+/* The game's chunky extruded buttons are its most recognisable feature, so
+   they flatten into Google's pill buttons. */
+html[data-sheet-disguise="on"] .btn {
+  min-height: 36px;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-radius: 20px;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.25px;
+  box-shadow: none;
+  transform: none;
+}
+
+html[data-sheet-disguise="on"] .btn:not(:disabled):hover,
+html[data-sheet-disguise="on"] .btn:not(:disabled):active {
+  transform: none;
+}
+
+html[data-sheet-disguise="on"] .btn-primary {
+  background-color: #0b57d0;
+  color: #ffffff;
+}
+
+html[data-sheet-disguise="on"] .btn-primary:not(:disabled):hover {
+  background-color: #0842a0;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+}
+
+html[data-sheet-disguise="on"] .btn-secondary,
+html[data-sheet-disguise="on"] .btn-ghost,
+html[data-sheet-disguise="on"] .btn-tonal {
+  background-color: transparent;
+  color: #0b57d0;
+  box-shadow: none;
+}
+
+html[data-sheet-disguise="on"] .btn-secondary {
+  box-shadow: inset 0 0 0 1px #747775;
+}
+
+html[data-sheet-disguise="on"] .btn-secondary:not(:disabled):hover,
+html[data-sheet-disguise="on"] .btn-ghost:not(:disabled):hover,
+html[data-sheet-disguise="on"] .btn-tonal:not(:disabled):hover {
+  background-color: rgba(11, 87, 208, 0.08);
+  color: #0b57d0;
+}
+
+html[data-sheet-disguise="on"] .btn-danger,
+html[data-sheet-disguise="on"] .btn-danger-solid {
+  background-color: #d93025;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+/* The tease pop-ups are the game talking; Sheets never would. */
+html[data-sheet-disguise="on"] .tease-toast {
+  display: none !important;
+}
+
+/* While a fake report is on screen nothing of the game may show over it. Its
+   dialogs (a take-back request from the opponent, a confirm, Settings) stay
+   mounted but out of sight, and come back when the player flips to the game
+   tab. The chrome's own help dialog carries data-sheet-dialog and stays. */
+html[data-sheet-disguise="on"][data-sheet-view="report"] .modal-scrim,
+html[data-sheet-disguise="on"][data-sheet-view="report"] [aria-modal="true"]:not([data-sheet-dialog]) {
+  display: none !important;
 }

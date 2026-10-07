@@ -6,8 +6,17 @@ import { MatchHeader } from '../features/game/MatchHeader';
 import type { UserProfile } from '../features/auth/AuthContext';
 import type { RoomSettings } from '../features/settings/types';
 import type { BoardMatrix } from '../shared/utils/gomokuLogic';
-import { BOT_USER, describeResultReason, TRIANGLE_BOT_USER } from './AppViewShared';
+import type { SheetMatch } from '../features/game/sheetBridge';
+import type { ChatMessage } from '../features/webrtc/types';
+import { BOT_USER, describeResultReason, SHEET_BOT_NAME, SHEET_TRIANGLE_BOT_NAME, TRIANGLE_BOT_USER } from './AppViewShared';
 import type { MoveHistoryItem, PracticePiece } from './AppViewShared';
+
+/**
+ * Practice has no chat. One shared empty list rather than a fresh `[]` per
+ * render, so the clocks ticking every second do not republish the disguise's
+ * comments panel each time.
+ */
+const NO_CHAT: ChatMessage[] = [];
 
 export interface PracticeMatchViewProps {
   user: UserProfile | null; openProfileModal: () => void; setOpponent: (user: UserProfile) => void;
@@ -27,8 +36,23 @@ export const PracticeMatchView: React.FC<PracticeMatchViewProps> = (p) => {
   const player = { name: p.user?.displayName || 'You', photoURL: p.user?.photoURL, piece: p.myPiece, clock: p.myPiece === 'X' ? p.p1TotalTime : p.p2TotalTime, moveClock: myTurn ? p.turnTimeLeft : 0, isTurn: myTurn, tag: 'You', onClick: p.openProfileModal, title: 'View and edit your profile' };
   const bot = { name: BOT_USER.displayName, photoURL: BOT_USER.photoURL, piece: botPiece, clock: botPiece === 'X' ? p.p1TotalTime : p.p2TotalTime, moveClock: botTurn ? p.turnTimeLeft : 0, isTurn: botTurn, tag: p.isAiThinking ? 'Thinking' : undefined, onClick: () => p.setOpponent(BOT_USER), title: "View opponent's profile and stats" };
   const triangle = { name: TRIANGLE_BOT_USER.displayName, photoURL: TRIANGLE_BOT_USER.photoURL, piece: 'T' as const, clock: 0, moveClock: p.currentTurn === 'T' ? p.turnTimeLeft : 0, isTurn: p.currentTurn === 'T', tag: p.currentTurn === 'T' && p.isAiThinking ? 'Thinking' : undefined, onClick: () => p.setOpponent(TRIANGLE_BOT_USER), title: "View opponent's profile and stats" };
-  return <GameControls playerTimers={[
+  const triangleTurn = p.gameStatus === 'playing' && p.currentTurn === 'T';
+  // The same seats MatchHeader draws, as the Spreadsheet disguise shows them:
+  // editors in the document, the one on turn "editing". The bots appear as
+  // colleagues with ordinary Vietnamese names: "AI Bot" on a presence chip
+  // over a finance sheet would give the whole thing away.
+  const sheetMatch: SheetMatch = {
+    seats: [
+      { name: p.user?.displayName || 'Tôi', piece: p.myPiece, isTurn: myTurn, isMe: true, clock: player.clock, moveClock: player.moveClock, empty: false },
+      { name: SHEET_BOT_NAME, piece: botPiece, isTurn: botTurn && !triangleTurn, isMe: false, clock: bot.clock, moveClock: botTurn && !triangleTurn ? p.turnTimeLeft : 0, empty: false },
+      ...(three ? [{ name: SHEET_TRIANGLE_BOT_NAME, piece: 'T' as const, isTurn: triangleTurn, isMe: false, clock: 0, moveClock: triangleTurn ? p.turnTimeLeft : 0, empty: false }] : []),
+    ],
+    score: three ? [p.sessionScore.mine, p.sessionScore.theirs, p.sessionScore.triangle] : [p.sessionScore.mine, p.sessionScore.theirs],
+    isAiMode: true,
+    role: 'player',
+  };
+  return <GameControls sheetMatch={sheetMatch} playerTimers={[
     { piece: 'X', seconds: Math.max(0, Math.ceil(p.settings.totalTimeMinutes > 0 ? p.p1TotalTime : p.p1ElapsedTime)), isTurn: p.gameStatus === 'playing' && p.currentTurn === 'X', moves: movesBy('X') },
     { piece: 'O', seconds: Math.max(0, Math.ceil(p.settings.totalTimeMinutes > 0 ? p.p2TotalTime : p.p2ElapsedTime)), isTurn: p.gameStatus === 'playing' && p.currentTurn === 'O', moves: movesBy('O') },
-  ]} moveCount={p.moveHistory.length} headerNode={<MatchHeader seats={three ? [player, bot, triangle] : [player, bot]} score={three ? [p.sessionScore.mine, p.sessionScore.theirs, p.sessionScore.triangle] : [p.sessionScore.mine, p.sessionScore.theirs]} announcement={p.gameStatus === 'playing' ? (myTurn ? 'Your turn' : 'Your opponent’s turn') : 'Match ended'} scoreLabel={three ? `Score: you ${p.sessionScore.mine}, O bot ${p.sessionScore.theirs}, triangle bot ${p.sessionScore.triangle}` : `Score: you ${p.sessionScore.mine}, opponent ${p.sessionScore.theirs}`} />} boardNode={<div className="flex-1 flex flex-col items-center"><Board board={p.board} size={p.settings.boardSize} lmaoMode={p.settings.placementMode === 'lmao'} threePlayer={three} placementCorners={p.placementCorners} onCellClick={p.onCellClick} lastMove={p.lastMove} winningLine={p.winningLine} currentTurn={p.currentTurn} disabled={p.gameStatus !== 'playing' || p.currentTurn !== p.myPiece} myPiece={p.myPiece} opponent={BOT_USER} gameStatus={p.gameStatus} gameResult={p.gameResult} resultReason={describeResultReason(p.gameResult?.reason)} ratingNote={p.ratingNote} /></div>} opponent={BOT_USER} myUser={p.user} chatMessages={[]} onSendChat={() => undefined} onProposeUndo={p.onUndo} onProposeRematch={p.onRematch} onResign={() => undefined} onExitMatch={p.onExit} exitLabel="Exit practice" gameStatus={p.gameStatus} allowUndo={p.settings.allowUndo} isAiMode elapsedGameTime={p.elapsedGameTime} canUndo={p.moveHistory.length > 0} undoPending={false} rematchPending={false} />;
+  ]} moveCount={p.moveHistory.length} headerNode={<MatchHeader seats={three ? [player, bot, triangle] : [player, bot]} score={three ? [p.sessionScore.mine, p.sessionScore.theirs, p.sessionScore.triangle] : [p.sessionScore.mine, p.sessionScore.theirs]} announcement={p.gameStatus === 'playing' ? (myTurn ? 'Your turn' : 'Your opponent’s turn') : 'Match ended'} scoreLabel={three ? `Score: you ${p.sessionScore.mine}, O bot ${p.sessionScore.theirs}, triangle bot ${p.sessionScore.triangle}` : `Score: you ${p.sessionScore.mine}, opponent ${p.sessionScore.theirs}`} />} boardNode={<div className="flex-1 flex flex-col items-center"><Board board={p.board} size={p.settings.boardSize} lmaoMode={p.settings.placementMode === 'lmao'} threePlayer={three} placementCorners={p.placementCorners} onCellClick={p.onCellClick} lastMove={p.lastMove} winningLine={p.winningLine} currentTurn={p.currentTurn} disabled={p.gameStatus !== 'playing' || p.currentTurn !== p.myPiece} myPiece={p.myPiece} opponent={BOT_USER} gameStatus={p.gameStatus} gameResult={p.gameResult} resultReason={describeResultReason(p.gameResult?.reason)} ratingNote={p.ratingNote} /></div>} opponent={BOT_USER} myUser={p.user} chatMessages={NO_CHAT} onSendChat={() => undefined} onProposeUndo={p.onUndo} onProposeRematch={p.onRematch} onResign={() => undefined} onExitMatch={p.onExit} exitLabel="Exit practice" gameStatus={p.gameStatus} allowUndo={p.settings.allowUndo} isAiMode elapsedGameTime={p.elapsedGameTime} canUndo={p.moveHistory.length > 0} undoPending={false} rematchPending={false} />;
 };

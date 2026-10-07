@@ -6,7 +6,12 @@ import { MatchHeader } from '../game/MatchHeader';
 import type { SeatView } from '../game/MatchHeader';
 import { GameControls } from '../game/GameControls';
 import { useIsDesktop } from '../../shared/hooks/useMediaQuery';
-import { useSound } from '../../shared/hooks/useSound';
+import { isSheetDisguiseActive, useDisguiseMode } from '../game/disguiseMode';
+import { sheetActionsStore } from '../game/sheetBridge';
+import type { SheetMatch } from '../game/sheetBridge';
+import { showSheetSnackbar } from '../game/sheet/sheetSnackbar';
+import { useSheetAwareSound } from '../game/sheet/useSheetAwareSound';
+import { useTheme } from '../theme/ThemeContext';
 import { RoomRoster } from './RoomRoster';
 import { TeaseToast } from './TeaseToast';
 import { CoinTossModal } from '../minigames/CoinTossModal';
@@ -31,7 +36,14 @@ const formatReconnectTime = (seconds: number | null | undefined) => {
 
 export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules, onViewMyProfile, onViewProfile, exitRef }) => {
   const isDesktop = useIsDesktop();
-  const { playWinSound, playTimerWarningSound, playClickSound, playBuzzSound } = useSound();
+  const { playWinSound, playTimerWarningSound, playClickSound, playBuzzSound } = useSheetAwareSound();
+  // Under the Spreadsheet board the room speaks Sheets: the paused panel
+  // always (it is drawn inside the sheet), and the room's own dialogs and
+  // pop-ups while the disguise is actually up.
+  const { theme } = useTheme();
+  const disguiseOn = useDisguiseMode();
+  const sheetTheme = theme.boardTheme === 'spreadsheet';
+  const sheetDisguise = sheetTheme && disguiseOn;
   const [confirmSpec, setConfirmSpec] = useState<ConfirmSpec | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [dismissedPromptAt, setDismissedPromptAt] = useState<number | null>(null);
@@ -107,6 +119,12 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         body: `Everyone here (${others}) is sent home${game ? ' and the game ends without a result' : ''}.`,
         confirmLabel: 'Close the room',
         cancelLabel: 'Stay',
+        sheet: {
+          title: 'Xóa tệp này?',
+          body: 'Mọi người đang mở tệp sẽ mất quyền truy cập.',
+          confirmLabel: 'Xóa',
+          cancelLabel: 'Hủy',
+        },
         tone: 'danger',
         onConfirm: leaveNow,
       });
@@ -118,6 +136,12 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         body: 'The game pauses and your seat opens for someone else. You can come back as a viewer.',
         confirmLabel: 'Leave the room',
         cancelLabel: 'Stay',
+        sheet: {
+          title: 'Đóng tệp?',
+          body: 'Bạn có thể mở lại tệp này sau với quyền xem.',
+          confirmLabel: 'Đóng',
+          cancelLabel: 'Hủy',
+        },
         tone: 'danger',
         onConfirm: leaveNow,
       });
@@ -143,6 +167,12 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         : 'They leave the room and free their place for someone else. They can join again with the invite link.',
       confirmLabel: 'Kick',
       cancelLabel: 'Cancel',
+      sheet: {
+        title: `Xóa quyền truy cập của ${member.profile.name}?`,
+        body: 'Người này sẽ không thể mở tệp nữa cho đến khi được chia sẻ lại.',
+        confirmLabel: 'Xóa quyền truy cập',
+        cancelLabel: 'Hủy',
+      },
       tone: 'danger',
       onConfirm: () => room.kickMember(member.id),
     });
@@ -155,6 +185,12 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         body: 'The game pauses until someone takes your seat and carries on from this position. You cannot sit back down in this game.',
         confirmLabel: 'Become a viewer',
         cancelLabel: 'Keep playing',
+        sheet: {
+          title: 'Từ bỏ quyền chỉnh sửa?',
+          body: 'Bạn sẽ chỉ còn quyền xem tệp này.',
+          confirmLabel: 'Từ bỏ',
+          cancelLabel: 'Hủy',
+        },
         onConfirm: () => room.becomeViewer(),
       });
       return;
@@ -169,6 +205,12 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       body: 'The game ends now and counts as a loss for you.',
       confirmLabel: 'Resign',
       cancelLabel: 'Keep playing',
+      sheet: {
+        title: 'Chuyển vào thùng rác?',
+        body: 'Tệp sẽ được chuyển vào thùng rác.',
+        confirmLabel: 'Chuyển vào thùng rác',
+        cancelLabel: 'Hủy',
+      },
       tone: 'danger',
       onConfirm: () => room.resign(),
     });
@@ -180,21 +222,60 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       body: 'Nobody wins or loses, and the room waits for two players again.',
       confirmLabel: 'End the game',
       cancelLabel: 'Keep waiting',
+      sheet: {
+        title: 'Hủy các thay đổi?',
+        body: 'Các thay đổi trong phiên này sẽ không được lưu.',
+        confirmLabel: 'Hủy thay đổi',
+        cancelLabel: 'Quay lại',
+      },
       tone: 'danger',
       onConfirm: () => room.discardGame(),
     });
 
+  /** Resolves to whether the link actually reached the clipboard. */
   const copyRoomLink = async () => {
-    if (!roomLink) return;
+    if (!roomLink) return false;
     try {
       if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
       await navigator.clipboard.writeText(roomLink);
       setCopyState('copied');
       setTimeout(() => setCopyState('idle'), 2500);
+      return true;
     } catch {
       setCopyState('failed');
+      return false;
     }
   };
+
+  // The Spreadsheet disguise's "Share" button copies the invite link, through
+  // the very same function the roster's copy button uses. The function is
+  // rebuilt every render, so the published action calls it through a ref and
+  // only changes when there starts or stops being a link to copy.
+  const copyRoomLinkRef = useRef(copyRoomLink);
+  useEffect(() => {
+    copyRoomLinkRef.current = copyRoomLink;
+  });
+  const hasRoomLink = Boolean(roomLink);
+  useEffect(() => {
+    sheetActionsStore.set((prev) => ({
+      ...prev,
+      share: {
+        // The snackbar waits for the clipboard: a copy can fail outside a
+        // secure context or without permission, and the roster that would
+        // otherwise say so is not on screen while disguised.
+        run: () =>
+          void copyRoomLinkRef
+            .current()
+            .then((copied) =>
+              showSheetSnackbar(copied ? 'Đã sao chép đường liên kết' : 'Không thể sao chép đường liên kết'),
+            ),
+        disabled: !hasRoomLink,
+        pending: false,
+        label: 'Sao chép đường liên kết mời',
+      },
+    }));
+    return () => sheetActionsStore.set((prev) => ({ ...prev, share: null }));
+  }, [hasRoomLink]);
 
   const shareRoomLink = async () => {
     if (!roomLink || !navigator.share) return;
@@ -213,7 +294,8 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     if (!shownResult || celebratedRef.current === shownResult.gameId) return;
     celebratedRef.current = shownResult.gameId;
     if (mySeat && shownResult.winner === mySeat && shownResult.players[mySeat].memberId === me) {
-      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+      // A burst of confetti over a "spreadsheet" would give the disguise away.
+      if (!isSheetDisguiseActive()) confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
       playWinSound();
     }
   }, [shownResult, mySeat, me, playWinSound]);
@@ -243,22 +325,32 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   const titleMarkNeeded = Boolean(openSeat && room.seatOpened && dismissedPromptAt !== room.seatOpened.at);
   useEffect(() => {
     if (!titleMarkNeeded || !document.hidden) return;
+    playClickSound();
+    // Under the Spreadsheet disguise the tab title is the fake document's
+    // name, and a game-worded prefix there would give the cover away.
+    if (isSheetDisguiseActive()) return;
     const original = document.title;
     document.title = `(Seat open) ${original}`;
-    playClickSound();
+    const marked = document.title;
+    // Only take the mark back off while it is still there. The disguise may
+    // have come on since, and its own tab title must not be replaced with
+    // the game's.
+    const unmark = () => {
+      if (document.title === marked) document.title = original;
+    };
     const restore = () => {
-      if (!document.hidden) document.title = original;
+      if (!document.hidden) unmark();
     };
     document.addEventListener('visibilitychange', restore);
     return () => {
       document.removeEventListener('visibilitychange', restore);
-      document.title = original;
+      unmark();
     };
   }, [titleMarkNeeded, playClickSound]);
 
   /* ------------------------------- views ------------------------------ */
 
-  const confirmDialog = <RoomConfirmDialog spec={confirmSpec} onDismiss={() => setConfirmSpec(null)} />;
+  const confirmDialog = <RoomConfirmDialog spec={confirmSpec} sheet={sheetDisguise} onDismiss={() => setConfirmSpec(null)} />;
 
   const teaseToast = (
     <TeaseToast notice={room.teaseNotice} onDismiss={room.dismissTease} openSeat={openSeat} onTakeSeat={room.takeSeat} />
@@ -358,6 +450,24 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     const pair = s.seats.X && s.seats.O ? `${s.seats.X}|${s.seats.O}` : null;
     return pair && s.score.pair === pair ? s.score[seat] : 0;
   };
+  // The same seats, in the same order, as the Spreadsheet disguise shows them.
+  const sheetMatch: SheetMatch = {
+    seats: order.map((seat) => {
+      const view = seatView(seat);
+      return {
+        name: view.name,
+        piece: seat,
+        isTurn: view.isTurn,
+        isMe: seat === mySeat,
+        clock: view.clock,
+        moveClock: view.moveClock,
+        empty: Boolean(view.empty),
+      };
+    }),
+    score: order.map(scoreOf),
+    isAiMode: false,
+    role: isViewer ? 'viewer' : 'player',
+  };
 
   const announcement =
     phase === 'paused'
@@ -373,20 +483,34 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       : `${moverName} (${turn}) to move`;
 
   // ---- the paused overlay
+  // On the Spreadsheet board it is a Sheets dialog in the middle of the grid,
+  // so it reads as a document waiting on a collaborator: Vietnamese, no game
+  // words, and the buttons named after Sheets' own actions. Claiming a
+  // disconnect win becomes "finishing the edit" on one's own.
+  const claimLabel = (secondsLeft: number | null) =>
+    sheetTheme
+      ? secondsLeft && secondsLeft > 0
+        ? `Hoàn tất chỉnh sửa sau ${secondsLeft}s`
+        : 'Hoàn tất chỉnh sửa'
+      : secondsLeft && secondsLeft > 0
+      ? `Claim win in ${secondsLeft}s`
+      : 'Claim disconnect win';
   let paused: { title: string; body?: string; actions?: React.ReactNode } | null = null;
   if (room.status === 'host_lost' && (phase === 'playing' || phase === 'paused')) {
     const host = members.find((member) => member.isHost);
     const canClaimWin = Boolean(game && game.settings.playerMode === 'oneVsOne' && mySeat && host && occupantOf(otherSeat(mySeat))?.id === host.id);
     paused = {
-      title: 'Waiting for the host…',
-      body: 'The clocks are stopped. You can claim the win after the host has been gone for 120 seconds.',
+      title: sheetTheme ? 'Đang kết nối lại…' : 'Waiting for the host…',
+      body: sheetTheme
+        ? 'Mất kết nối với máy chủ. Các thay đổi sẽ được đồng bộ khi có kết nối lại.'
+        : 'The clocks are stopped. You can claim the win after the host has been gone for 120 seconds.',
       actions: canClaimWin ? (
         <button
           onClick={room.claimLostHostWin}
           disabled={room.hostClaimSecondsLeft === null || room.hostClaimSecondsLeft > 0}
           className="btn btn-primary"
         >
-          {room.hostClaimSecondsLeft && room.hostClaimSecondsLeft > 0 ? `Claim win in ${room.hostClaimSecondsLeft}s` : 'Claim disconnect win'}
+          {claimLabel(room.hostClaimSecondsLeft)}
         </button>
       ) : undefined,
     };
@@ -406,10 +530,35 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
             title={canEnd ? undefined : 'A viewer gets a moment to take the seat first'}
             className="btn btn-ghost"
           >
-            {canEnd ? 'End game (no result)' : `End game in ${Math.ceil(guardLeft / 1000)}s`}
+            {sheetTheme
+              ? canEnd
+                ? 'Hủy thay đổi'
+                : `Hủy thay đổi sau ${Math.ceil(guardLeft / 1000)}s`
+              : canEnd
+              ? 'End game (no result)'
+              : `End game in ${Math.ceil(guardLeft / 1000)}s`}
           </button>
         ) : null;
-      if (isViewer) {
+      if (sheetTheme) {
+        paused = {
+          title: isViewer ? 'Có thể yêu cầu quyền chỉnh sửa' : 'Đang chờ người cộng tác',
+          actions: (
+            <>
+              {isViewer && openSeat && (
+                <button onClick={() => room.takeSeat(openSeat)} className="btn btn-primary">
+                  Yêu cầu quyền chỉnh sửa
+                </button>
+              )}
+              {!isViewer && (
+                <button onClick={requestBecomeViewer} className="btn btn-secondary">
+                  Chỉ xem
+                </button>
+              )}
+              {endButton}
+            </>
+          ),
+        };
+      } else if (isViewer) {
         paused = {
           title: `Seat ${emptySeat} is open`,
           body: barred
@@ -450,20 +599,22 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         mySeat !== null &&
         occupantOf(otherSeat(mySeat))?.id === away.id;
       paused = {
-        title: 'Game paused',
-        body: `Waiting for ${away.profile.name} to reconnect… ${formatReconnectTime(reconnectSeconds)}`,
+        title: sheetTheme ? 'Đang chờ người cộng tác' : 'Game paused',
+        body: sheetTheme
+          ? `Đang kết nối lại… ${formatReconnectTime(reconnectSeconds)}`
+          : `Waiting for ${away.profile.name} to reconnect… ${formatReconnectTime(reconnectSeconds)}`,
         actions: canClaimWin ? (
           <button
             onClick={room.claimDisconnectWin}
             disabled={claimWaitSeconds === null || claimWaitSeconds > 0}
             className="btn btn-primary"
           >
-            {claimWaitSeconds && claimWaitSeconds > 0 ? `Claim win in ${claimWaitSeconds}s` : 'Claim disconnect win'}
+            {claimLabel(claimWaitSeconds)}
           </button>
         ) : undefined,
       };
     } else {
-      paused = { title: 'Game paused', body: 'Resuming shortly…' };
+      paused = sheetTheme ? { title: 'Đang đồng bộ…' } : { title: 'Game paused', body: 'Resuming shortly…' };
     }
   }
 
@@ -641,24 +792,30 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         onTakeSeat={() => openSeat && room.takeSeat(openSeat)}
         canResign={phase === 'playing' && bothSeated}
         chatEmptyText="No messages yet. Say hello to the room."
+        sheetMatch={sheetMatch}
       />
 
-      {/* Take-back: only the other seated player is asked. */}
+      {/* Take-back: only the other seated player is asked. The opponent
+          triggers it at a moment the player does not choose, so under the
+          disguise it asks in Sheets' words (and global CSS keeps it out of
+          sight while a fake report is up). */}
       {undoFrom && mySeat && mySeat !== undoFrom && (
         <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby="undo-request-title">
           <div className="w-full max-w-sm space-y-4 rounded-lg border border-line bg-surface p-6 text-center">
             <h3 id="undo-request-title" className="text-base font-semibold text-ink">
-              Take back a move?
+              {sheetDisguise ? 'Khôi phục phiên bản trước?' : 'Take back a move?'}
             </h3>
             <p className="text-xs text-muted">
-              {occupantOf(undoFrom)?.profile.name ?? 'Your opponent'} wants to take back their last move.
+              {sheetDisguise
+                ? `${occupantOf(undoFrom)?.profile.name ?? 'Người cộng tác'} muốn khôi phục phiên bản trước của tệp.`
+                : `${occupantOf(undoFrom)?.profile.name ?? 'Your opponent'} wants to take back their last move.`}
             </p>
             <div className="flex gap-2 pt-2">
               <button onClick={() => room.answerUndo(true)} className="btn btn-primary btn-sm flex-1">
-                Allow it
+                {sheetDisguise ? 'Cho phép' : 'Allow it'}
               </button>
               <button onClick={() => room.answerUndo(false)} className="btn btn-secondary btn-sm flex-1">
-                Decline
+                {sheetDisguise ? 'Từ chối' : 'Decline'}
               </button>
             </div>
           </div>
@@ -669,25 +826,29 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby="rematch-title">
           <div className="w-full max-w-sm space-y-4 rounded-lg border border-line bg-surface p-6 text-center">
             <h3 id="rematch-title" className="text-base font-semibold text-ink">
-              Play again?
+              {sheetDisguise ? 'Tạo bản sao mới?' : 'Play again?'}
             </h3>
             <p className="text-xs text-muted">
-              {occupantOf(rematchFrom)?.profile.name ?? 'Your opponent'} wants to play another game with the same rules.
+              {sheetDisguise
+                ? `${occupantOf(rematchFrom)?.profile.name ?? 'Người cộng tác'} muốn tạo một bản sao mới của tệp.`
+                : `${occupantOf(rematchFrom)?.profile.name ?? 'Your opponent'} wants to play another game with the same rules.`}
             </p>
             <div className="flex gap-2 pt-2">
               <button onClick={() => room.answerRematch(true)} className="btn btn-primary btn-sm flex-1">
-                Play again
+                {sheetDisguise ? 'Tạo bản sao' : 'Play again'}
               </button>
               <button onClick={() => room.answerRematch(false)} className="btn btn-secondary btn-sm flex-1">
-                No thanks
+                {sheetDisguise ? 'Không, cảm ơn' : 'No thanks'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* A seat opened while this viewer was watching a finished game. */}
-      {seatPrompt && (
+      {/* A seat opened while this viewer was watching a finished game. Not
+          under the disguise: there it is Tệp > Yêu cầu quyền chỉnh sửa, and
+          this pill would float over the sheet in game words. */}
+      {seatPrompt && !sheetDisguise && (
         <div
           role="status"
           className="fixed bottom-24 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-surface px-3 py-2 shadow-lg"
@@ -702,7 +863,8 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         </div>
       )}
 
-      {hostLostStrip && <div className="fixed left-1/2 top-20 z-[55] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2">{hostLostStrip}</div>}
+      {/* The paused panel inside the sheet already says the host is gone. */}
+      {hostLostStrip && !sheetDisguise && <div className="fixed left-1/2 top-20 z-[55] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2">{hostLostStrip}</div>}
       {confirmDialog}
       {teaseToast}
     </>

@@ -23,6 +23,7 @@ const BOARD_THEMES: Array<{ id: BoardTheme; name: string }> = [
   { id: 'light_wood', name: 'Bamboo' },
   { id: 'laser_futuristic', name: 'Laser grid' },
   { id: 'classic_wood', name: 'Mahogany' },
+  { id: 'spreadsheet', name: 'Spreadsheet' },
 ];
 
 const PIECE_THEMES: Array<{ id: PieceTheme; name: string }> = [

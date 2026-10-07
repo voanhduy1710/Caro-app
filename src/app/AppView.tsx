@@ -2,7 +2,11 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import confetti from 'canvas-confetti';
 import { useAuth } from '../features/auth/AuthContext';
 import { useAvailableRooms } from '../features/webrtc/roomDiscoveryService';
-import { useSound } from '../shared/hooks/useSound';
+import { isSheetDisguiseActive, useDisguiseMode } from '../features/game/disguiseMode';
+import { showSheetSnackbar } from '../features/game/sheet/sheetSnackbar';
+import { useSheetAwareSound } from '../features/game/sheet/useSheetAwareSound';
+import { OPEN_SETTINGS_EVENT } from '../features/game/sheetBridge';
+import { useTheme } from '../features/theme/ThemeContext';
 import type { BoardCorner } from '../features/game/Board';
 import type { UserProfile } from '../features/auth/AuthContext';
 import { DEFAULT_ROOM_SETTINGS } from '../features/settings/types';
@@ -20,7 +24,7 @@ import { AppFeedback } from './AppFeedback';
 import { AppModalStack } from './AppModalStack';
 import { AppNavbar } from './AppNavbar';
 import { ActiveMatchStage } from './ActiveMatchStage';
-import { AI_BOARD_SIZE, aiThinkMs, lmaoCornerFor, nextPracticePiece, settingsUpdateFor } from './AppViewShared';
+import { AI_BOARD_SIZE, aiThinkMs, lmaoCornerFor, nextPracticePiece, settingsUpdateFor, sheetNoticeText } from './AppViewShared';
 import type { MoveHistoryItem, PracticePiece } from './AppViewShared';
 import type { ConfirmSpec } from './AppViewShared';
 export const App: React.FC = () => {
@@ -34,12 +38,18 @@ export const App: React.FC = () => {
     if (authLoading || !signedInUid) return;
     void resendPendingRatedResults();
   }, [authLoading, signedInUid]);
-  const { playMoveSound, playWinSound, playTimerWarningSound, playBuzzSound } = useSound();
+  const { playMoveSound, playWinSound, playTimerWarningSound, playBuzzSound } = useSheetAwareSound();
 
   // Non-blocking status pill, used instead of window.alert during a live match.
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showNotice = useCallback((message: string) => {
+    // Under the disguise there is one bottom-left snackbar, the Sheets one,
+    // and the notice goes there in Sheets' words instead of as the game's pill.
+    if (isSheetDisguiseActive()) {
+      showSheetSnackbar(sheetNoticeText(message));
+      return;
+    }
     setNotice(message);
     if (noticeTimeoutRef.current) clearTimeout(noticeTimeoutRef.current);
     noticeTimeoutRef.current = setTimeout(() => setNotice(null), 3200);
@@ -66,6 +76,19 @@ export const App: React.FC = () => {
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedOpponentProfile, setSelectedOpponentProfile] = useState<UserProfile | null>(null);
+
+  // The Spreadsheet disguise hides the navbar, which is where Settings normally
+  // opens from, so its "Spreadsheet settings" menu item asks for it by event.
+  useEffect(() => {
+    const open = () => setSettingsAndThemeOpen(true);
+    window.addEventListener(OPEN_SETTINGS_EVENT, open);
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, open);
+  }, []);
+
+  // Whether the Spreadsheet disguise is up, gated on being in a match below:
+  // the flag outlives nothing, but the lobby must never be styled as a sheet.
+  const { theme } = useTheme();
+  const disguiseOn = useDisguiseMode();
 
   // Practice game state. Online games live in the room.
   const [roomSettings, setRoomSettings] = useState<RoomSettings>(DEFAULT_ROOM_SETTINGS);
@@ -250,7 +273,8 @@ export const App: React.FC = () => {
           : { ...prev, theirs: prev.theirs + 1 }
       );
       if (isWinner) {
-        confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+        // A burst of confetti over a "spreadsheet" would give the disguise away.
+        if (!isSheetDisguiseActive()) confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
         playWinSound();
       }
     }
@@ -506,6 +530,11 @@ export const App: React.FC = () => {
       title: 'Leave this practice game?',
       body: 'The board will be discarded. Practice games are not counted as a loss.',
       confirmLabel: 'Leave and go home',
+      sheet: {
+        title: 'Đóng tệp?',
+        body: 'Các thay đổi chưa lưu trong tệp này sẽ bị mất.',
+        confirmLabel: 'Đóng',
+      },
       onConfirm: goHome,
     });
   }, [roomActive, room, gameStatus, goHome]);
@@ -570,6 +599,11 @@ export const App: React.FC = () => {
         title: 'Start a new game?',
         body: 'The game you are playing will be discarded.',
         confirmLabel: 'Start a new game',
+        sheet: {
+          title: 'Tạo bảng tính mới?',
+          body: 'Nội dung hiện tại của trang tính sẽ bị thay thế.',
+          confirmLabel: 'Tạo mới',
+        },
         onConfirm: handleStartAiMode,
       });
       return;
@@ -581,6 +615,7 @@ export const App: React.FC = () => {
 
   const roomInMatch = roomActive && room.state !== null && room.state.phase !== 'waiting';
   const inMatch = practiceInMatch || roomInMatch;
+  const sheetDisguise = inMatch && theme.boardTheme === 'spreadsheet' && disguiseOn;
 
   const roomClosedDialog = room.closedReason === 'host_left' || room.closedReason === 'host_lost';
   const homeError = roomActive || roomClosedDialog
@@ -613,7 +648,7 @@ export const App: React.FC = () => {
 
       </main>
 
-      <AppFeedback notice={notice} roomClosed={roomClosedDialog} roomError={room.error} onResetRoom={room.reset} confirm={confirmSpec} onDismissConfirm={() => setConfirmSpec(null)} />
+      <AppFeedback sheetDisguise={sheetDisguise} notice={notice}roomClosed={roomClosedDialog} roomError={room.error} onResetRoom={room.reset} confirm={confirmSpec} onDismissConfirm={() => setConfirmSpec(null)} />
       <AppModalStack settingsOpen={settingsAndThemeOpen} onCloseSettings={() => setSettingsAndThemeOpen(false)} settings={roomActive && room.state ? room.state.settings : isAiMode ? practiceSettings : roomSettings} onUpdateSettings={(next) => { if (roomActive) room.updateSettings(next); else setRoomSettings(settingsUpdateFor(roomSettings, next, isAiMode)); }} isHost={!roomActive || room.isHost} gameStatus={roomActive ? (roomPhase === 'waiting' || roomPhase === 'ended' ? 'lobby' : 'playing') : gameStatus} myPiece={roomActive ? (room.mySeat ?? undefined) : myPiece} leaderboardOpen={leaderboardOpen} onCloseLeaderboard={() => setLeaderboardOpen(false)} historyOpen={historyOpen} onCloseHistory={() => setHistoryOpen(false)} onSelectOpponent={setSelectedOpponentProfile} opponent={selectedOpponentProfile} onPlayNow={() => { setHistoryOpen(false); if (roomActive) { setConfirmSpec({ title: 'Leave the room and play the bot?', body: room.isHost ? 'The room closes for everyone in it.' : 'If you are playing, the game pauses and your seat opens for someone else.', confirmLabel: 'Leave and play the bot', tone: 'danger', onConfirm: handleStartAiMode }); } else handleStartAiMode(); }} confirmRoomExit={setConfirmSpec} />
 
     </div>

@@ -1,18 +1,9 @@
 import React, { memo } from 'react';
 import type { CellValue } from '../../shared/utils/gomokuLogic';
+import { columnLabel } from '../../shared/utils/gomokuLogic';
 import type { PieceTheme } from '../theme/types';
 import type { BoardCorner } from './BoardTypes';
-
-export const columnLabel = (index: number) => {
-  let value = index + 1;
-  let label = '';
-  while (value > 0) {
-    const remainder = (value - 1) % 26;
-    label = String.fromCharCode(65 + remainder) + label;
-    value = Math.floor((value - 1) / 26);
-  }
-  return label;
-};
+import { SheetGlyph, SHEET_TRIANGLE_COLOR } from './BoardSheetParts';
 
 interface PieceGlyphProps {
   piece: Exclude<CellValue, null>;
@@ -137,6 +128,8 @@ interface BoardCellProps {
   oColor: string;
   placementCorner: BoardCorner;
   lmaoMode: boolean;
+  /** Spreadsheet theme: pieces as cell text, Sheets' selection and collaborator looks. */
+  sheet: boolean;
   onSelect: (row: number, col: number, corner: BoardCorner) => void;
   onContextMenu: (event: React.MouseEvent, row: number, col: number) => void;
   onHover: (row: number, col: number, corner: BoardCorner) => void;
@@ -169,6 +162,7 @@ export const BoardCell = memo<BoardCellProps>(({
   onHover,
   placementCorner,
   lmaoMode,
+  sheet,
 }) => {
   const placementClass =
     !lmaoMode || placementCorner === 'center'
@@ -202,18 +196,65 @@ export const BoardCell = memo<BoardCellProps>(({
     ];
     return slots[y][x];
   };
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    // Space/Enter on a focused cell fires a click with detail 0; only
+    // pointer clicks may place a move.
+    if (event.detail === 0) return;
+    const corner = clickCorner(event);
+    // LMAO has eight peripheral slots; the centre is deliberately blank.
+    if (lmaoMode && corner === 'center') return;
+    onSelect(row, col, corner);
+  };
+
+  if (sheet) {
+    const pieceColor = (piece: Exclude<CellValue, null>) =>
+      piece === 'X' ? xColor : piece === 'T' ? SHEET_TRIANGLE_COLOR : oColor;
+    // A corner slot is a little over half the cell, so its text shrinks with it.
+    const fontSize = Math.max(8, Math.round(cellSize * (lmaoMode ? 0.4 : 0.5)));
+    return (
+      <button
+        type="button"
+        onClick={handleClick}
+        onContextMenu={(event) => onContextMenu(event, row, col)}
+        onMouseEnter={(event) => onHover(row, col, clickCorner(event))}
+        onMouseMove={(event) => onHover(row, col, clickCorner(event))}
+        aria-label={`Coordinate ${columnLabel(col)}${row + 1}${cell ? `, ${cell}` : ', empty'}`}
+        // The move that just landed wears a collaborator's cursor in the colour
+        // of whoever played it, the way Sheets shows another editor's cell, so
+        // it reads as a colleague typing rather than a game marking a move.
+        style={{
+          width: `${cellSize}px`,
+          height: `${cellSize}px`,
+          boxShadow: isLast && cell ? `inset 0 0 0 2px ${pieceColor(cell)}` : undefined,
+        }}
+        className={`board-cell relative flex shrink-0 items-center justify-center ${
+          cell ? 'board-cell--filled' : ''
+        } ${isLast ? 'board-cell--sheet-last' : ''} ${isWinning ? 'board-cell--sheet-win' : ''}`}
+      >
+        {cell ? (
+          <span className={placementClass}>
+            <SheetGlyph piece={cell} color={pieceColor(cell)} fontSize={fontSize} />
+          </span>
+        ) : simulatedPiece ? (
+          <SheetGlyph
+            piece={simulatedPiece}
+            color={simulatedColor || pieceColor(simulatedPiece)}
+            fontSize={fontSize}
+            opacity={0.6}
+          />
+        ) : isHovered && !boardDisabled ? (
+          <div className={`opacity-35 ${placementClass}`}>
+            <SheetGlyph piece={currentTurn} color={pieceColor(currentTurn)} fontSize={fontSize} />
+          </div>
+        ) : null}
+      </button>
+    );
+  }
+
   return (
   <button
     type="button"
-    onClick={(event) => {
-      // Space/Enter on a focused cell fires a click with detail 0; only
-      // pointer clicks may place a move.
-      if (event.detail === 0) return;
-      const corner = clickCorner(event);
-      // LMAO has eight peripheral slots; the centre is deliberately blank.
-      if (lmaoMode && corner === 'center') return;
-      onSelect(row, col, corner);
-    }}
+    onClick={handleClick}
     onContextMenu={(event) => onContextMenu(event, row, col)}
     onMouseEnter={(event) => onHover(row, col, clickCorner(event))}
     onMouseMove={(event) => onHover(row, col, clickCorner(event))}

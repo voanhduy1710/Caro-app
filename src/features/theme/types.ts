@@ -1,4 +1,4 @@
-export type BoardTheme = 'graph_paper' | 'light_wood' | 'laser_futuristic' | 'classic_wood';
+export type BoardTheme = 'graph_paper' | 'light_wood' | 'laser_futuristic' | 'classic_wood' | 'spreadsheet';
 export type PieceTheme = 'calligraphic' | 'classic' | 'gomoku_3d' | 'laser';
 
 export interface ThemeSettings {

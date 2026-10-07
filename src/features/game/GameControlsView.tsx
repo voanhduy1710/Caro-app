@@ -3,8 +3,13 @@ import { ChevronDown, ChevronUp, Timer } from 'lucide-react';
 import type { ChatMessage } from '../webrtc/types';
 import { useDisplayPrefs } from './displayPrefs';
 import { useIsDesktop } from '../../shared/hooks/useMediaQuery';
-import { useSound } from '../../shared/hooks/useSound';
 import { useTheme } from '../theme/ThemeContext';
+import { useDisguiseMode } from './disguiseMode';
+import { EMPTY_SHEET_ACTIONS, sheetActionsStore, sheetChatStore, sheetMatchStore, updateSheetUi, useSheetUi } from './sheetBridge';
+import type { SheetMatch } from './sheetBridge';
+import { SheetComments } from './SheetComments';
+import { SheetSideStrip } from './SheetSideStrip';
+import { useSheetAwareSound } from './sheet/useSheetAwareSound';
 import { CHAT_BAR_HEIGHT_PX, CHAT_OPEN_STORAGE_KEY, formatElapsed, PIN_TO_BOTTOM_MS, processImageFile, readStoredChatOpen, STICK_TO_BOTTOM_PX } from './GameControlsShared';
 import { GameActionRail } from './GameActionRail';
 import { GameReactionPicker } from './GameReactionPicker';
@@ -48,10 +53,17 @@ export const GameControls: React.FC<GameControlsProps> = ({
   doubleDown,
   onOfferDoubleDown,
   onAnswerDoubleDown,
+  sheetMatch = null,
 }) => {
   const isDesktop = useIsDesktop();
   const prefs = useDisplayPrefs();
   const { theme } = useTheme();
+  // Boss-key disguise: roster, chat and the action rail all go dark, leaving
+  // only the board (which carries the Sheets chrome) on screen. Gated on the
+  // theme too, so a flag left set from an earlier match can never hide the
+  // app under a board theme that isn't the disguise.
+  const disguiseOn = useDisguiseMode();
+  const sheetDisguise = theme.boardTheme === 'spreadsheet' && disguiseOn;
   const [isPrefsOpen, setIsPrefsOpen] = useState(false);
   const gearRef = useRef<HTMLButtonElement>(null);
   const prefsRef = useRef<HTMLDivElement>(null);
@@ -79,7 +91,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const emoteButtonRef = useRef<HTMLButtonElement>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [simulationCount, setSimulationCount] = useState(0);
-  const { playChatSound } = useSound();
+  const { playChatSound } = useSheetAwareSound();
 
   const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLDivElement>(null);
@@ -246,7 +258,10 @@ export const GameControls: React.FC<GameControlsProps> = ({
   }, [isChatOpen, chatMessages.length]);
 
   // The preferences popover closes on Escape or on a click anywhere else,
-  // like every other transient menu.
+  // like every other transient menu. Escape is taken on the capture phase and
+  // marked handled, so the Spreadsheet theme's boss key (a bubble-phase window
+  // listener registered long before the popover opened) leaves that press
+  // alone instead of also flipping to the fake report.
   useEffect(() => {
     if (!isPrefsOpen) return;
     const onPointerDown = (event: PointerEvent) => {
@@ -255,13 +270,15 @@ export const GameControls: React.FC<GameControlsProps> = ({
       setIsPrefsOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsPrefsOpen(false);
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setIsPrefsOpen(false);
     };
     window.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
     return () => {
       window.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
     };
   }, [isPrefsOpen]);
 
@@ -314,16 +331,25 @@ export const GameControls: React.FC<GameControlsProps> = ({
     }
   }, []);
 
-  // Escape closes the mobile sheet and the lightbox.
+  // Escape closes the mobile sheet and the lightbox. Either one marks the key
+  // as used, on the capture phase so it is marked before the Spreadsheet
+  // disguise's boss key (a bubble-phase listener) sees it and also fires on
+  // the same press. The phone sheet is unmounted while disguised, so a sheet
+  // left open from before the boss key must not swallow Escape either.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (lightboxImage) setLightboxImage(null);
-      else if (!isDesktop && isChatOpen) closeChatSheet();
+      if (lightboxImage) {
+        event.preventDefault();
+        setLightboxImage(null);
+      } else if (!sheetDisguise && !isDesktop && isChatOpen) {
+        event.preventDefault();
+        closeChatSheet();
+      }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [lightboxImage, isDesktop, isChatOpen, closeChatSheet]);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [lightboxImage, isDesktop, isChatOpen, closeChatSheet, sheetDisguise]);
 
   const handleChatSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -428,6 +454,114 @@ export const GameControls: React.FC<GameControlsProps> = ({
   // A rematch restarts the board, so it is only offered once the match is over.
   // Practice keeps a "New game" button, which asks before discarding a live game.
   const rematchDisabled = rematchUnavailable || rematchPending || (!isAiMode && gameStatus !== 'ended');
+
+  /* -------------------------- spreadsheet bridge -------------------------- */
+
+  // While disguised the rail and the chat column are gone, and the Sheets
+  // toolbar and menus run the same actions instead. They are published with
+  // exactly the rail's rules, so a greyed-out "Undo" in the toolbar means the
+  // same as a greyed-out Take back here. The callbacks change identity on
+  // every parent render, so the published run() functions go through a ref and
+  // the store only changes when a flag or a label does. The labels are what
+  // the chrome speaks to a screen reader beside its Sheets wording, so they
+  // are Vietnamese like everything else in the disguise.
+  const callbacksRef = useRef({ onExitMatch, onProposeUndo, onProposeRematch, onResign, onTakeSeat });
+  useEffect(() => {
+    callbacksRef.current = { onExitMatch, onProposeUndo, onProposeRematch, onResign, onTakeSeat };
+  });
+  const runners = useMemo(
+    () => ({
+      exit: () => callbacksRef.current.onExitMatch(),
+      undo: () => callbacksRef.current.onProposeUndo(),
+      rematch: () => callbacksRef.current.onProposeRematch(),
+      resign: () => callbacksRef.current.onResign(),
+      takeSeat: () => callbacksRef.current.onTakeSeat?.(),
+    }),
+    []
+  );
+  const isViewer = role === 'viewer';
+  const undoDisabled = !allowUndo || gameStatus !== 'playing' || !canUndo;
+  const resignDisabled = canResign === undefined ? gameStatus !== 'playing' : !canResign;
+  const canTakeSeat = Boolean(openSeat && onTakeSeat);
+  useEffect(() => {
+    sheetActionsStore.set((prev) => ({
+      ...prev,
+      exit: { run: runners.exit, disabled: false, pending: false, label: isAiMode ? 'Thoát ván luyện tập' : 'Rời phòng' },
+      undo: isViewer ? null : { run: runners.undo, disabled: undoDisabled, pending: undoPending, label: 'Xin đi lại' },
+      rematch: isViewer
+        ? null
+        : {
+            run: runners.rematch,
+            disabled: rematchDisabled,
+            pending: rematchPending,
+            label: isAiMode ? 'Ván mới' : 'Tái đấu',
+          },
+      resign:
+        isViewer || isAiMode ? null : { run: runners.resign, disabled: resignDisabled, pending: false, label: 'Đầu hàng' },
+      takeSeat: isViewer
+        ? {
+            run: runners.takeSeat,
+            disabled: !canTakeSeat,
+            pending: false,
+            label: openSeat ? `Vào ghế ${openSeat}` : 'Vào ghế',
+          }
+        : null,
+    }));
+  }, [runners, isViewer, isAiMode, undoDisabled, undoPending, rematchDisabled, rematchPending, resignDisabled, canTakeSeat, openSeat]);
+  // The room's own Share entry belongs to the room, not to this match, so it
+  // survives the match's actions being taken down.
+  useEffect(() => () => sheetActionsStore.set((prev) => ({ ...EMPTY_SHEET_ACTIONS, share: prev.share })), []);
+
+  // The comments panel counts what arrived while nobody was looking. "Looking"
+  // is whichever chat is on screen: the comments panel in disguise, the chat
+  // column otherwise, so lines read before the boss key are not news after it.
+  const { commentsOpen } = useSheetUi();
+  const chatInView = sheetDisguise ? commentsOpen : isChatOpen;
+  const [sheetSeenCount, setSheetSeenCount] = useState(chatMessages.length);
+  if (chatInView && sheetSeenCount !== chatMessages.length) setSheetSeenCount(chatMessages.length);
+  const sheetUnread = chatInView
+    ? 0
+    : chatMessages
+        .slice(Math.min(sheetSeenCount, chatMessages.length))
+        .filter((message) => !message.system && !isOwnMessage(message)).length;
+
+  // The comments panel only sends plain text: no image, no quote, no emote
+  // picker, all of which would look nothing like a Sheets comment.
+  const sendChatRef = useRef(onSendChat);
+  const answerOfferRef = useRef(onAnswerDoubleDown);
+  useEffect(() => {
+    sendChatRef.current = onSendChat;
+    answerOfferRef.current = onAnswerDoubleDown;
+  });
+  const canAnswerOffers = Boolean(onAnswerDoubleDown);
+  useEffect(() => {
+    sheetChatStore.set({
+      messages: chatMessages,
+      send: (text: string) => {
+        sendChatRef.current(text);
+        playChatSound();
+      },
+      isOwn: isOwnMessage,
+      unread: sheetUnread,
+      available: !isAiMode,
+      answerOffer: canAnswerOffers ? (accept: boolean) => answerOfferRef.current?.(accept) : undefined,
+    });
+  }, [chatMessages, isOwnMessage, sheetUnread, isAiMode, playChatSound, canAnswerOffers]);
+  // The game's chat opens itself for an offer waiting on an answer (above);
+  // under the disguise the comments panel is where its buttons are.
+  useEffect(() => {
+    if (answerableOfferId && sheetDisguise) updateSheetUi({ commentsOpen: true });
+  }, [answerableOfferId, sheetDisguise]);
+  useEffect(() => () => sheetChatStore.set(null), []);
+
+  // Who sits where, compared by value: the clocks tick every second and the
+  // caller rebuilds this object on every render, but the store should only
+  // change when something it shows has.
+  const sheetMatchKey = JSON.stringify(sheetMatch);
+  useEffect(() => {
+    sheetMatchStore.set(JSON.parse(sheetMatchKey) as SheetMatch | null);
+  }, [sheetMatchKey]);
+  useEffect(() => () => sheetMatchStore.set(null), []);
   // One row of icons rather than a wrap of labelled buttons: every action here
   // is either rare or destructive, and none of them should out-shout the board.
   const actionButtons = <GameActionRail {...{ exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown }} />;
@@ -485,41 +619,69 @@ export const GameControls: React.FC<GameControlsProps> = ({
     </div>
   );
 
-  /* ------------------------------ practice ------------------------------- */
+  /* ------------------------------- layouts ------------------------------- */
 
-  if (isAiMode) {
-    return (
-      <div className="match-stage match-stage--solo">
+  // Four layouts share one tree, and the board sits at the same place in all
+  // of them: the second child of the root, after a slot that may be empty.
+  // React keeps a child mounted only while its position in the tree holds, and
+  // the boss key flips layouts at will. With separate trees per layout every
+  // flip mounted a new Board, which threw away the sketches, the scroll and
+  // the centring, and whose auto-disguise put the disguise straight back on,
+  // so the star could never peek at the real game.
+  //
+  // Disguised, the whole window becomes one Sheets document. Roster, rail and
+  // chat are unmounted rather than hidden, so nothing of the game's own UI can
+  // flash through; the board (which draws the Sheets chrome around itself)
+  // fills the main column, chat reappears as the comments panel, and the
+  // Workspace strip closes off the right edge the way real Sheets does. One
+  // shell serves practice, desktop and phone alike.
+  const layout: 'sheet' | 'solo' | 'desktop' | 'mobile' = sheetDisguise
+    ? 'sheet'
+    : isAiMode
+    ? 'solo'
+    : isDesktop
+    ? 'desktop'
+    : 'mobile';
+
+  const rootClassName =
+    layout === 'sheet'
+      ? 'sheet-shell fixed inset-0 z-[45] flex bg-white'
+      : layout === 'solo'
+      ? 'match-stage match-stage--solo'
+      : 'match-stage';
+
+  return (
+    <div className={rootClassName}>
+      {layout === 'sheet' ? null : (
         <div className="area-left">
           {headerNode}
           {rosterNode}
-          <div className="flex-1 min-h-0" />
+          {layout !== 'mobile' && <div className="flex-1 min-h-0" />}
         </div>
-        <div className="area-board pt-2">
+      )}
+
+      {/* The board's slot. In the shell the board node, which centres its
+          content for the game's own layout, has to stretch instead, or the
+          Sheets chrome would shrink to the grid. */}
+      <div
+        className={
+          layout === 'sheet' ? 'flex min-h-0 min-w-0 flex-1 flex-col *:min-h-0 *:items-stretch' : 'area-board pt-2'
+        }
+      >
+        {layout === 'solo' || layout === 'desktop' ? (
           <div className="mx-auto mb-2 w-full max-w-[1200px]">{actionsCell()}</div>
-          {boardNode}
-        </div>
-        {lightbox}
+        ) : null}
+        {boardNode}
       </div>
-    );
-  }
 
-  /* --------------------------------- desktop -------------------------------- */
+      {layout === 'sheet' ? (
+        <>
+          {commentsOpen && <SheetComments onOpenImage={setLightboxImage} />}
+          <SheetSideStrip />
+        </>
+      ) : null}
 
-  if (isDesktop) {
-    return (
-      <div className="match-stage">
-        <div className="area-left">
-          {headerNode}
-          {rosterNode}
-          <div className="flex-1 min-h-0" />
-        </div>
-
-        <div className="area-board pt-2">
-          <div className="mx-auto mb-2 w-full max-w-[1200px]">{actionsCell()}</div>
-          {boardNode}
-        </div>
-
+      {layout === 'desktop' ? (
         <aside className="area-right flex min-h-0 flex-col overflow-hidden">
           <div className="shrink-0 border-b border-line">
             {chatHeader}
@@ -533,117 +695,104 @@ export const GameControls: React.FC<GameControlsProps> = ({
             {composer}
           </div>
         </aside>
+      ) : null}
 
-        {lightbox}
-      </div>
-    );
-  }
-
-  /* --------------------------------- mobile --------------------------------- */
-
-  return (
-    <div className="match-stage">
-      <div className="area-left">
-        {headerNode}
-        {rosterNode}
-      </div>
-
-      <div className="area-board pt-2">
-        {boardNode}
-      </div>
-
-      <div className="area-actions flex flex-col w-full">
-        {actionsCell()}
-      </div>
-
-      {/* The chat bar is fixed over the bottom of the screen, so the page ends
-          in a strip exactly as tall as the bar. Without it the bar sat on the
-          action rail, and no amount of scrolling brought the rail out from
-          under it. */}
-      <div style={{ height: `calc(${CHAT_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom))` }} />
-
-      <div
-        className="fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-40 border-t border-line bg-surface p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]"
-        style={{ height: CHAT_BAR_HEIGHT_PX }}
-      >
-        <button
-          ref={chatBarRef}
-          type="button"
-          onClick={() => setIsChatOpen(true)}
-          aria-label={
-            unreadCount > 0
-              ? `Open chat, ${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`
-              : 'Open chat'
-          }
-          aria-expanded={isChatOpen}
-          aria-controls="chat-sheet"
-          aria-describedby="chat-bar-preview"
-          className="flex h-full w-full items-center justify-between gap-2 rounded-full bg-surface-2 px-4 text-left transition-colors hover:bg-surface-3"
-        >
-          {/* One line, always. A long or multi-line message would otherwise
-              grow the bar past the strip the page reserves for it. */}
-          <div className="flex min-w-0 items-center gap-2">
-            <span id="chat-bar-preview" className="min-w-0 truncate text-[13px] font-medium text-muted">
-              {lastMessagePreview}
-            </span>
-            {unreadCount > 0 && (
-              <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-danger-solid text-danger-fg text-[10px] font-semibold leading-none">
-                {unreadCount}
-              </span>
-            )}
+      {layout === 'mobile' ? (
+        <>
+          <div className="area-actions flex flex-col w-full">
+            {actionsCell()}
           </div>
-          <ChevronUp size={16} className="shrink-0 text-subtle" />
-        </button>
-      </div>
 
-      {/* Without a scrim a tap above the open sheet landed on the page
-          underneath, board cells included. It sits over the bar (z-40) and
-          under the sheet (z-50). */}
-      {isChatOpen && (
-        <div
-          className="fixed inset-0 z-[45] bg-[var(--ui-scrim)] backdrop-blur-[2px]"
-          onClick={closeChatSheet}
-          aria-hidden="true"
-        />
-      )}
+          {/* The chat bar is fixed over the bottom of the screen, so the page ends
+              in a strip exactly as tall as the bar. Without it the bar sat on the
+              action rail, and no amount of scrolling brought the rail out from
+              under it. */}
+          <div style={{ height: `calc(${CHAT_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom))` }} />
 
-      {/* Closed, the sheet is only moved off screen, so it is made inert too.
-          Otherwise a screen reader read out a chat nobody could see, and Tab
-          reached its composer, which could still send. */}
-      <div
-        id="chat-sheet"
-        ref={sheetRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="chat-sheet-title"
-        aria-hidden={isChatOpen ? undefined : true}
-        inert={!isChatOpen}
-        tabIndex={-1}
-        onKeyDown={trapSheetFocus}
-        className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl outline-none border-t border-line bg-surface shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
-          isChatOpen ? 'translate-y-0' : 'translate-y-full'
-        }`}
-        style={{
-          height: '80dvh',
-          paddingBottom: 'env(safe-area-inset-bottom)',
-        }}
-      >
-        <div className="flex shrink-0 items-center justify-between border-b border-line px-2 py-1">
-          <h2 id="chat-sheet-title" className="px-2 text-base text-ink">Chat</h2>
-          <button
-            type="button"
-            onClick={closeChatSheet}
-            className="btn btn-ghost btn-icon h-10 w-10 shrink-0 text-muted hover:bg-surface-2 hover:text-ink"
-            aria-label="Close chat"
+          <div
+            className="fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-40 border-t border-line bg-surface p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]"
+            style={{ height: CHAT_BAR_HEIGHT_PX }}
           >
-            <ChevronDown size={20} strokeWidth={2} />
-          </button>
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col p-3 pb-0">{chatFeed}</div>
-        <div className="shrink-0 p-3 shadow-[0_-8px_16px_-8px_rgba(0,0,0,0.05)]">
-          {composer}
-        </div>
-      </div>
+            <button
+              ref={chatBarRef}
+              type="button"
+              onClick={() => setIsChatOpen(true)}
+              aria-label={
+                unreadCount > 0
+                  ? `Open chat, ${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`
+                  : 'Open chat'
+              }
+              aria-expanded={isChatOpen}
+              aria-controls="chat-sheet"
+              aria-describedby="chat-bar-preview"
+              className="flex h-full w-full items-center justify-between gap-2 rounded-full bg-surface-2 px-4 text-left transition-colors hover:bg-surface-3"
+            >
+              {/* One line, always. A long or multi-line message would otherwise
+                  grow the bar past the strip the page reserves for it. */}
+              <div className="flex min-w-0 items-center gap-2">
+                <span id="chat-bar-preview" className="min-w-0 truncate text-[13px] font-medium text-muted">
+                  {lastMessagePreview}
+                </span>
+                {unreadCount > 0 && (
+                  <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-danger-solid text-danger-fg text-[10px] font-semibold leading-none">
+                    {unreadCount}
+                  </span>
+                )}
+              </div>
+              <ChevronUp size={16} className="shrink-0 text-subtle" />
+            </button>
+          </div>
+
+          {/* Without a scrim a tap above the open sheet landed on the page
+              underneath, board cells included. It sits over the bar (z-40) and
+              under the sheet (z-50). */}
+          {isChatOpen && (
+            <div
+              className="fixed inset-0 z-[45] bg-[var(--ui-scrim)] backdrop-blur-[2px]"
+              onClick={closeChatSheet}
+              aria-hidden="true"
+            />
+          )}
+
+          {/* Closed, the sheet is only moved off screen, so it is made inert too.
+              Otherwise a screen reader read out a chat nobody could see, and Tab
+              reached its composer, which could still send. */}
+          <div
+            id="chat-sheet"
+            ref={sheetRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="chat-sheet-title"
+            aria-hidden={isChatOpen ? undefined : true}
+            inert={!isChatOpen}
+            tabIndex={-1}
+            onKeyDown={trapSheetFocus}
+            className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl outline-none border-t border-line bg-surface shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
+              isChatOpen ? 'translate-y-0' : 'translate-y-full'
+            }`}
+            style={{
+              height: '80dvh',
+              paddingBottom: 'env(safe-area-inset-bottom)',
+            }}
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-line px-2 py-1">
+              <h2 id="chat-sheet-title" className="px-2 text-base text-ink">Chat</h2>
+              <button
+                type="button"
+                onClick={closeChatSheet}
+                className="btn btn-ghost btn-icon h-10 w-10 shrink-0 text-muted hover:bg-surface-2 hover:text-ink"
+                aria-label="Close chat"
+              >
+                <ChevronDown size={20} strokeWidth={2} />
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col p-3 pb-0">{chatFeed}</div>
+            <div className="shrink-0 p-3 shadow-[0_-8px_16px_-8px_rgba(0,0,0,0.05)]">
+              {composer}
+            </div>
+          </div>
+        </>
+      ) : null}
 
       {lightbox}
     </div>

@@ -3,19 +3,21 @@ import { WifiOff } from 'lucide-react';
 import type { ConfirmSpec } from './OnlineRoomTypes';
 import { formatReconnectDuration } from '../../shared/utils/formatDuration';
 
-export const RoomConfirmDialog: React.FC<{ spec: ConfirmSpec | null; onDismiss: () => void }> = ({ spec, onDismiss }) => {
+/** `sheet`: the Spreadsheet disguise is up, so the dialog asks in its Sheets wording. */
+export const RoomConfirmDialog: React.FC<{ spec: ConfirmSpec | null; onDismiss: () => void; sheet?: boolean }> = ({ spec, onDismiss, sheet = false }) => {
   if (!spec) return null;
+  const copy = sheet ? spec.sheet : spec;
   return (
     <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby="room-confirm-title">
       <div className="w-full max-w-sm space-y-4 rounded-lg border border-line bg-surface p-6">
         <div className="space-y-1.5">
-          <h3 id="room-confirm-title" className="text-base font-semibold text-ink">{spec.title}</h3>
-          <p className="text-xs leading-relaxed text-muted">{spec.body}</p>
+          <h3 id="room-confirm-title" className="text-base font-semibold text-ink">{copy.title}</h3>
+          <p className="text-xs leading-relaxed text-muted">{copy.body}</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={onDismiss} className="btn btn-secondary btn-sm flex-1" autoFocus>{spec.cancelLabel ?? 'Cancel'}</button>
+          <button onClick={onDismiss} className="btn btn-secondary btn-sm flex-1" autoFocus>{copy.cancelLabel ?? 'Cancel'}</button>
           <button onClick={() => { const run = spec.onConfirm; onDismiss(); run(); }} className={`btn btn-sm flex-1 ${spec.tone === 'danger' ? 'btn-danger' : 'btn-primary'}`}>
-            {spec.confirmLabel}
+            {copy.confirmLabel}
           </button>
         </div>
       </div>

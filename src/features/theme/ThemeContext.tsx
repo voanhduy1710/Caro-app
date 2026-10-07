@@ -17,7 +17,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_KEY = 'caro_app_theme_settings';
 
-const VALID_BOARD_THEMES: BoardTheme[] = ['graph_paper', 'light_wood', 'laser_futuristic', 'classic_wood'];
+const VALID_BOARD_THEMES: BoardTheme[] = ['graph_paper', 'light_wood', 'laser_futuristic', 'classic_wood', 'spreadsheet'];
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<ThemeSettings>(() => {

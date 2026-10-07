@@ -3,11 +3,19 @@ import type { UserProfile } from '../auth/AuthContext';
 import type { RoomApi } from './useRoom';
 import type { Member } from './roomEngine';
 
-export type ConfirmSpec = {
+export type ConfirmCopy = {
   title: string;
   body: string;
   confirmLabel: string;
   cancelLabel?: string;
+};
+
+export type ConfirmSpec = ConfirmCopy & {
+  /**
+   * The same question in Sheets' Vietnamese, shown instead while the
+   * Spreadsheet disguise is up, since its menus reach these confirms too.
+   */
+  sheet: Required<ConfirmCopy>;
   tone?: 'danger' | 'default';
   onConfirm: () => void;
 };
