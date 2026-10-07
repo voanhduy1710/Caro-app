@@ -7,9 +7,8 @@ export type DismissReason = 'escape' | 'outside' | 'resize';
  * window resizes (the panel is positioned from a measured anchor, which a
  * resize invalidates).
  *
- * Escape is caught on the capture phase and marked handled, so the boss-key
- * listener in SheetChrome, which skips handled events, closes the menu first
- * instead of also flipping to the fake report.
+ * Escape is caught on the capture phase and marked handled, so the chrome's
+ * own Escape (closing the help dialog) leaves that press alone.
  */
 export const useDismiss = (
   open: boolean,

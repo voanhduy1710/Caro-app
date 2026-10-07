@@ -2,7 +2,7 @@ import { columnLabel } from '../../../shared/utils/gomokuLogic';
 import { formatNumber } from './sheetStyle';
 
 /**
- * The two fake reports ESC flips to. They have to survive a second look, so
+ * The two fake reports Ctrl+Q flips to. They have to survive a second look, so
  * the totals really are the sums of their lines, every percentage really is
  * computed from its row, and the formula bar shows the formula that would
  * produce each derived cell. All amounts are kept in millions of đồng and

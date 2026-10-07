@@ -68,8 +68,6 @@ export const CHAT_BACKLOG_SIZE = 50;
 export const CHAT_QUOTES_SIZE = 100;
 /** How much of the answered message a reply carries. */
 export const CHAT_QUOTE_MAX = 120;
-/** Images held back from a seated player during a game, per player. */
-export const HELD_IMAGES_PER_MEMBER = 10;
 export const BUZZ_INTERVAL_MS = 2_000;
 export const MALFORMED_WINDOW_MS = 10_000;
 export const MALFORMED_KICK_COUNT = 3;
@@ -256,7 +254,6 @@ export interface HostBook {
    * here, so nobody can put words in someone else's mouth with a fake quote.
    */
   recentQuotes: ChatQuote[];
-  heldImages: Array<{ to: string; message: RoomChatMessage }>;
 }
 
 export interface EngineState {

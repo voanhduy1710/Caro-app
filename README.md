@@ -41,9 +41,18 @@ A real-time **Caro (Gomoku / Five-in-a-Row)** web application built with **React
 
 ### Chat
 - Live room chat with **reply and quote** (tap a quote to jump to the original message)
-- Image, meme and GIF attachments
+- Image, meme and GIF attachments, delivered live even mid-game; click any image to view it full size
+- Animated Yahoo Messenger-style emotes with text shortcuts such as `=))`
 - Quick reactions, a buzz, and a tease that targets a player
 - Sound and unread indicators
+
+### Spreadsheet disguise (boss key)
+- Pick the **Spreadsheet** board theme and the match is dressed as a Google Sheets file: toolbar, menus, sheet tabs and a grid that runs past the board
+- **Ctrl+Q** is the boss key: it flips instantly between the board and a convincing fake finance report, and works even while you are typing
+- The chat becomes the **Comments** panel, with letter avatars, replies, emotes and image attachments (click to zoom)
+- **Ctrl+`** opens and closes the comments panel (Ctrl+Alt+M works too); opening it puts the caret straight in the comment box
+- Other Sheets shortcuts map to game actions: Ctrl+Z take-back, Ctrl+Y rematch, Ctrl+plus / Ctrl+minus / Ctrl+0 zoom, Ctrl+/ shows every shortcut
+- Game sounds are muted while the fake report is on screen
 
 ### Ratings and ranks
 - **ELO rating** (K-factor 32) computed on the server, never by the client
@@ -60,7 +69,7 @@ A real-time **Caro (Gomoku / Five-in-a-Row)** web application built with **React
 
 ### Interface
 - Coordinates, move simulations, display preferences (coordinates, last-move marker, sound)
-- Board themes (graph paper, light wood, classic wood, laser), piece styles and custom piece colours
+- Board themes (graph paper, bamboo, laser grid, spreadsheet), piece styles and custom piece colours
 - Light and dark appearance that follows your system setting
 - Responsive layout down to 320px phones, with a modal chat sheet on mobile
 - Respects `prefers-reduced-motion`

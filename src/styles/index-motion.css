@@ -184,20 +184,19 @@
 }
 
 /* Graph paper is the only board that follows the app theme, so it is the only
-   one whose focus ring can. The other three are fixed materials: on them
+   one whose focus ring can. The others are fixed materials: on them
    --ui-text is whatever the app theme says, which put a near-white ring on
    bamboo at 1.10:1 and a navy ring on the laser grid at 1.42:1. Each fixed
    board pins a ring measured against its own tile instead. */
-.board-theme-light-wood .board-cell:focus-visible,
-.board-theme-classic-wood .board-cell:focus-visible {
-  outline-color: #0d2b45;  /* 11.78:1 on bamboo, 4.22:1 on classic wood */
+.board-theme-light-wood .board-cell:focus-visible {
+  outline-color: #0d2b45;  /* 11.78:1 on bamboo */
 }
 
 .board-theme-laser-futuristic .board-cell:focus-visible {
   outline-color: #ffffff;  /* 20.23:1 on the grid, and not a piece colour */
 }
 
-/* Spreadsheet stays white regardless of app theme, like the other three fixed
+/* Spreadsheet stays white regardless of app theme, like the other fixed
    materials, so its ring is pinned too: --ui-text can land near-white in dark
    mode, which would vanish on this board's own white cells. */
 .board-theme-spreadsheet .board-cell:focus-visible {
@@ -301,41 +300,10 @@
   box-shadow: inset 0 0 15px #e879f9, 0 0 20px #FAE0F7 !important;
 }
 
-/* 4. Warm mahogany wood */
-.board-theme-classic-wood {
-  background-color: #c47842 !important;
-  background-image:
-    repeating-linear-gradient(0deg, rgba(70, 30, 10, 0.08) 0px, rgba(70, 30, 10, 0.08) 1px, transparent 1px, transparent 4px),
-    repeating-linear-gradient(90deg, rgba(255, 235, 200, 0.07) 0px, rgba(255, 235, 200, 0.07) 2px, transparent 2px, transparent 18px),
-    linear-gradient(135deg, #d4874e 0%, #ab5e2a 100%) !important;
-  box-shadow: inset 0 0 40px rgba(90, 40, 15, 0.5), 0 10px 0 #6d3413, 0 24px 44px -18px rgba(25, 10, 2, 0.55) !important;
-  border: 6px solid #8f441b !important;
-}
-
-.board-theme-classic-wood .board-grid-inner {
-  border-top: 1.5px solid #fef3c7 !important;
-  border-left: 1.5px solid #fef3c7 !important;
-  box-shadow: 0 0 3px rgba(254, 243, 199, 0.4) !important;
-}
-
-.board-theme-classic-wood .board-cell {
-  background: rgba(196, 120, 66, 0.85) !important;
-  border-right: 1.5px solid #fef3c7 !important;
-  border-bottom: 1.5px solid #fef3c7 !important;
-  box-shadow: inset 0 0 3px rgba(100, 45, 15, 0.2);
-  border-radius: 0 !important;
-}
-
-.board-theme-classic-wood .board-cell:hover:not(:disabled) {
-  background: rgba(230, 150, 90, 0.95) !important;
-  border-color: #ffffff !important;
-  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.3);
-}
-
-/* 5. Spreadsheet - the "boss key" skin. Not a board on a page but the page
+/* 4. Spreadsheet - the "boss key" skin. Not a board on a page but the page
       itself: a real sheet's grid with pinned letter and number headers that
       runs on past the board. Fixed to Sheets' own palette rather than the app
-      theme, same as the other three materials above. */
+      theme, same as the other materials above. */
 .board-scroll-container.board-theme-spreadsheet {
   background-color: #ffffff;
   border: none;

@@ -89,11 +89,11 @@ const foreignModalOpen = () =>
 /**
  * The window-level keys while the Spreadsheet board is on screen.
  *
- * Escape is the boss key: from the real game UI it puts the disguise on and
+ * Ctrl+Q is the boss key: from the real game UI it puts the disguise on and
  * jumps to the fake report; while disguised it flips between the report and
  * the board. The comments panel is closed on the way to the report, since the
- * chat is the one part of the page that reads as a game. Open dropdowns catch
- * Escape first (see useDismiss) and mark it handled, so it closes them instead.
+ * chat is the one part of the page that reads as a game. Escape is left to
+ * close dialogs, dropdowns and the like.
  */
 const handleSheetKey = (event: KeyboardEvent, toggleCompact: () => void) => {
   if (event.defaultPrevented) return;
@@ -103,23 +103,24 @@ const handleSheetKey = (event: KeyboardEvent, toggleCompact: () => void) => {
     if (ui.helpOpen) {
       event.preventDefault();
       updateSheetUi({ helpOpen: false });
-      return;
     }
-    // A text field keeps its own Escape, except the comment composer: someone
-    // caught mid-message needs the boss key most, and the draft vanishing
-    // with the panel is part of the cover.
-    const inComments = event.target instanceof Element && Boolean(event.target.closest('[data-sheet-comments]'));
-    if (isEditableTarget(event.target) && !inComments) return;
+    return;
+  }
+
+  // Matched on the physical key so it works on any layout. Ctrl+Q types
+  // nothing, so it fires from text fields too: someone caught mid-message
+  // needs the boss key most.
+  if (event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey && event.code === 'KeyQ') {
+    event.preventDefault();
+    if (ui.helpOpen) updateSheetUi({ helpOpen: false });
     if (foreignModalOpen()) {
       // A game dialog (a take-back request, a confirm, Settings) is exactly
       // when the panic key matters most. The report goes up anyway and global
-      // CSS hides the dialog under it until the player flips back. The key is
-      // left unhandled so a dialog that closes on Escape still does.
+      // CSS hides the dialog under it until the player flips back.
       if (!getDisguised()) setDisguised(true);
       updateSheetUi({ view: 'finance', commentsOpen: false });
       return;
     }
-    event.preventDefault();
     if (!getDisguised()) {
       setDisguised(true);
       updateSheetUi({ view: 'finance', commentsOpen: false });
@@ -128,6 +129,15 @@ const handleSheetKey = (event: KeyboardEvent, toggleCompact: () => void) => {
     } else {
       updateSheetUi({ view: 'game' });
     }
+    return;
+  }
+
+  // Ctrl+` opens and closes the comments (the match chat). Like the boss key it
+  // fires from the comment box too, so the panel can be shut mid-message.
+  if (event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey && event.code === 'Backquote') {
+    if (!getDisguised() || foreignModalOpen()) return;
+    event.preventDefault();
+    toggleSheetComments();
     return;
   }
 

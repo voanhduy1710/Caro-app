@@ -509,7 +509,6 @@ export const Board: React.FC<BoardProps> = ({
   const getBoardThemeClass = () => {
     if (theme.boardTheme === 'light_wood') return 'board-theme-light-wood';
     if (theme.boardTheme === 'laser_futuristic') return 'board-theme-laser-futuristic';
-    if (theme.boardTheme === 'classic_wood') return 'board-theme-classic-wood';
     if (theme.boardTheme === 'spreadsheet') return 'board-theme-spreadsheet';
     return 'board-theme-graph-paper';
   };

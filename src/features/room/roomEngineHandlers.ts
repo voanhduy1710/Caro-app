@@ -1,7 +1,7 @@
 import { checkWin } from '../../shared/utils/gomokuLogic';
 import { cutToCodePoints, isAllowedSettings, MAX_NAME_CODE_POINTS, sanitizeProfile } from './protocol';
 import type { IntentPayloads, RatingReportStatus, RoomChatMessage, Seat } from './protocol';
-import { BUZZ_INTERVAL_MS, CHAT_BACKLOG_SIZE, CHAT_IMAGE_MAX, CHAT_QUOTE_MAX, CHAT_QUOTES_SIZE, CHAT_MIN_INTERVAL_MS, CHAT_TEXT_MAX, CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, DOUBLE_DOWN_ANSWER_MOVES, GRACE_MS, HELD_IMAGES_PER_MEMBER, INSTANT_UNDO_MS, MAX_MEMBERS, OFFER_TTL_MS, RATING_DELTA_MAX, REFUND_AFTER_LAST_SEEN_MS, ROOM_IMAGE_INTERVAL_MS, STALE_MOVER_MS, TEASE_PAIR_COOLDOWN_MS, TEASE_SENDER_COOLDOWN_MS } from './roomEngineTypes';
+import { BUZZ_INTERVAL_MS, CHAT_BACKLOG_SIZE, CHAT_IMAGE_MAX, CHAT_QUOTE_MAX, CHAT_QUOTES_SIZE, CHAT_MIN_INTERVAL_MS, CHAT_TEXT_MAX, CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, DOUBLE_DOWN_ANSWER_MOVES, GRACE_MS, INSTANT_UNDO_MS, MAX_MEMBERS, OFFER_TTL_MS, RATING_DELTA_MAX, REFUND_AFTER_LAST_SEEN_MS, ROOM_IMAGE_INTERVAL_MS, STALE_MOVER_MS, TEASE_PAIR_COOLDOWN_MS, TEASE_SENDER_COOLDOWN_MS } from './roomEngineTypes';
 import type { EngineEnv, EngineState, Member } from './roomEngineTypes';
 import type { ChatQuote } from '../webrtc/types';
 import { activeSeats, boardFromMoves, bothSeatedAndConnected, findMember, nextSeat, occupant, otherSeat, pieceAt, playerRef, seatOf, turnLimitMs } from './roomEngineHelpers';
@@ -516,7 +516,7 @@ export const handleCoinCall = (d: EngineState, m: Member, p: IntentPayloads['COI
 };
 
 export const handleChat = (d: EngineState, m: Member, p: IntentPayloads['CHAT'], ctx: Ctx): void => {
-  const { host, room } = d;
+  const { host } = d;
   const text = p.text.trim();
   const image = p.image;
   if (!text && !image) return reject(ctx, m.id, 'CHAT', 'empty');
@@ -550,22 +550,9 @@ export const handleChat = (d: EngineState, m: Member, p: IntentPayloads['CHAT'],
   if (image === undefined) {
     host.chatBacklog = [...host.chatBacklog, message].slice(-CHAT_BACKLOG_SIZE);
   }
-  // Every message shares one ordered channel with the moves, so an image
-  // relayed to a player mid-game would queue their opponent's move behind it
-  // while the host's clock charges them. Players get images when play stops.
-  const holdFor =
-    image !== undefined && room.phase === 'playing'
-      ? activeSeats(room.settings).map((s) => room.seats[s]).filter((id): id is string => id !== null && id !== m.id)
-      : [];
-  for (const to of holdFor) {
-    const mine = host.heldImages.filter((h) => h.to === to);
-    if (mine.length >= HELD_IMAGES_PER_MEMBER) {
-      const oldest = mine[0];
-      host.heldImages = host.heldImages.filter((h) => h !== oldest);
-    }
-    host.heldImages.push({ to, message });
-  }
-  ctx.events.push({ kind: 'broadcast', message: { type: 'CHAT', payload: { message } }, except: [m.id, ...holdFor] });
+  // Images go out live, mid-game included: shrinkImage and CHAT_IMAGE_MAX keep
+  // one small enough that a move queued behind it on the channel barely waits.
+  ctx.events.push({ kind: 'broadcast', message: { type: 'CHAT', payload: { message } }, except: [m.id] });
 };
 
 export const handleBuzz = (d: EngineState, m: Member, ctx: Ctx): void => {

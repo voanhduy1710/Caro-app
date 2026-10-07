@@ -5,6 +5,7 @@ import type { ChatMessage, ChatQuote } from '../webrtc/types';
 import { renderWithEmotes } from './chatEmotes';
 import { EmoteInput } from './EmoteInput';
 import { GameReactionPicker } from './GameReactionPicker';
+import { processImageFile } from './GameControlsShared';
 
 /**
  * The match chat, dressed as Google Sheets' comments panel. While the
@@ -144,14 +145,11 @@ const CommentCard: React.FC<CommentCardProps> = ({ message, mine, onOpenImage, o
         <button
           type="button"
           onClick={() => onOpenImage?.(message.image as string)}
-          className="mt-2 flex items-center gap-2 rounded-md border border-[#dadce0] bg-white p-1.5 pr-3 text-left text-[12px] text-[#3c4043] hover:bg-[#f1f3f4]"
+          className="mt-2 block cursor-zoom-in overflow-hidden rounded-md border border-[#dadce0] bg-white transition-opacity hover:opacity-90"
           title="Xem hình ảnh"
+          aria-label="Xem hình ảnh đính kèm"
         >
-          <img src={message.image} alt="" className="h-12 w-12 shrink-0 rounded object-cover" />
-          <span className="flex items-center gap-1.5">
-            <ImageIcon size={14} strokeWidth={2} color="#5f6368" aria-hidden="true" />
-            Hình ảnh đính kèm
-          </span>
+          <img src={message.image} alt="Hình ảnh đính kèm" className="block max-h-44 max-w-full object-contain" />
         </button>
       )}
 
@@ -180,6 +178,8 @@ export const SheetComments: React.FC<SheetCommentsProps> = ({ onOpenImage }) => 
   const allMessages = available && chat ? chat.messages : null;
   const messages = useMemo(() => (allMessages ? allMessages.filter((message) => !message.system) : []), [allMessages]);
   const [draft, setDraft] = useState('');
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [replyTarget, setReplyingTo] = useState<ChatMessage | null>(null);
   // A reply to a comment that has since left the list has nothing to point at.
   const replyingTo = replyTarget && messages.some((message) => message.id === replyTarget.id) ? replyTarget : null;
@@ -200,6 +200,12 @@ export const SheetComments: React.FC<SheetCommentsProps> = ({ onOpenImage }) => 
   }, [messages.length]);
 
 
+  // Opening the panel puts the caret in the comment box, ready to type. Not on
+  // a touch screen, where focusing would throw the keyboard over the panel.
+  useLayoutEffect(() => {
+    if (window.matchMedia?.('(pointer: fine)').matches) inputRef.current?.focus();
+  }, []);
+
   const handleScroll = () => {
     const el = listRef.current;
     if (!el) return;
@@ -213,11 +219,29 @@ export const SheetComments: React.FC<SheetCommentsProps> = ({ onOpenImage }) => 
 
   const submit = () => {
     const text = draft.trim();
-    if (!text || !chat || !available) return;
-    chat.send(text, replyingTo ?? undefined);
+    if ((!text && !attachedImage) || !chat || !available) return;
+    chat.send(text, attachedImage ?? undefined, replyingTo ?? undefined);
     setDraft('');
+    setAttachedImage(null);
     setReplyingTo(null);
     stickRef.current = true;
+  };
+
+  const attachFile = async (file: File | null | undefined) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    try {
+      setAttachedImage(await processImageFile(file));
+    } catch (err) {
+      console.error('Failed to process comment image:', err);
+    }
+  };
+
+  /** A pasted image becomes the attachment; pasted text goes in as usual. */
+  const handlePaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const item = Array.from(event.clipboardData?.items ?? []).find((entry) => entry.type.startsWith('image/'));
+    if (!item) return;
+    event.preventDefault();
+    void attachFile(item.getAsFile());
   };
 
   /** Puts the emote's shortcut at the caret, the way the game's chat does. */
@@ -241,9 +265,6 @@ export const SheetComments: React.FC<SheetCommentsProps> = ({ onOpenImage }) => 
   return (
     <aside
       aria-label="Nhận xét"
-      // Lets the boss key fire while the player is typing a comment (see
-      // SheetChrome's key handler), which is exactly when it is most needed.
-      data-sheet-comments=""
       className="fixed inset-0 z-[55] flex flex-col bg-white md:static md:z-auto md:w-[360px] md:shrink-0 md:border-l md:border-[#e0e0e0]"
       style={{ fontFamily: SHEET_FONT }}
     >
@@ -325,11 +346,33 @@ export const SheetComments: React.FC<SheetCommentsProps> = ({ onOpenImage }) => 
             available ? 'border-[#c4c7c5] focus-within:border-[#0b57d0]' : 'border-[#e0e0e0] bg-[#f8f9fa]'
           }`}
         >
+          {attachedImage && (
+            <div className="relative mb-2 inline-block">
+              <button
+                type="button"
+                onClick={() => onOpenImage?.(attachedImage)}
+                className="block cursor-zoom-in overflow-hidden rounded-md border border-[#dadce0]"
+                title="Xem hình ảnh"
+              >
+                <img src={attachedImage} alt="Hình ảnh sẽ gửi" className="block max-h-24 max-w-[200px] object-contain" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setAttachedImage(null)}
+                title="Xóa hình ảnh"
+                aria-label="Xóa hình ảnh"
+                className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full border border-[#dadce0] bg-white text-[#444746] shadow-sm hover:bg-[#f1f3f4]"
+              >
+                <X size={13} strokeWidth={2.25} aria-hidden="true" />
+              </button>
+            </div>
+          )}
           {available ? (
             <EmoteInput
               inputRef={inputRef}
               value={draft}
               onChange={setDraft}
+              onPaste={handlePaste}
               onKeyDown={(event) => {
                 // Enter sends, Shift+Enter breaks the line. A Vietnamese input
                 // method commits its word on Enter too, so that one is left alone.
@@ -337,7 +380,6 @@ export const SheetComments: React.FC<SheetCommentsProps> = ({ onOpenImage }) => 
                   event.preventDefault();
                   submit();
                 } else if (event.key === 'Escape' && replyingTo) {
-                  // Handled here so the boss key does not also fire.
                   event.preventDefault();
                   setReplyingTo(null);
                 }
@@ -362,11 +404,32 @@ export const SheetComments: React.FC<SheetCommentsProps> = ({ onOpenImage }) => 
             >
               <Smile size={18} strokeWidth={2} aria-hidden="true" />
             </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!available}
+              title="Chèn hình ảnh"
+              aria-label="Chèn hình ảnh"
+              className="grid h-8 w-8 place-items-center rounded-full text-[#444746] transition-colors hover:bg-[rgba(68,71,70,0.08)] disabled:text-[#80868b] disabled:hover:bg-transparent"
+            >
+              <ImageIcon size={18} strokeWidth={2} aria-hidden="true" />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="hidden"
+              onChange={(event) => {
+                void attachFile(event.target.files?.[0]);
+                event.target.value = '';
+              }}
+            />
             <span className="flex-1" />
             <button
               type="button"
               onClick={() => {
                 setDraft('');
+                setAttachedImage(null);
                 setReplyingTo(null);
               }}
               disabled={!available}
@@ -376,7 +439,7 @@ export const SheetComments: React.FC<SheetCommentsProps> = ({ onOpenImage }) => 
             </button>
             <button
               type="submit"
-              disabled={!available || !draft.trim()}
+              disabled={!available || (!draft.trim() && !attachedImage)}
               className="h-9 rounded-full bg-[#0b57d0] px-4 text-[14px] font-medium text-white transition-colors hover:bg-[#0a4ab4] disabled:bg-[rgba(31,31,31,0.12)] disabled:text-[rgba(31,31,31,0.38)]"
             >
               {replyingTo ? 'Trả lời' : 'Nhận xét'}

@@ -2,7 +2,7 @@ import type { RoomSettings } from '../settings/types';
 import type { EventKind, IntentType, RejectReason, Seat } from './protocol';
 import { COUNTDOWN_MS, RESULTS_CEILING, RESULTS_KEPT, SEAT_LOG_CAP } from './roomEngineTypes';
 import type { Clocks, EngineEnv, EngineEvent, EngineResult, EngineState, Game, GameResult, Member, RatingOutcome, RatingState, Reply, ResultReason, SeatChange } from './roomEngineTypes';
-import { activeSeats, bankLimitMs, bothSeatedAndConnected, findMember, liveClocks, liveClocksAt, occupant, playerRef, ratingDecision, turnLimitMs } from './roomEngineHelpers';
+import { activeSeats, bankLimitMs, bothSeatedAndConnected, liveClocks, liveClocksAt, occupant, playerRef, ratingDecision, turnLimitMs } from './roomEngineHelpers';
 import { toWire } from './roomEngineCore';
 
 export interface Ctx {
@@ -49,7 +49,6 @@ export const cloneState = (state: EngineState): EngineState => {
       chatBacklog: [...h.chatBacklog],
       // Older saved rooms predate quotes.
       recentQuotes: [...(h.recentQuotes ?? [])],
-      heldImages: [...h.heldImages],
     },
   };
 };
@@ -289,7 +288,6 @@ export const removeMember = (d: EngineState, memberId: string, ctx: Ctx): void =
     const [from, to] = key.split('>');
     if (from === memberId || to === memberId) delete host.teaseByPair[key];
   }
-  host.heldImages = host.heldImages.filter((h) => h.to !== memberId);
   markSubmitterGone(d, memberId);
   ctx.events.push({ kind: 'member_removed', memberId });
 };
@@ -392,14 +390,6 @@ export const runStartChecks = (d: EngineState, ctx: Ctx): void => {
 
 export const finalize = (before: EngineState, d: EngineState, ctx: Ctx): EngineResult => {
   runStartChecks(d, ctx);
-
-  // Images held back from the players during a game go out as soon as play stops.
-  if (d.room.phase !== 'playing' && d.host.heldImages.length > 0) {
-    for (const held of d.host.heldImages) {
-      if (findMember(d, held.to)) ctx.replies.push({ to: held.to, message: { type: 'CHAT', payload: { message: held.message } } });
-    }
-    d.host.heldImages = [];
-  }
 
   const changed = JSON.stringify(before.room) !== JSON.stringify(d.room);
   if (changed) d.room.rev = before.room.rev + 1;

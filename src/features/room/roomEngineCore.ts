@@ -46,7 +46,7 @@ export const createRoom = (opts: CreateRoomOptions, now: number, env: EngineEnv 
       hostMemberId: hostId, tokens: {}, tabIds: opts.hostTabId ? { [hostId]: opts.hostTabId } : {},
       lastSeenAt: {}, graceEndsAt: {}, runningSince: null, countdownEndsAt: null, teaseBySender: {},
       teaseByPair: {}, lastChatAt: {}, lastImageAt: null, lastBuzzAt: {}, malformedAt: {},
-      chatBacklog: [], recentQuotes: [], heldImages: [],
+      chatBacklog: [], recentQuotes: [],
     },
   };
 };
@@ -77,7 +77,6 @@ export interface HostSnapshot { state: EngineState; savedAt: number }
 export const snapshot = (state: EngineState, now: number): HostSnapshot => {
   const d = cloneState(state);
   bankClocks(d, now);
-  d.host.heldImages = [];
   return { state: structuredClone(d), savedAt: now };
 };
 
@@ -107,7 +106,7 @@ export const restore = (snap: HostSnapshot, now: number): EngineState => {
     host.graceEndsAt[member.id] = now + GRACE_MS;
   }
   host.lastSeenAt = {}; host.lastChatAt = {}; host.lastBuzzAt = {}; host.malformedAt = {};
-  host.lastImageAt = null; host.heldImages = [];
+  host.lastImageAt = null;
   const game = room.game;
   if (game) {
     game.clocks.running = false; host.runningSince = null; game.undo = null;

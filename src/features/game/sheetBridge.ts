@@ -112,8 +112,8 @@ export const useSheetMatch = () => useStore(sheetMatchStore);
 /** Published by GameControls. The disguise shows chat as a comments panel. */
 export interface SheetChat {
   messages: ChatMessage[];
-  /** Sends a comment, optionally as a reply to an earlier one. */
-  send: (text: string, replyTo?: ChatMessage) => void;
+  /** Sends a comment, optionally with an image or as a reply to an earlier one. */
+  send: (text: string, image?: string, replyTo?: ChatMessage) => void;
   isOwn: (message: ChatMessage) => boolean;
   /** Messages that arrived while the comments panel was closed. */
   unread: number;
@@ -139,7 +139,7 @@ export const SHEET_ZOOM_STEPS = [0.5, 0.75, 0.9, 1, 1.25, 1.5, 2] as const;
 export interface SheetUi {
   /** The comments (chat) panel beside the grid while disguised. */
   commentsOpen: boolean;
-  /** ESC flips to a fake report and back; the tabs switch too. */
+  /** Ctrl+Q flips to a fake report and back; the tabs switch too. */
   view: SheetView;
   /** Multiplier on the fitted cell size. 1 is "100%". */
   zoom: number;

@@ -10,12 +10,13 @@ import { CHROME_FONT, DIALOG_SHADOW } from './sheetStyle';
  * every disguised control really does in the game.
  */
 const SHORTCUTS: Array<[keys: string[], meaning: string]> = [
-  [['Esc'], 'Chuyển ngay sang trang báo cáo giả và quay lại'],
+  [['Ctrl', 'Q'], 'Chuyển ngay sang trang báo cáo giả và quay lại'],
   [['Ctrl', 'Z'], 'Hoàn tác nước đi (xin đi lại)'],
   [['Ctrl', 'Y'], 'Làm lại: ván mới / tái đấu'],
   [['Ctrl', '+'], 'Phóng to bàn cờ'],
   [['Ctrl', '-'], 'Thu nhỏ bàn cờ'],
   [['Ctrl', '0'], 'Thu phóng về 100%'],
+  [['Ctrl', '`'], 'Mở hoặc đóng nhận xét (trò chuyện)'],
   [['Ctrl', 'Alt', 'M'], 'Mở hoặc đóng nhận xét (trò chuyện)'],
   [['Ctrl', '/'], 'Mở bảng phím tắt này'],
 ];

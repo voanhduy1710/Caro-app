@@ -259,9 +259,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
   // The preferences popover closes on Escape or on a click anywhere else,
   // like every other transient menu. Escape is taken on the capture phase and
-  // marked handled, so the Spreadsheet theme's boss key (a bubble-phase window
-  // listener registered long before the popover opened) leaves that press
-  // alone instead of also flipping to the fake report.
+  // marked handled, so nothing else reacts to the same press.
   useEffect(() => {
     if (!isPrefsOpen) return;
     const onPointerDown = (event: PointerEvent) => {
@@ -332,10 +330,9 @@ export const GameControls: React.FC<GameControlsProps> = ({
   }, []);
 
   // Escape closes the mobile sheet and the lightbox. Either one marks the key
-  // as used, on the capture phase so it is marked before the Spreadsheet
-  // disguise's boss key (a bubble-phase listener) sees it and also fires on
-  // the same press. The phone sheet is unmounted while disguised, so a sheet
-  // left open from before the boss key must not swallow Escape either.
+  // as used, on the capture phase, so nothing else reacts to the same press.
+  // The phone sheet is unmounted while disguised, so a sheet left open from
+  // before the boss key must not swallow Escape either.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
@@ -525,8 +522,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
         .slice(Math.min(sheetSeenCount, chatMessages.length))
         .filter((message) => !message.system && !isOwnMessage(message)).length;
 
-  // The comments panel sends text, emote shortcuts and replies; images stay
-  // in the game's own chat.
+  // The comments panel sends text, emote shortcuts, images and replies.
   const sendChatRef = useRef(onSendChat);
   const answerOfferRef = useRef(onAnswerDoubleDown);
   useEffect(() => {
@@ -537,8 +533,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
   useEffect(() => {
     sheetChatStore.set({
       messages: chatMessages,
-      send: (text: string, replyTo?: ChatMessage) => {
-        sendChatRef.current(text, undefined, replyTo);
+      send: (text: string, image?: string, replyTo?: ChatMessage) => {
+        sendChatRef.current(text, image, replyTo);
         playChatSound();
       },
       isOwn: isOwnMessage,
