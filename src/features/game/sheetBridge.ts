@@ -112,7 +112,8 @@ export const useSheetMatch = () => useStore(sheetMatchStore);
 /** Published by GameControls. The disguise shows chat as a comments panel. */
 export interface SheetChat {
   messages: ChatMessage[];
-  send: (text: string) => void;
+  /** Sends a comment, optionally as a reply to an earlier one. */
+  send: (text: string, replyTo?: ChatMessage) => void;
   isOwn: (message: ChatMessage) => boolean;
   /** Messages that arrived while the comments panel was closed. */
   unread: number;
