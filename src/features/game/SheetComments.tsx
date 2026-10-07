@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Image as ImageIcon, MessageSquarePlus, Reply, Smile, X } from 'lucide-react';
+import { BellRing, ChevronDown, Image as ImageIcon, MessageSquarePlus, Reply, Smile, X } from 'lucide-react';
 import { updateSheetUi, useSheetChat } from './sheetBridge';
 import type { ChatMessage, ChatQuote } from '../webrtc/types';
 import { renderWithEmotes } from './chatEmotes';
@@ -173,10 +173,14 @@ const CommentCard: React.FC<CommentCardProps> = ({ message, mine, onOpenImage, o
 export const SheetComments: React.FC<SheetCommentsProps> = ({ onOpenImage }) => {
   const chat = useSheetChat();
   const available = Boolean(chat?.available);
-  // The room's own event lines (buzzes, teases) are game talk with emoji, not
-  // anything a colleague would comment on a file, so the panel leaves them out.
+  // The room's own event lines (teases and the like) are game talk with emoji,
+  // not anything a colleague would comment on a file, so the panel leaves them
+  // out. A buzz stays, reworded as a Sheets reminder.
   const allMessages = available && chat ? chat.messages : null;
-  const messages = useMemo(() => (allMessages ? allMessages.filter((message) => !message.system) : []), [allMessages]);
+  const messages = useMemo(
+    () => (allMessages ? allMessages.filter((message) => !message.system || message.buzzFrom) : []),
+    [allMessages],
+  );
   const [draft, setDraft] = useState('');
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -303,17 +307,27 @@ export const SheetComments: React.FC<SheetCommentsProps> = ({ onOpenImage }) => 
             </p>
           </div>
         ) : (
-          messages.map((message) => (
-            <CommentCard
-              key={message.id}
-              message={message}
-              mine={Boolean(chat?.isOwn(message))}
-              onOpenImage={onOpenImage}
-              onAnswerOffer={chat?.answerOffer}
-              onReply={available ? startReply : undefined}
-              onJump={(id) => jumpTo(listRef.current, id)}
-            />
-          ))
+          messages.map((message) =>
+            message.system ? (
+              <div key={message.id} data-chat-id={message.id} className="flex justify-center px-3 py-1.5">
+                <span className="flex max-w-full items-center gap-1.5 rounded-full bg-[#e8eaed] px-3 py-1 text-[12px] text-[#3c4043]">
+                  <BellRing size={13} strokeWidth={2} color="#5f6368" aria-hidden="true" />
+                  <span className="truncate">{message.buzzFrom} đã gửi lời nhắc</span>
+                  <span className="text-[#5f6368]">· {formatCommentTime(message.timestamp)}</span>
+                </span>
+              </div>
+            ) : (
+              <CommentCard
+                key={message.id}
+                message={message}
+                mine={Boolean(chat?.isOwn(message))}
+                onOpenImage={onOpenImage}
+                onAnswerOffer={chat?.answerOffer}
+                onReply={available ? startReply : undefined}
+                onJump={(id) => jumpTo(listRef.current, id)}
+              />
+            ),
+          )
         )}
       </div>
 
@@ -414,6 +428,19 @@ export const SheetComments: React.FC<SheetCommentsProps> = ({ onOpenImage }) => 
             >
               <ImageIcon size={18} strokeWidth={2} aria-hidden="true" />
             </button>
+            {chat?.buzz && (
+              // The game's buzz, passed off as nudging a collaborator.
+              <button
+                type="button"
+                onClick={chat.buzz}
+                disabled={chat.buzzCooldown}
+                title="Gửi lời nhắc"
+                aria-label="Gửi lời nhắc"
+                className="grid h-8 w-8 place-items-center rounded-full text-[#444746] transition-colors hover:bg-[rgba(68,71,70,0.08)] disabled:text-[#80868b] disabled:hover:bg-transparent"
+              >
+                <BellRing size={18} strokeWidth={2} aria-hidden="true" />
+              </button>
+            )}
             <input
               ref={fileInputRef}
               type="file"

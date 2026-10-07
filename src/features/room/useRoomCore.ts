@@ -169,8 +169,8 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       setChatMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message].slice(-CHAT_KEEP)));
     };
 
-    const systemLine = (text: string) =>
-      appendChat({ id: cryptoEnv.randomId(10), sender: 'System', text, timestamp: Date.now(), system: true });
+    const systemLine = (text: string, extra?: Partial<ChatMessage>) =>
+      appendChat({ id: cryptoEnv.randomId(10), sender: 'System', text, timestamp: Date.now(), system: true, ...extra });
 
     /** Turns an answered double-down offer into a chat line everyone in the room sees. */
     const announceDoubleDown = (prev: RoomState | null, next: RoomState) => {
@@ -468,7 +468,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           return;
         case 'BUZZ': {
           const p = message.payload;
-          systemLine(`🔔 ${p.fromName} buzzed`);
+          systemLine(`🔔 ${p.fromName} buzzed`, { buzzFrom: p.fromName });
           const mine = r.mirror ? seatOf(r.mirror, r.memberId) : null;
           if (mine && mine !== p.fromSeat) handlersRef.current.onBuzzed?.();
           return;

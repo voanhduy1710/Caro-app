@@ -124,6 +124,10 @@ export interface SheetChat {
    * suggested edit with Accept and Reject, the way Sheets shows suggestions.
    */
   answerOffer?: (accept: boolean) => void;
+  /** Buzzes the opponent. Missing for viewers and in practice. */
+  buzz?: () => void;
+  /** A buzz was just sent and the next one has to wait. */
+  buzzCooldown: boolean;
 }
 
 export const sheetChatStore = createStore<SheetChat | null>(null);

@@ -21,6 +21,8 @@ export interface ChatMessage {
   timestamp: number;
   /** Locally generated notices (buzz) render as a centred system line. */
   system?: boolean;
+  /** Who buzzed, on the system line a buzz leaves, so other views can word it their own way. */
+  buzzFrom?: string;
   /** The message this one answers, when it is a reply. */
   replyTo?: ChatQuote;
   /** A live double-down offer, drawn as a card with answer buttons for the addressed player. */

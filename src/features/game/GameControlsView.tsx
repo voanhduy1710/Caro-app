@@ -522,14 +522,18 @@ export const GameControls: React.FC<GameControlsProps> = ({
         .slice(Math.min(sheetSeenCount, chatMessages.length))
         .filter((message) => !message.system && !isOwnMessage(message)).length;
 
-  // The comments panel sends text, emote shortcuts, images and replies.
+  // The comments panel sends text, emote shortcuts, images, replies and buzzes.
   const sendChatRef = useRef(onSendChat);
   const answerOfferRef = useRef(onAnswerDoubleDown);
+  const buzzRef = useRef(handleBuzzClick);
   useEffect(() => {
     sendChatRef.current = onSendChat;
     answerOfferRef.current = onAnswerDoubleDown;
+    buzzRef.current = handleBuzzClick;
   });
   const canAnswerOffers = Boolean(onAnswerDoubleDown);
+  // Same rule as the game's composer: only a seated player can buzz.
+  const canBuzz = !isAiMode && (role ?? 'player') === 'player' && Boolean(onSendBuzz);
   useEffect(() => {
     sheetChatStore.set({
       messages: chatMessages,
@@ -541,8 +545,10 @@ export const GameControls: React.FC<GameControlsProps> = ({
       unread: sheetUnread,
       available: !isAiMode,
       answerOffer: canAnswerOffers ? (accept: boolean) => answerOfferRef.current?.(accept) : undefined,
+      buzz: canBuzz ? () => buzzRef.current() : undefined,
+      buzzCooldown: isBuzzCooldown,
     });
-  }, [chatMessages, isOwnMessage, sheetUnread, isAiMode, playChatSound, canAnswerOffers]);
+  }, [chatMessages, isOwnMessage, sheetUnread, isAiMode, playChatSound, canAnswerOffers, canBuzz, isBuzzCooldown]);
   // The game's chat opens itself for an offer waiting on an answer (above);
   // under the disguise the comments panel is where its buttons are.
   useEffect(() => {
