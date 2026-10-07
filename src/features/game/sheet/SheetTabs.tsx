@@ -65,7 +65,9 @@ const MatchPill: React.FC<{ match: SheetMatch }> = ({ match }) => {
   const seats = match.seats.filter((seat) => !seat.empty);
   const clocks = seats.filter((seat) => seat.clock > 0);
   const turn = seats.find((seat) => seat.isTurn && seat.moveClock > 0);
-  const hasScore = match.score.length > 1 && match.score.some((n) => n > 0);
+  // Shown from 0 - 0 on: a player looking for the score should find it
+  // in the same place before the first round is won as after.
+  const hasScore = match.score.length > 1;
   if (!clocks.length && !turn && !hasScore) return null;
   const urgent = Boolean(turn && turn.moveClock < 6);
   // A phone has no room for every clock and the score beside the tabs, so it

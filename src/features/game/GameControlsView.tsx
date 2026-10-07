@@ -525,8 +525,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
         .slice(Math.min(sheetSeenCount, chatMessages.length))
         .filter((message) => !message.system && !isOwnMessage(message)).length;
 
-  // The comments panel only sends plain text: no image, no quote, no emote
-  // picker, all of which would look nothing like a Sheets comment.
+  // The comments panel sends text, emote shortcuts and replies; images stay
+  // in the game's own chat.
   const sendChatRef = useRef(onSendChat);
   const answerOfferRef = useRef(onAnswerDoubleDown);
   useEffect(() => {
@@ -537,8 +537,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
   useEffect(() => {
     sheetChatStore.set({
       messages: chatMessages,
-      send: (text: string) => {
-        sendChatRef.current(text);
+      send: (text: string, replyTo?: ChatMessage) => {
+        sendChatRef.current(text, undefined, replyTo);
         playChatSound();
       },
       isOwn: isOwnMessage,
