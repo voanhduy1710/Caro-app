@@ -58,7 +58,9 @@ export const RANK_TIERS: readonly RankTier[] = [
   { minElo: 1200, title: 'Silver', color: 'text-slate-300 border-slate-400', badge: '/badges/silver.webp' },
   { minElo: 1100, title: 'Bronze', color: 'text-amber-600 border-amber-700', badge: '/badges/bronze.webp' },
   { minElo: 1000, title: 'Wood', color: 'text-amber-800 border-amber-900', badge: '/badges/wood.webp' },
-  { minElo: null, title: 'Stone', color: 'text-stone-400 border-stone-500', badge: '/badges/stone.webp' },
+  { minElo: 900, title: 'Stone', color: 'text-stone-400 border-stone-500', badge: '/badges/stone.webp' },
+  { minElo: 800, title: 'Plastic', color: 'text-sky-400 border-sky-500', badge: '/badges/plastic.webp' },
+  { minElo: null, title: 'Cardboard', color: 'text-yellow-700 border-yellow-800', badge: '/badges/cardboard.webp' },
 ];
 
 /** Returns rank title, color classes and badge image for an Elo score. */

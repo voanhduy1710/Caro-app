@@ -56,7 +56,7 @@ A real-time **Caro (Gomoku / Five-in-a-Row)** web application built with **React
 
 ### Ratings and ranks
 - **ELO rating** (K-factor 32) computed on the server, never by the client
-- **Rank tiers with badges**: Stone, Wood, Bronze, Silver, Gold, Diamond, Platinum, Uranium, Master and Grand Master, shown in the navbar, profiles and leaderboard
+- **Rank tiers with badges**: Cardboard, Plastic, Stone, Wood, Bronze, Silver, Gold, Diamond, Platinum, Uranium, Master and Grand Master, shown in the navbar, profiles and leaderboard
 - **Leaderboard** with a rank guide that explains each tier
 - **Match history** and a profile with stats and avatar selection
 - **Tamper-resistant results**: a result that favours the reporting player is held as a claim, recorded after ten minutes unless disputed, and only if both players held a seat ticket for the game

@@ -3,7 +3,8 @@ import { getRankTitle } from './eloCalculator';
 
 describe('getRankTitle', () => {
   const cases: [number, string][] = [
-    [999, 'Stone'], [1000, 'Wood'], [1099, 'Wood'],
+    [100, 'Cardboard'], [799, 'Cardboard'], [800, 'Plastic'], [899, 'Plastic'],
+    [900, 'Stone'], [999, 'Stone'], [1000, 'Wood'], [1099, 'Wood'],
     [1100, 'Bronze'], [1200, 'Silver'], [1300, 'Gold'],
     [1400, 'Diamond'], [1500, 'Platinum'], [1700, 'Uranium'],
     [1900, 'Master'], [2099, 'Master'], [2100, 'Grand Master'],
