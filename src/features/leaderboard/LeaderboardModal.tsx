@@ -89,6 +89,7 @@ const OpenLeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onClose
               const formattedRank = (idx + 1).toString().padStart(2, '0');
               const streak = p.streak || 0;
               const isHotStreak = streak > 2;
+              const isColdStreak = streak < -2;
 
               return (
                 <div
@@ -129,9 +130,10 @@ const OpenLeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onClose
 
                   <div className="text-right font-mono">
                     <div className="text-sm font-semibold text-accent-text">{p.elo} ELO</div>
-                    <div className={`mt-0.5 flex items-center justify-end gap-1 text-xs font-semibold ${isHotStreak ? 'text-danger' : 'text-muted'}`}>
-                      <span>Streak: {streak}</span>
+                    <div className={`mt-0.5 flex items-center justify-end gap-1 text-xs font-semibold ${isHotStreak ? 'text-danger' : isColdStreak ? 'text-info' : 'text-muted'}`}>
+                      <span>{streak < 0 ? `Loss streak: ${-streak}` : `Streak: ${streak}`}</span>
                       {isHotStreak && <img src="/Fire_streak.gif" alt="On fire" className="relative bottom-0.5 h-4 w-4 object-contain" />}
+                      {isColdStreak && <img src="/lose.gif" alt="Losing streak" className="relative top-px h-4 w-4 object-contain" />}
                     </div>
                   </div>
                 </div>

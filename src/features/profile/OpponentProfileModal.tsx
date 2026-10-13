@@ -108,10 +108,17 @@ export const OpponentProfileModal: React.FC<OpponentProfileModalProps> = ({
         </div>
 
         {/* Additional Player Meta */}
-        <div className="p-3 bg-accent-soft border border-accent rounded-md flex items-center justify-between text-xs font-mono">
-          <span className="text-accent-text font-medium">Current Win Streak</span>
-          <span className="font-semibold text-accent-text text-sm"><Flame size={14} strokeWidth={2.25} className="inline shrink-0 mr-1 -mt-0.5" aria-hidden="true" />{opponent.streak || 0} games</span>
-        </div>
+        {(opponent.streak || 0) < 0 ? (
+          <div className="p-3 bg-info-soft border border-info rounded-md flex items-center justify-between text-xs font-mono">
+            <span className="text-info font-medium">Current Loss Streak</span>
+            <span className="flex items-center font-semibold text-info text-sm"><img src="/lose.gif" alt="" className="h-4 w-4 mr-1 object-contain" aria-hidden="true" />{-(opponent.streak || 0)} games</span>
+          </div>
+        ) : (
+          <div className="p-3 bg-accent-soft border border-accent rounded-md flex items-center justify-between text-xs font-mono">
+            <span className="text-accent-text font-medium">Current Win Streak</span>
+            <span className="font-semibold text-accent-text text-sm"><Flame size={14} strokeWidth={2.25} className="inline shrink-0 mr-1 -mt-0.5" aria-hidden="true" />{opponent.streak || 0} games</span>
+          </div>
+        )}
 
         {/* Close Action */}
         <button

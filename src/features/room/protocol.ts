@@ -137,9 +137,10 @@ const cleanAvatar = (value: unknown): string | null => {
 /** The same avatar rule for anything else that shows a picture it was sent, such as the public room list. */
 export const sanitizeAvatar = (value: unknown): string | null => cleanAvatar(value);
 
-const clampStat = (value: unknown): number | undefined => {
+/** Streak is signed (negative is a loss streak); every other stat is a count. */
+const clampStat = (value: unknown, signed = false): number | undefined => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
-  return Math.min(STAT_MAX, Math.max(0, value));
+  return Math.min(STAT_MAX, Math.max(signed ? -STAT_MAX : 0, value));
 };
 
 /**
@@ -164,7 +165,7 @@ export const sanitizeProfile = (claim: unknown): MemberProfile | null => {
     guest,
   };
   for (const key of STAT_KEYS) {
-    const stat = clampStat(claim[key]);
+    const stat = clampStat(claim[key], key === 'streak');
     if (stat !== undefined) profile[key] = stat;
   }
   return profile;

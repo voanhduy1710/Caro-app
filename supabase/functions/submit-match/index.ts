@@ -345,7 +345,8 @@ Deno.serve(async (req: Request) => {
         wins: current.wins + (won ? 1 : 0),
         losses: current.losses + (!won && !drew ? 1 : 0),
         draws: current.draws + (drew ? 1 : 0),
-        streak: won ? current.streak + 1 : 0,
+        // Signed: +N is N wins in a row, -N is N losses in a row; a draw resets it.
+        streak: drew ? 0 : won ? Math.max(current.streak, 0) + 1 : Math.min(current.streak, 0) - 1,
         updated_at: new Date().toISOString(),
       })
       .eq('uid', uid);
