@@ -54,7 +54,6 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   const game = s?.game ?? null;
   const phase = s?.phase ?? 'waiting';
   const members = useMemo(() => s?.members ?? [], [s?.members]);
-  const myMember = members.find((m) => m.id === me) ?? null;
   const occupantOf = (seat: Seat): Member | null => (s ? (members.find((m) => m.id === s.seats[seat]) ?? null) : null);
   const requiredSeats = s ? activeSeats(game?.settings ?? s.settings) : [];
   const bothSeated = Boolean(s && requiredSeats.every((seat) => s.seats[seat]));
@@ -62,8 +61,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   const isViewer = mySeat === null;
   const emptySeat: Seat | null = s ? (requiredSeats.find((seat) => s.seats[seat] === null) ?? null) : null;
   // A player who gave up a seat in this game may not take one again in it.
-  const barred = Boolean(phase === 'paused' && game && myMember && game.gaveUp.includes(myMember.profile.uid));
-  const openSeat: Seat | null = phase !== 'countdown' && connected && isViewer && !barred ? emptySeat : null;
+  const openSeat: Seat | null = phase !== 'countdown' && connected && isViewer ? emptySeat : null;
   const clocks = room.clocksNow();
   const settings = game?.settings ?? s?.settings;
   const result = s ? latestResult(s) : null;
@@ -561,9 +559,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       } else if (isViewer) {
         paused = {
           title: `Seat ${emptySeat} is open`,
-          body: barred
-            ? 'You gave up a seat in this game, so someone else has to take this one.'
-            : `Take it to continue ${previousName}'s game as ${emptySeat} from this position.`,
+          body: `Take it to continue ${previousName}'s game as ${emptySeat} from this position.`,
           actions: (
             <>
               {openSeat && (

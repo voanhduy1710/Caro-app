@@ -309,7 +309,7 @@ export const shrinkImage = async (dataUrl: string, maxChars: number): Promise<st
 };
 
 const REJECTION_TEXT: Partial<Record<RejectReason, string>> = {
-  seat_taken: 'Someone else took that seat.', same_account: 'That account is already sitting in the other seat.', gave_up_seat: 'You gave up a seat in this game, so someone else has to take it.', countdown: 'Wait for the count-in to finish.', time_out: 'Too late: the clock ran out.', locked: 'The rules are locked during a game.', too_long: 'That message is too long.', bad_image: 'That image is too large to send. Try a smaller screenshot.', undo_off: 'Take-backs are turned off for this game.', undo_pending: 'A take-back is already waiting for an answer.', offer_pending: 'A rematch offer is already waiting for an answer.', seat_empty: 'Both seats need a player first.', not_host: 'Only the host can do that.',
+  seat_taken: 'Someone else took that seat.', same_account: 'That account is already sitting in the other seat.', countdown: 'Wait for the count-in to finish.', time_out: 'Too late: the clock ran out.', locked: 'The rules are locked during a game.', too_long: 'That message is too long.', bad_image: 'That image is too large to send. Try a smaller screenshot.', undo_off: 'Take-backs are turned off for this game.', undo_pending: 'A take-back is already waiting for an answer.', offer_pending: 'A rematch offer is already waiting for an answer.', seat_empty: 'Both seats need a player first.', not_host: 'Only the host can do that.',
 };
 
 export const rejectionText = (payload: HostMessagePayloads['REJECTED']): string | null => {

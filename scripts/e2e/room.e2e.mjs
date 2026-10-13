@@ -212,7 +212,7 @@ try {
   check('the seat log records the handoff', a.state.game.seatLog.map((s) => s.reason).join(',') === 'stood,sat', a.state.game.seatLog.map((s) => s.reason).join(','));
   await act(B, "takeSeat('O')");
   await sleep(300);
-  check('who stood up cannot sit back in this game', ['seat_taken', 'gave_up_seat'].includes((await get(B)).lastRejected?.reason));
+  check('who stood up can try to sit back in this game', (await get(B)).lastRejected?.reason === 'seat_taken');
 
   // ------------------------------------------------ take-back
   await waitFor(C, `${S}.state.game.moves.length === 3 && ${S}.state.game.turn === 'O'`, 5000);

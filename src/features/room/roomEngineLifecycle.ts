@@ -145,7 +145,6 @@ export const startNewGame = (d: EngineState, ctx: Ctx): void => {
     startedWith: { X: playerRef(x), O: playerRef(o), T: playerRef(t ?? x) },
     seatLog: [],
     seatLogDropped: 0,
-    gaveUp: [],
     vacatedAt: { X: null, O: null, T: null },
     lastMove: null,
     undo: null,
@@ -214,13 +213,6 @@ export const vacate = (d: EngineState, seat: Seat, reason: SeatChange['reason'],
         at: ctx.now,
       });
       game.vacatedAt[seat] = ctx.now;
-      // Standing up freezes both clocks. Without this, a player short of time
-      // could stand, think for free, and sit again with the same clocks. Only
-      // the player's own choice bars them: a drop is not a choice, and neither
-      // is the host's Remove, which is mostly used on someone still stuck
-      // reconnecting who should be free to sit again once they are back.
-      const choseToGo = reason === 'stood' || reason === 'left';
-      if (choseToGo && !game.gaveUp.includes(member.profile.uid)) game.gaveUp.push(member.profile.uid);
     }
   }
   if (room.phase === 'waiting' || room.phase === 'ended') room.autoStartArmed = true;

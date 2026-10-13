@@ -194,8 +194,6 @@ export interface Game {
   seatLog: SeatChange[];
   /** Entries removed from the middle of seatLog to keep it at SEAT_LOG_CAP. */
   seatLogDropped: number;
-  /** uids that stood up or left during this game and may not sit in it again. */
-  gaveUp: string[];
   /** When each seat was last vacated during this game, for the discard guard. */
   vacatedAt: { X: number | null; O: number | null; T: number | null };
   lastMove: { by: string; at: number } | null;

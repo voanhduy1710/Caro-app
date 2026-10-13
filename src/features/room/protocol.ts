@@ -272,7 +272,6 @@ export type RejectReason =
   | 'seat_taken'
   | 'seat_empty'
   | 'same_account'
-  | 'gave_up_seat'
   | 'countdown'
   | 'not_playing'
   | 'not_paused'

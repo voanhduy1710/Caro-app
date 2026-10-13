@@ -165,9 +165,6 @@ export const handleTakeSeat = (d: EngineState, m: Member, seat: Seat, ctx: Ctx):
   if (room.seats[seat] !== null) evictAbsentee(d, seat);
   if (room.phase === 'countdown') return reject(ctx, m.id, 'TAKE_SEAT', 'countdown');
   const { game } = room;
-  if (room.phase === 'paused' && game?.gaveUp.includes(m.profile.uid)) {
-    return reject(ctx, m.id, 'TAKE_SEAT', 'gave_up_seat');
-  }
   room.seats[seat] = m.id;
   if (game && room.phase === 'paused') {
     appendSeatChange(game, { seat, from: null, to: playerRef(m), atMove: game.moves.length, reason: 'sat', at: ctx.now });
