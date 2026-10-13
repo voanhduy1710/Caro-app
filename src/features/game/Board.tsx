@@ -548,8 +548,15 @@ export const Board: React.FC<BoardProps> = ({
   const isMyTurn = myPiece === currentTurn;
 
   // One lookup instead of a scan of every sketch for each of up to 2,500 cells.
-  const simulatedByKey = new Map<string, SimulatedMove>();
-  for (const move of simulatedMoves) simulatedByKey.set(`${move.row}:${move.col}`, move);
+  // Each sketch is numbered within its own piece (X: 1, 2... O: 1, 2...), so the
+  // order of the analysis line can be read back off the board.
+  const simulatedByKey = new Map<string, SimulatedMove & { n: number }>();
+  const simulatedCounts: Partial<Record<Exclude<CellValue, null>, number>> = {};
+  for (const move of simulatedMoves) {
+    const n = (simulatedCounts[move.piece] ?? 0) + 1;
+    simulatedCounts[move.piece] = n;
+    simulatedByKey.set(`${move.row}:${move.col}`, { ...move, n });
+  }
 
   const cells = board.map((row, rIdx) =>
     row.map((cell, cIdx) => {
@@ -575,6 +582,7 @@ export const Board: React.FC<BoardProps> = ({
           isMajorBottom={!isSheetTheme && (rIdx + 1) % 5 === 0 && rIdx + 1 < size}
           showCoords={!isSheetTheme && prefs.showCoordinates && cellSize >= 28}
           simulatedPiece={simItem ? simItem.piece : null}
+          simulatedNumber={simItem ? simItem.n : null}
           simulatedColor={
             simItem
               ? simItem.piece === myPiece

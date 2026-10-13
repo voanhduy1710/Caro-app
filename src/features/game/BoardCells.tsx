@@ -121,6 +121,8 @@ interface BoardCellProps {
   showCoords: boolean;
   simulatedPiece: Exclude<CellValue, null> | null;
   simulatedColor?: string;
+  /** Position of this sketch among its piece's sketches, drawn as a subscript. */
+  simulatedNumber: number | null;
   currentTurn: Exclude<CellValue, null>;
   boardDisabled: boolean;
   pieceTheme: PieceTheme;
@@ -152,6 +154,7 @@ export const BoardCell = memo<BoardCellProps>(({
   showCoords,
   simulatedPiece,
   simulatedColor,
+  simulatedNumber,
   currentTurn,
   boardDisabled,
   pieceTheme,
@@ -196,6 +199,14 @@ export const BoardCell = memo<BoardCellProps>(({
     ];
     return slots[y][x];
   };
+  const simulatedLabel = simulatedNumber !== null ? (
+    <span
+      className="pointer-events-none absolute bottom-0 right-0.5 select-none font-mono font-bold leading-none"
+      style={{ fontSize: `${Math.max(7, Math.round(cellSize * 0.3))}px`, color: simulatedColor }}
+    >
+      {simulatedNumber}
+    </span>
+  ) : null;
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     // Space/Enter on a focused cell fires a click with detail 0; only
     // pointer clicks may place a move.
@@ -236,12 +247,15 @@ export const BoardCell = memo<BoardCellProps>(({
             <SheetGlyph piece={cell} color={pieceColor(cell)} fontSize={fontSize} />
           </span>
         ) : simulatedPiece ? (
-          <SheetGlyph
-            piece={simulatedPiece}
-            color={simulatedColor || pieceColor(simulatedPiece)}
-            fontSize={fontSize}
-            opacity={0.6}
-          />
+          <>
+            <SheetGlyph
+              piece={simulatedPiece}
+              color={simulatedColor || pieceColor(simulatedPiece)}
+              fontSize={fontSize}
+              opacity={0.6}
+            />
+            {simulatedLabel}
+          </>
         ) : isHovered && !boardDisabled ? (
           <div className={`opacity-35 ${placementClass}`}>
             <SheetGlyph piece={currentTurn} color={pieceColor(currentTurn)} fontSize={fontSize} />
@@ -280,14 +294,17 @@ export const BoardCell = memo<BoardCellProps>(({
         </span>
       )
     ) : simulatedPiece ? (
-      <PieceGlyph
-        piece={simulatedPiece}
-        pieceTheme={pieceTheme}
-        xColor={xColor}
-        oColor={oColor}
-        isSimulated
-        customColor={simulatedColor}
-      />
+      <>
+        <PieceGlyph
+          piece={simulatedPiece}
+          pieceTheme={pieceTheme}
+          xColor={xColor}
+          oColor={oColor}
+          isSimulated
+          customColor={simulatedColor}
+        />
+        {simulatedLabel}
+      </>
     ) : isHovered && !boardDisabled ? (
       <div className={`opacity-35 ${placementClass}`}>
         <PieceGlyph piece={currentTurn} pieceTheme={pieceTheme} xColor={xColor} oColor={oColor} isSimulated />
