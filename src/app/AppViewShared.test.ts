@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { AI_BOARD_SIZE, aiThinkMs, settingsUpdateFor } from './AppViewShared';
 
 describe('practice bot settings', () => {
-  it('uses a 15x15 board', () => {
-    expect(AI_BOARD_SIZE).toBe(15);
+  it('uses a 19x19 board', () => {
+    expect(AI_BOARD_SIZE).toBe(19);
   });
 
   it('thinks 900 ms without a turn timer', () => {

@@ -70,9 +70,18 @@ export class EngineBoard {
 
   /** True when a stone of p on i makes a four (or better) in some direction. */
   makesFour(p: Stone, i: number): boolean {
+    return this.makesAtLeast(p, i, Shape.FOUR);
+  }
+
+  /** True when a stone of p on i makes an open three (or better): a move the opponent must answer. */
+  makesThreat(p: Stone, i: number): boolean {
+    return this.makesAtLeast(p, i, Shape.OPEN3);
+  }
+
+  private makesAtLeast(p: Stone, i: number, min: Shape): boolean {
     const at = ((p - 1) * this.area + i) * 4;
     for (let d = 0; d < 4; d++) {
-      if (this.shapes[at + d] >= Shape.FOUR) return true;
+      if (this.shapes[at + d] >= min) return true;
     }
     return false;
   }
@@ -85,6 +94,37 @@ export class EngineBoard {
       if (this.values[base + i] >= min) out.push(i);
     }
     return out;
+  }
+
+  /** Empty cells within `span` steps of i along its lines (all 4 unless `dirs` says), i itself excluded. */
+  lineCells(i: number, span: number, dirs: readonly number[] = [0, 1, 2, 3]): number[] {
+    const out: number[] = [];
+    const r0 = Math.floor(i / this.size);
+    const c0 = i % this.size;
+    for (const d of dirs) {
+      const [dr, dc] = DIRS[d];
+      for (let k = -span; k <= span; k++) {
+        if (k === 0) continue;
+        const r = r0 + dr * k;
+        const c = c0 + dc * k;
+        if (r < 0 || r >= this.size || c < 0 || c >= this.size) continue;
+        const j = r * this.size + c;
+        if (this.cells[j] === EMPTY) out.push(j);
+      }
+    }
+    return out;
+  }
+
+  /** Index (0-3) of the line through a and b if they lie within `span` steps on one, else -1. */
+  lineBetween(a: number, b: number, span: number): number {
+    const dr = Math.floor(b / this.size) - Math.floor(a / this.size);
+    const dc = (b % this.size) - (a % this.size);
+    if (Math.max(Math.abs(dr), Math.abs(dc)) > span) return -1;
+    if (dr === 0) return 0;
+    if (dc === 0) return 1;
+    if (dr === dc) return 2;
+    if (dr === -dc) return 3;
+    return -1;
   }
 
   /** Empty cells near a stone; the centre (or any empty cell) when there is no stone. */

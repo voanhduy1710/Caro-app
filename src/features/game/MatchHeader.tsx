@@ -134,6 +134,8 @@ const Seat: React.FC<SeatProps> = ({
       }`}
       style={isTurn && !empty ? ({ borderColor: color, '--seat-glow': `${color}33` } as React.CSSProperties) : undefined}
     >
+      {/* Pinned to the ring: as a grid child, h-full resolves against a row
+          sized by the image itself, so a tall sprite spilled out of the circle. */}
       {!empty && (
         <img
           src={getAvatarPublicUrl(photoURL)}
@@ -143,7 +145,7 @@ const Seat: React.FC<SeatProps> = ({
             e.currentTarget.onerror = null;
             e.currentTarget.src = getAvatarPublicUrl();
           }}
-          className={`h-full w-full rounded-full object-contain p-0.5 lg:p-1.5 ${away ? 'opacity-40 grayscale' : ''}`}
+          className={`absolute inset-0 h-full w-full rounded-full object-contain p-0.5 lg:p-1.5 ${away ? 'opacity-40 grayscale' : ''}`}
         />
       )}
       {/* The piece rides on the portrait instead of sitting under the name:

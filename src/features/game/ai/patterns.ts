@@ -29,6 +29,10 @@ export const WIN_VALUE = 10_000_000;
 /** Open four, double four or four-three: wins next move unless the opponent has a five. */
 export const FORCED_WIN_VALUE = 1_000_000;
 export const DOUBLE_THREE_VALUE = 100_000;
+/** Open three plus open two: one quiet move from a double three. */
+const THREE_TWO_BONUS = 3_000;
+/** Two or more open twos (the missing corner of a square): one move from a three-three setup. */
+const DOUBLE_TWO_BONUS = 700;
 
 const SHAPE_VALUE: readonly number[] = [0, 10, 60, 50, 500, 600, 0, 0];
 
@@ -102,6 +106,7 @@ export const SHAPE_TABLE: Uint8Array = (() => {
 export const cellValue = (shapes: ArrayLike<number>, at: number): number => {
   let fours = 0;
   let threes = 0;
+  let twos = 0;
   let openFour = false;
   let sum = 0;
   for (let d = 0; d < 4; d++) {
@@ -110,9 +115,12 @@ export const cellValue = (shapes: ArrayLike<number>, at: number): number => {
     if (shape === Shape.OPEN4) openFour = true;
     else if (shape === Shape.FOUR) fours++;
     else if (shape === Shape.OPEN3) threes++;
+    else if (shape === Shape.OPEN2) twos++;
     sum += SHAPE_VALUE[shape];
   }
   if (openFour || fours >= 2 || (fours >= 1 && threes >= 1)) return FORCED_WIN_VALUE + sum;
   if (threes >= 2) return DOUBLE_THREE_VALUE + sum;
+  if (threes >= 1 && twos >= 1) return THREE_TWO_BONUS + sum;
+  if (twos >= 2) return DOUBLE_TWO_BONUS + sum;
   return sum;
 };

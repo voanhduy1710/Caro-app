@@ -3,7 +3,7 @@ import { getBestAiMove } from './aiEngine';
 import { engineBoardFrom } from './ai/board';
 import { findVcf } from './ai/threats';
 import { boardWith } from './ai/testBoards';
-import type { BoardMatrix } from '../../shared/utils/gomokuLogic';
+import { checkWin, type BoardMatrix } from '../../shared/utils/gomokuLogic';
 
 const SIZE = 15;
 const FAST = { timeLimitMs: 300 };
@@ -68,6 +68,29 @@ describe('getBestAiMove', () => {
     const [r, c] = play(board);
     board[r][c] = 'O';
     expect(findVcf(engineBoardFrom(board, SIZE, 'O'), 2)).toBe(-1);
+  });
+
+  it('finds the one move that stops a forced win through threes', () => {
+    // X wins by a chain of open threes after every O move except (8,8).
+    const board = boardWith(SIZE, [
+      [6, 6, 'X'], [7, 7, 'X'], [9, 8, 'X'], [7, 9, 'X'],
+      [8, 5, 'O'], [5, 9, 'O'], [6, 5, 'O'], [6, 8, 'O'],
+    ]);
+    expect(getBestAiMove(board, SIZE, 'O', { timeLimitMs: 900 })).toEqual([8, 8]);
+  });
+
+  it('converts its own forced win through threes', { timeout: 120_000 }, () => {
+    // O's L shape with the move is a proven win by open threes; the bot plays both sides.
+    const board = boardWith(SIZE, [[6, 5, 'O'], [6, 6, 'O'], [7, 5, 'O'], [6, 4, 'X'], [9, 9, 'X'], [3, 3, 'X']]);
+    let turn: 'X' | 'O' = 'O';
+    let winner: string | null = null;
+    for (let n = 0; n < 30 && !winner; n++) {
+      const [r, c] = getBestAiMove(board, SIZE, turn, { maxDepth: 6, timeLimitMs: 60_000 });
+      board[r][c] = turn;
+      if (checkWin(board, r, c, SIZE)) winner = turn;
+      turn = turn === 'X' ? 'O' : 'X';
+    }
+    expect(winner).toBe('O');
   });
 
   it('never plays on a T stone', () => {

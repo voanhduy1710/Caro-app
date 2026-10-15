@@ -1,6 +1,6 @@
 import { opponentOf, type EngineBoard, type Stone } from './board';
 import { FORCED_WIN_VALUE, WIN_VALUE } from './patterns';
-import { findVcf, type VcfLimits } from './threats';
+import { findVcf, findVct, type VcfLimits } from './threats';
 
 export interface SearchOptions {
   /** Wall-clock budget for one move. */
@@ -13,8 +13,16 @@ const DEFAULT_TIME_MS = 900;
 const DEFAULT_MAX_DEPTH = 12;
 const ROOT_WIDTH = 20;
 const NODE_WIDTH = 10;
+/** Share of the move budget the forced-win defence may use before the main search. */
+/** Share of the move budget spent looking for our own chain of threes. */
+const ATTACK_SHARE = 0.3;
+const ATTACK_VCT: VcfLimits = { depth: 6, nodes: 3_000 };
+const DEFENCE_SHARE = 0.6;
 const DEFENCE_WIDTH = 40;
+/** Opponent strong points tried when looking for a move that stops a chain of threes. */
+const DEFENCE_VCT_WIDTH = 12;
 const DEFENCE_VCF: VcfLimits = { depth: 12, nodes: 3_000 };
+const DEFENCE_VCT: VcfLimits = { depth: 6, nodes: 2_000 };
 const WIN = 1_000_000_000;
 /** Scores this close to WIN are decided games. */
 const DECIDED = WIN - 1_000;
@@ -75,17 +83,40 @@ export const searchBestMove = (board: EngineBoard, me: Stone, options: SearchOpt
   if (blocks.length > 0) return blocks[0];
   const vcf = findVcf(board, me);
   if (vcf >= 0) return vcf;
+  // A chain of threes wins only while the opponent has no four to break it with.
+  if (!board.candidates().some((i) => board.makesFour(opp, i))) {
+    const attackDeadline = performance.now() + (deadline - performance.now()) * ATTACK_SHARE;
+    const vct = findVct(board, me, ATTACK_VCT, attackDeadline);
+    if (vct >= 0) return vct;
+  }
 
   let rootMoves = orderMoves(board, me, ROOT_WIDTH);
   if (rootMoves.length <= 1) return rootMoves.length === 1 ? rootMoves[0] : -1;
 
-  // Keep only moves after which the opponent has no forced four chain, if any exist.
+  // Keep only moves after which the opponent has no forced win, if any exist:
+  // first chains of fours, otherwise chains of threes (a square turning into a
+  // double three). Saving moves sit on the opponent's own strong points, so
+  // those are tried first, whatever our move ordering thinks of them.
+  const defenceDeadline = performance.now() + (deadline - performance.now()) * DEFENCE_SHARE;
+  let defence: { stillLost: () => boolean; moves: number[] } | null = null;
   if (findVcf(board, opp, DEFENCE_VCF) >= 0) {
+    defence = { stillLost: () => findVcf(board, opp, DEFENCE_VCF) >= 0, moves: orderMoves(board, me, DEFENCE_WIDTH) };
+  } else if (findVct(board, opp, DEFENCE_VCT, defenceDeadline) >= 0) {
+    defence = {
+      // Only a proven -1 counts as safe; VCT_UNKNOWN means the check gave up.
+      stillLost: () => findVct(board, opp, DEFENCE_VCT, defenceDeadline) !== -1,
+      moves: board.candidates()
+        .sort((a, b) => board.value(opp, b) - board.value(opp, a))
+        .slice(0, DEFENCE_VCT_WIDTH),
+    };
+  }
+  if (defence) {
     const safe: number[] = [];
-    for (const i of orderMoves(board, me, DEFENCE_WIDTH)) {
-      if (performance.now() > deadline) break;
+    for (const i of defence.moves) {
+      if (performance.now() > defenceDeadline) break;
       board.place(i, me);
-      const refuted = findVcf(board, opp, DEFENCE_VCF) < 0;
+      // A four of ours only delays: the reply to it is forced, so it proves nothing here.
+      const refuted = board.cellsWith(me, WIN_VALUE).length === 0 && !defence.stillLost();
       board.undo();
       if (refuted) safe.push(i);
     }

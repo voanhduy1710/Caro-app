@@ -58,6 +58,15 @@ describe('cellValue', () => {
     expect(at(Shape.FOUR, 0, 0, 0)).toBeLessThan(DOUBLE_THREE_VALUE);
   });
 
+  it('values a double open two above a single open three', () => {
+    expect(at(Shape.OPEN2, Shape.OPEN2, 0, 0)).toBeGreaterThan(at(Shape.OPEN3, 0, 0, 0));
+  });
+
+  it('values an open three plus open two above a double open two', () => {
+    expect(at(Shape.OPEN3, Shape.OPEN2, 0, 0)).toBeGreaterThan(at(Shape.OPEN2, Shape.OPEN2, Shape.OPEN2, 0));
+    expect(at(Shape.OPEN3, Shape.OPEN2, 0, 0)).toBeLessThan(DOUBLE_THREE_VALUE);
+  });
+
   it('orders single shapes', () => {
     expect(at(Shape.FOUR, 0, 0, 0)).toBeGreaterThan(at(Shape.OPEN3, 0, 0, 0));
     expect(at(Shape.OPEN3, 0, 0, 0)).toBeGreaterThan(at(Shape.OPEN2, 0, 0, 0));

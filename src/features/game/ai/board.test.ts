@@ -80,6 +80,35 @@ describe('EngineBoard', () => {
     expect(board.cells[at(0, 1)]).toBe(2);
   });
 
+  it('reports threats: open threes and better, not blocked threes', () => {
+    const board = new EngineBoard(SIZE);
+    for (const c of [5, 6]) board.place(at(7, c), 1);
+    expect(board.makesThreat(1, at(7, 7))).toBe(true);
+    board.place(at(7, 4), 2);
+    expect(board.makesThreat(1, at(7, 7))).toBe(false);
+    expect(board.makesThreat(1, at(0, 0))).toBe(false);
+  });
+
+  it('lists the empty cells on the 4 lines through a cell', () => {
+    const board = new EngineBoard(SIZE);
+    board.place(at(7, 8), 1);
+    const cells = board.lineCells(at(7, 7), 1);
+    expect(cells.sort((a, b) => a - b)).toEqual(
+      [at(6, 6), at(6, 7), at(6, 8), at(7, 6), at(8, 6), at(8, 7), at(8, 8)].sort((a, b) => a - b),
+    );
+    expect(board.lineCells(at(0, 0), 1).sort((a, b) => a - b)).toEqual([at(0, 1), at(1, 0), at(1, 1)]);
+  });
+
+  it('names the line joining two cells', () => {
+    const board = new EngineBoard(SIZE);
+    expect(board.lineBetween(at(7, 7), at(7, 10), 5)).toBe(0);
+    expect(board.lineBetween(at(7, 7), at(4, 7), 5)).toBe(1);
+    expect(board.lineBetween(at(7, 7), at(9, 9), 5)).toBe(2);
+    expect(board.lineBetween(at(7, 7), at(9, 5), 5)).toBe(3);
+    expect(board.lineBetween(at(7, 7), at(8, 9), 5)).toBe(-1);
+    expect(board.lineBetween(at(7, 7), at(7, 13), 5)).toBe(-1);
+  });
+
   it('reports fours', () => {
     const board = new EngineBoard(SIZE);
     for (const c of [4, 5, 6]) board.place(at(7, c), 1);

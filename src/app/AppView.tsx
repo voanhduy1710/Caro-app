@@ -92,7 +92,7 @@ export const App: React.FC = () => {
 
   // Practice game state. Online games live in the room.
   const [roomSettings, setRoomSettings] = useState<RoomSettings>(DEFAULT_ROOM_SETTINGS);
-  /** The bot always plays 15x15; online rooms keep the chosen size. */
+  /** The bot always plays 19x19; online rooms keep the chosen size. */
   const practiceSettings = useMemo(() => ({ ...roomSettings, boardSize: AI_BOARD_SIZE }), [roomSettings]);
   const [gameStatus, setGameStatus] = useState<'lobby' | 'playing' | 'ended'>('lobby');
   const [board, setBoard] = useState<BoardMatrix>(() => createEmptyBoard(DEFAULT_ROOM_SETTINGS.boardSize));

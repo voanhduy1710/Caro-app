@@ -49,10 +49,10 @@ export const SHEET_BOT_NAME = 'Nguyễn Minh Anh';
 export const SHEET_TRIANGLE_BOT_NAME = 'Trần Thu Hà';
 export const BOT_USER: UserProfile = { uid: 'ai_bot', displayName: 'AI Bot 🤖', photoURL: getAvatarPublicUrl('Blitzcrank'), email: '', elo: 1350, wins: 50, losses: 50, draws: 10, streak: 0 };
 export const TRIANGLE_BOT_USER: UserProfile = { uid: 'ai_triangle_bot', displayName: 'AI Triangle 🤖', photoURL: getAvatarPublicUrl('Leona'), email: '', elo: 1350, wins: 50, losses: 50, draws: 10, streak: 0 };
-/** The practice bot always plays on 15x15: small enough to search deeply in the browser. */
-export const AI_BOARD_SIZE = 15;
+/** The practice bot always plays on 19x19: the search stays local, so it runs as fast as 15x15. */
+export const AI_BOARD_SIZE = 19;
 const AI_MAX_THINK_MS = 900;
 /** Bot think time: 900 ms, or a quarter of the turn timer when that is shorter. */
 export const aiThinkMs = (turnTimeSeconds: number): number => turnTimeSeconds > 0 ? Math.min(AI_MAX_THINK_MS, (turnTimeSeconds * 1000) / 4) : AI_MAX_THINK_MS;
-/** Rules edited during practice must not leak the bot's 15x15 into the online room size. */
+/** Rules edited during practice must not leak the bot's 19x19 into the online room size. */
 export const settingsUpdateFor = (current: RoomSettings, next: RoomSettings, inPractice: boolean): RoomSettings => inPractice ? { ...next, boardSize: current.boardSize } : next;
