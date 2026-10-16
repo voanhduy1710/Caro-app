@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { ratingDelta } from './elo.ts';
 
 /**
  * Records a finished match and updates both players' ratings.
@@ -31,7 +32,6 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
  * lookup below.
  */
 
-const K_FACTOR = 32;
 /** Extra rating a decisive game is worth when both players doubled down. */
 const DOUBLE_DOWN_BONUS = 20;
 const SAFE_UID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -59,9 +59,6 @@ const cleanName = (value: unknown, fallback: string) => {
   const trimmed = value.trim().slice(0, 40);
   return trimmed || fallback;
 };
-
-const expectedScore = (rating: number, opponentRating: number) =>
-  1 / (1 + Math.pow(10, (opponentRating - rating) / 400));
 
 /**
  * Keeps whatever part of a seat log is well formed. A malformed or oversized
@@ -270,8 +267,8 @@ Deno.serve(async (req: Request) => {
     if ((consents ?? []).length === 2) bonus = DOUBLE_DOWN_BONUS;
   }
 
-  const delta1 = Math.round(K_FACTOR * (score1 - expectedScore(elo1, elo2))) + (score1 === 1 ? bonus : -bonus);
-  const delta2 = Math.round(K_FACTOR * (score2 - expectedScore(elo2, elo1))) + (score2 === 1 ? bonus : -bonus);
+  const delta1 = ratingDelta(score1, elo1, elo2) + (score1 === 1 ? bonus : -bonus);
+  const delta2 = ratingDelta(score2, elo2, elo1) + (score2 === 1 ? bonus : -bonus);
 
   // A result that favours the caller is only ever a claim, and only against a
   // player who really sat in this game.
