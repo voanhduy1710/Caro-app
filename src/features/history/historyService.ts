@@ -1,7 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../../config/supabase';
 import type { MatchRecord } from './types';
-
-const LOCAL_HISTORY_KEY = 'caro_app_match_history';
+import { LOCAL_HISTORY_KEY, fetchPracticeHistory, syncPracticeHistory } from './practiceSync';
 
 export interface SaveMatchOutcome {
   eloDeltaPlayer1: number;
@@ -38,8 +37,12 @@ export const saveMatchRecord = async (
   }
 
   // Practice games have no second player and no rating at stake, so there is
-  // nothing for the server to verify. They live on this device only.
-  if (options.localOnly) return { eloDeltaPlayer1: 0, eloDeltaPlayer2: 0 };
+  // nothing for submit-match to verify. They are copied to the player's own
+  // practice table instead, which never touches ratings.
+  if (options.localOnly) {
+    if (record.mode === 'ai') void syncPracticeHistory(record.player1Uid);
+    return { eloDeltaPlayer1: 0, eloDeltaPlayer2: 0 };
+  }
 
   if (!isSupabaseConfigured || !supabase) return null;
 
@@ -101,12 +104,15 @@ export const fetchUserMatchHistory = async (userUid: string): Promise<MatchRecor
   if (isSupabaseConfigured && supabase && userUid && SAFE_UID.test(userUid) && !userUid.startsWith('guest_')) {
     const sb = supabase;
     try {
-      const { data, error } = await sb
-        .from('gomoku_matches')
-        .select('*')
-        .or(`player1_uid.eq.${userUid},player2_uid.eq.${userUid}`)
-        .order('timestamp', { ascending: false })
-        .limit(20);
+      const [{ data, error }, remotePractice] = await Promise.all([
+        sb
+          .from('gomoku_matches')
+          .select('*')
+          .or(`player1_uid.eq.${userUid},player2_uid.eq.${userUid}`)
+          .order('timestamp', { ascending: false })
+          .limit(20),
+        fetchPracticeHistory(userUid),
+      ]);
 
       if (error) {
         console.warn('Supabase fetch match history error:', error);
@@ -128,12 +134,17 @@ export const fetchUserMatchHistory = async (userUid: string): Promise<MatchRecor
           gameId: row.game_id ?? undefined,
         }));
 
-        // Practice games are never sent to the server, and an online game whose
-        // rating could not be recorded only exists here, so both are merged in.
-        // A game the server does have is shown once, from the server.
+        // Practice games not yet uploaded, and online games whose rating could
+        // not be recorded, only exist here, so both are merged in. A game the
+        // server does have is shown once, from the server.
+        const practice = remotePractice ?? [];
         const onServer = new Set(records.map((r) => r.gameId).filter(Boolean));
-        const localOnly = local.filter((m) => m.mode === 'ai' || (m.gameId !== undefined && !onServer.has(m.gameId)));
-        return [...records, ...localOnly].sort((a, b) => b.timestamp - a.timestamp);
+        const practiceOnServer = new Set(practice.map((r) => r.id));
+        const localOnly = local.filter((m) =>
+          m.mode === 'ai'
+            ? !practiceOnServer.has(m.id)
+            : m.gameId !== undefined && !onServer.has(m.gameId));
+        return [...records, ...practice, ...localOnly].sort((a, b) => b.timestamp - a.timestamp);
       }
     } catch (e) {
       console.warn('Supabase fetch match history exception, returning local history:', e);

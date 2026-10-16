@@ -15,6 +15,7 @@ import { createEmptyBoard, checkWin, isBoardFull } from '../shared/utils/gomokuL
 import type { BoardMatrix } from '../shared/utils/gomokuLogic';
 import { useAiEngine } from '../features/game/useAiEngine';
 import { saveMatchRecord, resendPendingRatedResults } from '../features/history/historyService';
+import { syncPracticeHistory } from '../features/history/practiceSync';
 import { useRoom, readLastRoom, clearLastRoom } from '../features/room/useRoom';
 import type { LastRoom } from '../features/room/useRoom';
 import { PublicRoomList } from './PublicRoomList';
@@ -37,6 +38,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (authLoading || !signedInUid) return;
     void resendPendingRatedResults();
+    // Practice games played on this device, including ones from before they
+    // were stored online, are copied to the player's account.
+    void syncPracticeHistory(signedInUid);
   }, [authLoading, signedInUid]);
   const { playMoveSound, playWinSound, playTimerWarningSound, playBuzzSound } = useSheetAwareSound();
 
@@ -283,7 +287,7 @@ export const App: React.FC = () => {
 
     if (user) {
       // Practice is still a game the player finished, so it belongs in their
-      // history. It never reaches the server and never moves the rating.
+      // history. It is stored for their account but never moves the rating.
       const iWon = winner === myPiece;
       void saveMatchRecord(
         {
