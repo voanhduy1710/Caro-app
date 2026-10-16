@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AI_BOARD_SIZE, aiThinkMs, settingsUpdateFor } from './AppViewShared';
+import { AI_BOARD_SIZE, BOT_WIN_QUIPS, aiThinkMs, botQuip, settingsUpdateFor } from './AppViewShared';
 
 describe('practice bot settings', () => {
   it('uses a 19x19 board', () => {
@@ -26,5 +26,23 @@ describe('settingsUpdateFor', () => {
 
   it('passes changes through outside practice', () => {
     expect(settingsUpdateFor(room, { ...room, boardSize: 19 }, false)).toEqual({ ...room, boardSize: 19 });
+  });
+});
+
+describe('botQuip', () => {
+  it('promises a comeback when the bot loses', () => {
+    expect(botQuip('lost', 0)).toBe("I'll win next time");
+    expect(botQuip('lost', 5)).toBe("I'll win next time");
+  });
+
+  it('gloats with one of the win lines, picked by the seed', () => {
+    const lines = Array.from({ length: BOT_WIN_QUIPS.length }, (_, seed) => botQuip('won', seed));
+    expect(new Set(lines)).toEqual(new Set(BOT_WIN_QUIPS));
+    expect(botQuip('won', 3)).toBe(botQuip('won', 3));
+  });
+
+  it('wraps seeds of any size, including negative ones', () => {
+    expect(BOT_WIN_QUIPS).toContain(botQuip('won', 1_000_003));
+    expect(BOT_WIN_QUIPS).toContain(botQuip('won', -7));
   });
 });

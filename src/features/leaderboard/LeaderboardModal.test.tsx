@@ -12,12 +12,15 @@ describe('LeaderboardModal', () => {
 
   it('shows all badge images with the Elo ranges used by rank matching', () => {
     const html = renderToStaticMarkup(<RankGuideModal isOpen onClose={() => {}} />);
-    expect(html.match(/src="\/badges\/[^"]+\.webp"/g)).toHaveLength(10);
+    expect(html.match(/src="\/badges\/[^"]+\.webp"/g)).toHaveLength(12);
     expect(html).toContain('Grand Master');
     expect(html).toContain('2100+ Elo');
     expect(html).toContain('1900–2099 Elo');
-    expect(html).toContain('Below 1000 Elo');
+    expect(html).toContain('900–999 Elo');
+    expect(html).toContain('800–899 Elo');
+    expect(html).toContain('Below 800 Elo');
     expect(html).toContain('/badges/stone.webp');
+    expect(html).toContain('/badges/cardboard.webp');
   });
 
   it('offers a preview button for each badge', () => {

@@ -56,3 +56,7 @@ const AI_MAX_THINK_MS = 900;
 export const aiThinkMs = (turnTimeSeconds: number): number => turnTimeSeconds > 0 ? Math.min(AI_MAX_THINK_MS, (turnTimeSeconds * 1000) / 4) : AI_MAX_THINK_MS;
 /** Rules edited during practice must not leak the bot's 19x19 into the online room size. */
 export const settingsUpdateFor = (current: RoomSettings, next: RoomSettings, inPractice: boolean): RoomSettings => inPractice ? { ...next, boardSize: current.boardSize } : next;
+/** What the bot says when it wins a practice game. */
+export const BOT_WIN_QUIPS = ['EZ', 'IZI', 'EZ game EZ life', 'Oh god so ez', 'lul', 'Lmao', '=))', ':))'] as const;
+/** The bot's thought bubble after a game; `seed` keeps one line steady for the whole result screen. */
+export const botQuip = (outcome: 'won' | 'lost', seed: number): string => outcome === 'lost' ? "I'll win next time" : BOT_WIN_QUIPS[((seed % BOT_WIN_QUIPS.length) + BOT_WIN_QUIPS.length) % BOT_WIN_QUIPS.length];

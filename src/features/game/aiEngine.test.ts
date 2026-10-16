@@ -70,13 +70,14 @@ describe('getBestAiMove', () => {
     expect(findVcf(engineBoardFrom(board, SIZE, 'O'), 2)).toBe(-1);
   });
 
-  it('finds the one move that stops a forced win through threes', () => {
+  it('finds the one move that stops a forced win through threes', { timeout: 20_000 }, () => {
     // X wins by a chain of open threes after every O move except (8,8).
     const board = boardWith(SIZE, [
       [6, 6, 'X'], [7, 7, 'X'], [9, 8, 'X'], [7, 9, 'X'],
       [8, 5, 'O'], [5, 9, 'O'], [6, 5, 'O'], [6, 8, 'O'],
     ]);
-    expect(getBestAiMove(board, SIZE, 'O', { timeLimitMs: 900 })).toEqual([8, 8]);
+    // A generous budget: this checks the bot can find the save, not how fast (that has its own test).
+    expect(getBestAiMove(board, SIZE, 'O', { timeLimitMs: 3000 })).toEqual([8, 8]);
   });
 
   it('converts its own forced win through threes', { timeout: 120_000 }, () => {

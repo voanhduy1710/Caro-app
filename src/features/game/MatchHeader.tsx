@@ -18,6 +18,8 @@ export interface SeatView {
   moveClock: number;
   isTurn: boolean;
   tag?: string;
+  /** A short line this seat "thinks", drawn as a thought bubble over the portrait. */
+  bubble?: string;
   onClick?: () => void;
   title: string;
   /** Nobody sits here: drawn as an open seat. */
@@ -75,6 +77,19 @@ const clockPill = (lit: boolean, urgent = false) =>
     lit ? (urgent ? 'bg-danger-solid text-danger-fg' : 'bg-accent text-accent-fg') : 'bg-surface-3 text-muted'
   }`;
 
+/**
+ * The trail from a thought bubble back to the portrait, biggest dot first. On
+ * a phone the bubble hangs below the portrait, so the dots climb up to it and
+ * drift towards its centre; in the rail it sits to the right, so they step
+ * left and sink towards the middle of the 96px portrait. Values in px.
+ */
+const THOUGHT_DOTS = [
+  { phone: { gap: 2, size: 8, shift: 10 }, rail: { gap: 3, size: 11, drop: 2 } },
+  { phone: { gap: 12, size: 6, shift: 12 }, rail: { gap: 17, size: 8, drop: -3 } },
+  { phone: { gap: 20, size: 5, shift: 13 }, rail: { gap: 28, size: 6, drop: -8 } },
+  { phone: { gap: 27, size: 3, shift: 15 }, rail: { gap: 37, size: 4, drop: -12 } },
+] as const;
+
 interface SeatProps extends SeatView {
   color: string;
   /** Set on the right-hand seat, which a phone lays out from its outer edge in. */
@@ -102,6 +117,7 @@ const Seat: React.FC<SeatProps> = ({
   isTurn,
   mirrored = false,
   tag,
+  bubble,
   onClick,
   title,
   empty = false,
@@ -156,6 +172,43 @@ const Seat: React.FC<SeatProps> = ({
       >
         {piece}
       </span>
+      {/* Beside the portrait in the rail, where above it would cover the
+          score; below it on a phone, where above it is cut off by the top bar,
+          held to the seat's own side of the row. The trailing dots point back
+          at the portrait, which is what makes it read as a thought rather than
+          a label. The outer layer positions, the inner one pops in, since the
+          pop-in animation owns the transform it runs on. */}
+      {bubble && (
+        <span
+          className={`pointer-events-none absolute top-full z-10 mt-8 lg:left-full lg:right-auto lg:top-0 lg:mt-0 lg:ml-11 ${
+            mirrored ? 'right-0' : 'left-0'
+          }`}
+        >
+          <span
+            role="status"
+            className="animate-pop-in relative block w-max max-w-[9rem] rounded-2xl border-2 border-line-strong bg-surface px-2.5 py-1 text-center font-display text-xs font-bold leading-snug text-ink shadow-md lg:px-3.5 lg:py-1.5 lg:text-base"
+          >
+            {bubble}
+            {THOUGHT_DOTS.map((dot) => (
+              <span
+                key={dot.phone.gap}
+                aria-hidden="true"
+                className={`absolute bottom-[calc(100%+var(--gap))] h-[var(--size)] w-[var(--size)] rounded-full border-[1.5px] border-line-strong bg-surface lg:bottom-[var(--rail-drop)] lg:right-[calc(100%+var(--rail-gap))] lg:left-auto lg:h-[var(--rail-size)] lg:w-[var(--rail-size)] ${
+                  mirrored ? 'right-[var(--shift)]' : 'left-[var(--shift)]'
+                }`}
+                style={{
+                  '--gap': `${dot.phone.gap}px`,
+                  '--size': `${dot.phone.size}px`,
+                  '--shift': `${dot.phone.shift}px`,
+                  '--rail-gap': `${dot.rail.gap}px`,
+                  '--rail-size': `${dot.rail.size}px`,
+                  '--rail-drop': `${dot.rail.drop}px`,
+                } as React.CSSProperties}
+              />
+            ))}
+          </span>
+        </span>
+      )}
     </span>
   );
 
