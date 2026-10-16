@@ -331,6 +331,8 @@ export const App: React.FC = () => {
   const executeUndoMove = useCallback((targetHistory: MoveHistoryItem[]) => {
     practiceGameGenerationRef.current += 1;
     cancelAiMove();
+    // The cancelled search never answers, so nothing else would clear this and the bot would wait forever.
+    setIsAiThinking(false);
     const size = AI_BOARD_SIZE;
     const newBoard = createEmptyBoard(size);
 
