@@ -3,6 +3,7 @@ import { Bell, ImagePlus, Smile, X } from 'lucide-react';
 import type { ChatMessage } from '../webrtc/types';
 import { quoteSnippet } from './GameControlsShared';
 import { EmoteInput } from './EmoteInput';
+import { useT } from '../i18n/language';
 
 export interface GameChatComposerProps {
   attachedImage: string | null; setAttachedImage: React.Dispatch<React.SetStateAction<string | null>>; reactionRow: React.ReactNode;
@@ -15,6 +16,7 @@ export interface GameChatComposerProps {
 }
 
 export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
+  const t = useT();
   const { attachedImage, setAttachedImage, reactionRow, handleChatSubmit, isAiMode, isReactionsOpen, setIsReactionsOpen, attachmentInputRef, handleAttachmentChange, emoteButtonRef, textareaRef, chatText, setChatText, handleKeyDown, handlePaste, role, handleBuzzClick, isBuzzCooldown, replyingTo, onCancelReply } = props;
   return (
     <div className="shrink-0">
@@ -23,14 +25,14 @@ export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
           <button
             type="button"
             onClick={onCancelReply}
-            title="Cancel reply"
-            aria-label="Cancel reply"
+            title={t('game.cancelReply')}
+            aria-label={t('game.cancelReply')}
             className="btn btn-ghost btn-icon h-6 w-6 shrink-0 rounded-full text-muted"
           >
             <X size={13} strokeWidth={2.25} aria-hidden="true" />
           </button>
           <span className="min-w-0 flex-1 truncate text-muted">
-            Reply to <span className="font-semibold text-ink">{replyingTo.sender}</span>: {quoteSnippet({ text: replyingTo.text, hasImage: Boolean(replyingTo.image) })}
+            {t('game.replyToLabel')} <span className="font-semibold text-ink">{replyingTo.sender}</span>: {quoteSnippet({ text: replyingTo.text, hasImage: Boolean(replyingTo.image) })}
           </span>
         </div>
       )}
@@ -40,21 +42,21 @@ export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
           <div className="relative inline-block">
             <img
               src={attachedImage}
-              alt="Pasted attachment preview"
+              alt={t('game.pastedPreview')}
               className="h-14 w-14 object-cover rounded-sm border-2 border-accent"
             />
             <button
               type="button"
               onClick={() => setAttachedImage(null)}
-              title="Remove image"
-              aria-label="Remove attached image"
+              title={t('game.removeImage')}
+              aria-label={t('game.removeAttachedImage')}
               className="absolute -top-1.5 -right-1.5 bg-danger-solid hover:opacity-90 text-danger-fg rounded-full w-5 h-5 text-[10px] font-medium flex items-center justify-center shadow transition cursor-pointer"
             >
               <X size={11} strokeWidth={2.25} aria-hidden="true" />
             </button>
           </div>
           <span className="text-[11px] text-muted">
-            {attachedImage.startsWith('data:image/gif') ? 'GIF ready to send' : 'Image ready to send'}
+            {attachedImage.startsWith('data:image/gif') ? t('game.gifReady') : t('game.imageReady')}
           </span>
         </div>
       )}
@@ -71,8 +73,8 @@ export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
             type="button"
             onClick={() => setIsReactionsOpen((open) => !open)}
             aria-expanded={isReactionsOpen}
-            aria-label="Emoticons"
-            title="Emoticons"
+            aria-label={t('game.emoticons')}
+            title={t('game.emoticons')}
             className="btn btn-ghost btn-icon h-9 w-9 shrink-0"
           >
             <Smile size={16} strokeWidth={2.25} aria-hidden="true" />
@@ -91,8 +93,8 @@ export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
             <button
               type="button"
               onClick={() => attachmentInputRef.current?.click()}
-              title="Attach an image or animated GIF"
-              aria-label="Attach an image or animated GIF"
+              title={t('game.attachImage')}
+              aria-label={t('game.attachImage')}
               className="btn btn-ghost btn-icon h-9 w-9 shrink-0"
             >
               <ImagePlus size={16} strokeWidth={2.25} aria-hidden="true" />
@@ -105,9 +107,9 @@ export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
           onChange={setChatText}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder={replyingTo ? `Reply to ${replyingTo.sender}...` : 'Type a message...'}
-          title="Shift+Enter for a newline, paste an image, or attach an image/GIF. Emote shortcuts such as =)) turn into pictures as you type."
-          aria-label="Chat message"
+          placeholder={replyingTo ? t('game.replyToPlaceholder', { name: replyingTo.sender }) : t('game.typeMessage')}
+          title={t('game.composerHint')}
+          aria-label={t('game.chatMessage')}
           className="min-h-[38px] max-h-[78px] min-w-0 flex-1 overflow-y-auto rounded-md border border-line-strong bg-surface px-3 py-2 text-[13px] leading-snug text-ink focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none"
         />
         <button
@@ -115,15 +117,15 @@ export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
           disabled={!chatText.trim() && !attachedImage}
           className="btn btn-primary btn-sm h-9 shrink-0"
         >
-          Send
+          {t('game.send')}
         </button>
         {role === 'player' && (
           <button
             type="button"
             onClick={handleBuzzClick}
             disabled={isBuzzCooldown}
-            title="Nudge the other player with a sound"
-            aria-label="Buzz the other player"
+            title={t('game.buzzTitle')}
+            aria-label={t('game.buzzAria')}
             className="btn btn-secondary btn-icon h-9 w-9 shrink-0"
           >
             <Bell size={16} strokeWidth={2.25} aria-hidden="true" />

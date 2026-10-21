@@ -6,6 +6,7 @@ import { getRankTitle } from '../utils/eloCalculator';
 import { getAvatarPublicUrl } from '../../features/avatar/avatarService';
 import { useTheme } from '../../features/theme/ThemeContext';
 import { useDisguiseMode } from '../../features/game/disguiseMode';
+import { useT } from '../../features/i18n/language';
 
 interface NavbarProps {
   onOpenLeaderboard: () => void;
@@ -35,6 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSettingsAndTheme,
   onNavigateHome,
 }) => {
+  const t = useT();
   const { user, openAuthModal, openProfileModal, signOut } = useAuth();
   const rank = user ? getRankTitle(user.elo) : getRankTitle(1200);
   const isSignedIn = Boolean(user && !user.isGuest);
@@ -57,8 +59,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         <button
           type="button"
           onClick={onNavigateHome}
-          title="Back to the home screen"
-          aria-label="Home"
+          title={t('home.navBackHome')}
+          aria-label={t('home.navHome')}
           className="flex shrink-0 items-center gap-2.5 select-none rounded-md px-1 py-1 transition-colors hover:bg-surface-2"
         >
           <img
@@ -80,7 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               type="button"
               onClick={openProfileModal}
               className="mr-1 flex shrink-0 items-center gap-2 rounded-md border border-line bg-surface-2 p-1 transition-colors hover:bg-surface-3 md:pr-3"
-              title={user.isGuest ? 'Guest profile: pick a name and avatar' : 'Edit profile and avatar'}
+              title={user.isGuest ? t('home.navGuestProfile') : t('home.navEditProfile')}
             >
               <img
                 src={getAvatarPublicUrl(user.photoURL)}
@@ -107,7 +109,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
               {user.isGuest && (
                 <span className="hidden rounded-sm bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning sm:inline md:hidden">
-                  Guest
+                  {t('home.navGuest')}
                 </span>
               )}
             </button>
@@ -117,33 +119,33 @@ export const Navbar: React.FC<NavbarProps> = ({
             type="button"
             onClick={onOpenLeaderboard}
             className="btn btn-ghost btn-sm max-lg:h-9 max-lg:w-9 max-lg:p-0"
-            title="Leaderboard"
-            aria-label="Leaderboard"
+            title={t('home.navLeaderboard')}
+            aria-label={t('home.navLeaderboard')}
           >
             <Trophy {...ICON} aria-hidden="true" />
-            <span className={inMatch ? 'hidden' : 'hidden lg:inline'}>Leaderboard</span>
+            <span className={inMatch ? 'hidden' : 'hidden lg:inline'}>{t('home.navLeaderboard')}</span>
           </button>
 
           <button
             type="button"
             onClick={onOpenHistory}
             className="btn btn-ghost btn-sm max-lg:h-9 max-lg:w-9 max-lg:p-0"
-            title="Match history"
-            aria-label="Match history"
+            title={t('home.navHistoryTitle')}
+            aria-label={t('home.navHistoryTitle')}
           >
             <History {...ICON} aria-hidden="true" />
-            <span className={inMatch ? 'hidden' : 'hidden lg:inline'}>History</span>
+            <span className={inMatch ? 'hidden' : 'hidden lg:inline'}>{t('home.navHistory')}</span>
           </button>
 
           <button
             type="button"
             onClick={onOpenSettingsAndTheme}
             className="btn btn-ghost btn-sm max-lg:h-9 max-lg:w-9 max-lg:p-0"
-            title="Match rules, appearance and themes"
-            aria-label="Match rules, appearance and themes"
+            title={t('home.navSettingsTitle')}
+            aria-label={t('home.navSettingsTitle')}
           >
             <Settings {...ICON} aria-hidden="true" />
-            <span className={inMatch ? 'hidden' : 'hidden lg:inline'}>Settings</span>
+            <span className={inMatch ? 'hidden' : 'hidden lg:inline'}>{t('home.navSettings')}</span>
           </button>
 
           {isSignedIn ? (
@@ -151,11 +153,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               type="button"
               onClick={signOut}
               className="btn btn-secondary btn-sm max-sm:h-9 max-sm:w-9 max-sm:p-0"
-              title="Sign out"
-              aria-label="Sign out"
+              title={t('home.navSignOut')}
+              aria-label={t('home.navSignOut')}
             >
               <LogOut {...ICON} aria-hidden="true" />
-              <span className="hidden sm:inline">Sign out</span>
+              <span className="hidden sm:inline">{t('home.navSignOut')}</span>
             </button>
           ) : (
             <>
@@ -165,20 +167,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                 type="button"
                 onClick={() => openAuthModal('signin')}
                 className="btn btn-ghost btn-sm max-sm:h-9 max-sm:w-9 max-sm:p-0"
-                title="Sign in"
-                aria-label="Sign in"
+                title={t('home.navSignIn')}
+                aria-label={t('home.navSignIn')}
               >
                 <LogIn {...ICON} aria-hidden="true" />
-                <span className="hidden sm:inline">Sign in</span>
+                <span className="hidden sm:inline">{t('home.navSignIn')}</span>
               </button>
               <button
                 type="button"
                 onClick={() => openAuthModal('create')}
                 className="btn btn-primary btn-sm shrink-0"
-                title="Create an account"
+                title={t('home.navCreateAccount')}
               >
                 <UserPlus {...ICON} aria-hidden="true" />
-                <span>Sign up</span>
+                <span>{t('home.navSignUp')}</span>
               </button>
             </>
           )}

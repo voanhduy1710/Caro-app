@@ -1,23 +1,25 @@
 import type { GameResult } from './roomEngine';
+import { t } from '../i18n/language';
+import type { StringKey } from '../i18n/strings';
 
 /** Plain-language result and seat-departure copy for the room screen. */
-export const RESULT_REASONS: Record<GameResult['reason'], string> = {
-  '5_in_a_row': 'Five in a row completed the line.',
-  board_full: 'The board filled up with nobody in a row.',
-  turn_timeout: 'The clock for that move ran out.',
-  total_time_out: 'A player used up their total time.',
-  resigned: 'A player resigned.',
-  disconnected: 'A player did not return before the reconnect time expired.',
+export const RESULT_REASONS: Record<GameResult['reason'], StringKey> = {
+  '5_in_a_row': 'room.reason.fiveInRow',
+  board_full: 'room.reason.boardFull',
+  turn_timeout: 'room.reason.turnTimeout',
+  total_time_out: 'room.reason.totalTimeOut',
+  resigned: 'room.reason.resigned',
+  disconnected: 'room.reason.disconnected',
 };
 
 export const resultReason = (result: GameResult): string =>
   result.reason === '5_in_a_row' && result.settings.playerMode === 'oneVsOneVsOne'
-    ? 'Four in a row completed the line.'
-    : RESULT_REASONS[result.reason];
+    ? t('room.reason.fourInRow')
+    : t(RESULT_REASONS[result.reason]);
 
-export const LEFT_HOW: Record<string, string> = {
-  stood: 'stood up',
-  left: 'left the room',
-  dropped: 'lost the connection',
-  removed: 'was moved out of the seat',
+export const LEFT_HOW: Record<string, StringKey> = {
+  stood: 'room.left.stood',
+  left: 'room.left.left',
+  dropped: 'room.left.dropped',
+  removed: 'room.left.removed',
 };

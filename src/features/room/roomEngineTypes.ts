@@ -203,12 +203,15 @@ export interface Game {
   doubleDown?: DoubleDown;
 }
 
+export type RoomMode = 'casual' | 'ranked' | 'chat';
+
 export interface RoomState {
   v: typeof PROTOCOL_VERSION;
   roomId: string;
   rev: number;
   isPublic: boolean;
-  mode: 'casual' | 'ranked';
+  /** 'chat' is a room with no board: nobody sits, no game ever starts. */
+  mode: RoomMode;
   createdAt: number;
   settings: RoomSettings;
   members: Member[]; // host first, then join order
@@ -252,6 +255,8 @@ export interface HostBook {
    * here, so nobody can put words in someone else's mouth with a fake quote.
    */
   recentQuotes: ChatQuote[];
+  /** The last message each seated player has read, by member id. Only ever moves forward. */
+  chatSeen: Record<string, string>;
 }
 
 export interface EngineState {

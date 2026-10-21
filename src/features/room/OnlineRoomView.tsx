@@ -12,11 +12,13 @@ import type { SheetMatch } from '../game/sheetBridge';
 import { showSheetSnackbar } from '../game/sheet/sheetSnackbar';
 import { useSheetAwareSound } from '../game/sheet/useSheetAwareSound';
 import { useTheme } from '../theme/ThemeContext';
+import { useT } from '../i18n/language';
 import { RoomRoster } from './RoomRoster';
 import { TeaseToast } from './TeaseToast';
 import { CoinTossModal } from '../minigames/CoinTossModal';
 import { RockPaperScissorsModal } from '../minigames/RockPaperScissorsModal';
 import { OnlineRoomLobby } from './OnlineRoomLobby';
+import { ChatRoomView } from './ChatRoomView';
 import { HostLostStrip, OnlineRoomConnecting, RoomConfirmDialog } from './OnlineRoomOverlays';
 import type { Seat } from './protocol';
 import { CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, DOUBLE_DOWN_ANSWER_MOVES, DOUBLE_DOWN_BONUS, GRACE_MS, MAX_MEMBERS, SEATS, activeSeats, boardFromMoves, latestResult, otherSeat, pieceAt } from './roomEngine';
@@ -35,6 +37,7 @@ const formatReconnectTime = (seconds: number | null | undefined) => {
 };
 
 export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules, onViewMyProfile, onViewProfile, exitRef }) => {
+  const t = useT();
   const isDesktop = useIsDesktop();
   const { playWinSound, playTimerWarningSound, playClickSound, playBuzzSound } = useSheetAwareSound();
   // Under the Spreadsheet board the room speaks Sheets: the paused panel
@@ -80,15 +83,30 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     const offer: ChatMessage = {
       id: `double-down-${game.id}-${doubleDownFrom}`,
       senderId: doubleDownOfferer?.id,
-      sender: doubleDownOfferer?.profile.name ?? 'Your opponent',
-      text: `${doubleDownOfferer?.profile.name ?? 'Your opponent'} has offered to Double down`,
+      sender: doubleDownOfferer?.profile.name ?? t('room.yourOpponent'),
+      text: t('room.dd.offered', { name: doubleDownOfferer?.profile.name ?? t('room.yourOpponent') }),
       timestamp: Date.now(),
       doubleDownOffer: { canAnswer: canAnswerDoubleDown, movesLeft: game.doubleDown?.answerMovesLeft ?? DOUBLE_DOWN_ANSWER_MOVES },
     };
     return [...room.chatMessages, offer];
     // The offer is rebuilt only when something it shows changes, so the feed does not re-scroll on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room.chatMessages, game?.id, game?.doubleDown?.answerMovesLeft, doubleDownFrom, doubleDownOfferer?.id, doubleDownOfferer?.profile.name, canAnswerDoubleDown]);
+  }, [room.chatMessages, game?.id, game?.doubleDown?.answerMovesLeft, doubleDownFrom, doubleDownOfferer?.id, doubleDownOfferer?.profile.name, canAnswerDoubleDown, t]);
+  // A seated player's newest line reads "Seen" once a player in another seat
+  // has read up to it or past it. Viewers neither get the label nor count.
+  const chatReceipt = useMemo(() => {
+    if (!s || !me || !mySeat) return null;
+    const lines = room.chatMessages;
+    let mine = -1;
+    for (let i = lines.length - 1; i >= 0 && mine < 0; i--) if (!lines[i].system && lines[i].senderId === me) mine = i;
+    if (mine < 0) return null;
+    const seen = (['X', 'O', 'T'] as Seat[]).some((seat) => {
+      const reader = s.seats[seat];
+      const upTo = reader && seat !== mySeat ? room.chatSeen[reader] : undefined;
+      return upTo !== undefined && lines.findIndex((line) => line.id === upTo) >= mine;
+    });
+    return { messageId: lines[mine].id, seen };
+  }, [s, me, mySeat, room.chatMessages, room.chatSeen]);
   const placementCorners = useMemo<Record<string, BoardCorner>>(
     () =>
       Object.fromEntries(
@@ -113,10 +131,10 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         return;
       }
       setConfirmSpec({
-        title: 'Close the room?',
-        body: `Everyone here (${others}) is sent home${game ? ' and the game ends without a result' : ''}.`,
-        confirmLabel: 'Close the room',
-        cancelLabel: 'Stay',
+        title: t('room.confirm.closeTitle'),
+        body: t(game ? 'room.confirm.closeBodyGame' : 'room.confirm.closeBody', { others }),
+        confirmLabel: t('room.confirm.closeConfirm'),
+        cancelLabel: t('room.confirm.stay'),
         sheet: {
           title: 'Xóa tệp này?',
           body: 'Mọi người đang mở tệp sẽ mất quyền truy cập.',
@@ -130,10 +148,10 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     }
     if (mySeat && (phase === 'opening' || phase === 'playing' || phase === 'paused' || phase === 'countdown')) {
       setConfirmSpec({
-        title: 'Leave the room?',
-        body: 'The game pauses and your seat opens for someone else. You can come back as a viewer.',
-        confirmLabel: 'Leave the room',
-        cancelLabel: 'Stay',
+        title: t('room.confirm.leaveTitle'),
+        body: t('room.confirm.leaveBody'),
+        confirmLabel: t('room.confirm.leaveConfirm'),
+        cancelLabel: t('room.confirm.stay'),
         sheet: {
           title: 'Đóng tệp?',
           body: 'Bạn có thể mở lại tệp này sau với quyền xem.',
@@ -146,7 +164,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       return;
     }
     leaveNow();
-  }, [s, room.isHost, game, mySeat, phase, leaveNow]);
+  }, [s, room.isHost, game, mySeat, phase, leaveNow, t]);
 
   useEffect(() => {
     exitRef.current = requestExit;
@@ -159,12 +177,12 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     const seated = s ? SEATS.some((seat) => s.seats[seat] === member.id) : false;
     const midGame = phase === 'opening' || phase === 'playing' || phase === 'paused';
     setConfirmSpec({
-      title: `Kick ${member.profile.name}?`,
+      title: t('room.confirm.kickTitle', { name: member.profile.name }),
       body: seated && midGame
-        ? 'They leave the room and their seat opens. The game pauses until someone takes the seat; no result is recorded.'
-        : 'They leave the room and free their place for someone else. They can join again with the invite link.',
-      confirmLabel: 'Kick',
-      cancelLabel: 'Cancel',
+        ? t('room.confirm.kickBodySeated')
+        : t('room.confirm.kickBody'),
+      confirmLabel: t('room.confirm.kick'),
+      cancelLabel: t('common.cancel'),
       sheet: {
         title: `Xóa quyền truy cập của ${member.profile.name}?`,
         body: 'Người này sẽ không thể mở tệp nữa cho đến khi được chia sẻ lại.',
@@ -179,10 +197,10 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   const requestBecomeViewer = () => {
     if (phase === 'opening' || phase === 'playing' || phase === 'paused' || phase === 'countdown') {
       setConfirmSpec({
-        title: 'Give up your seat?',
-        body: 'The game pauses until someone takes your seat and carries on from this position. You cannot sit back down in this game.',
-        confirmLabel: 'Become a viewer',
-        cancelLabel: 'Keep playing',
+        title: t('room.confirm.giveUpTitle'),
+        body: t('room.confirm.giveUpBody'),
+        confirmLabel: t('room.confirm.becomeViewer'),
+        cancelLabel: t('room.keepPlaying'),
         sheet: {
           title: 'Từ bỏ quyền chỉnh sửa?',
           body: 'Bạn sẽ chỉ còn quyền xem tệp này.',
@@ -199,10 +217,10 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   const requestResign = () => {
     if (phase !== 'playing') return;
     setConfirmSpec({
-      title: 'Resign this game?',
-      body: 'The game ends now and counts as a loss for you.',
-      confirmLabel: 'Resign',
-      cancelLabel: 'Keep playing',
+      title: t('room.confirm.resignTitle'),
+      body: t('room.confirm.resignBody'),
+      confirmLabel: t('room.confirm.resign'),
+      cancelLabel: t('room.keepPlaying'),
       sheet: {
         title: 'Chuyển vào thùng rác?',
         body: 'Tệp sẽ được chuyển vào thùng rác.',
@@ -216,10 +234,10 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
 
   const requestDiscard = () =>
     setConfirmSpec({
-      title: 'End this game without a result?',
-      body: 'Nobody wins or loses, and the room waits for two players again.',
-      confirmLabel: 'End the game',
-      cancelLabel: 'Keep waiting',
+      title: t('room.confirm.discardTitle'),
+      body: t('room.confirm.discardBody'),
+      confirmLabel: t('room.confirm.discard'),
+      cancelLabel: t('room.confirm.keepWaiting'),
       sheet: {
         title: 'Hủy các thay đổi?',
         body: 'Các thay đổi trong phiên này sẽ không được lưu.',
@@ -278,7 +296,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   const shareRoomLink = async () => {
     if (!roomLink || !navigator.share) return;
     try {
-      await navigator.share({ title: 'Play Caro with me', url: roomLink });
+      await navigator.share({ title: t('room.shareTitle'), url: roomLink });
     } catch {
       // A cancelled share sheet is not a failure worth reporting.
     }
@@ -328,7 +346,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     // name, and a game-worded prefix there would give the cover away.
     if (isSheetDisguiseActive()) return;
     const original = document.title;
-    document.title = `(Seat open) ${original}`;
+    document.title = t('room.seatOpenTab', { title: original });
     const marked = document.title;
     // Only take the mark back off while it is still there. The disguise may
     // have come on since, and its own tab title must not be replaced with
@@ -344,7 +362,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       document.removeEventListener('visibilitychange', restore);
       unmark();
     };
-  }, [titleMarkNeeded, playClickSound]);
+  }, [titleMarkNeeded, playClickSound, t]);
 
   /* ------------------------------- views ------------------------------ */
 
@@ -367,6 +385,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       onViewProfile={(member) => (member.id === me ? onViewMyProfile() : onViewProfile(memberProfile(member)))}
       onCopyInvite={copyRoomLink}
       collapsible={!isDesktop}
+      showSeats={s.mode !== 'chat'}
     />
   );
 
@@ -376,6 +395,18 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   }
 
   const hostLostStrip = room.status === 'host_lost' ? <HostLostStrip seconds={phase === 'playing' || phase === 'paused' ? room.hostClaimSecondsLeft : room.hostGraceSecondsLeft} /> : null;
+  /* ------------------------------ chat room ------------------------------ */
+
+  if (s.mode === 'chat') {
+    return (
+      <ChatRoomView
+        room={room} s={s} me={me} members={members}
+        copyState={copyState} roomLink={roomLink} copyRoomLink={copyRoomLink} requestExit={requestExit}
+        roster={roster} hostLostStrip={hostLostStrip} confirmDialog={confirmDialog}
+      />
+    );
+  }
+
   /* ----------------------------- waiting room ----------------------------- */
 
   if (phase === 'waiting') {
@@ -403,7 +434,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   moves.forEach((_, index) => { moveCounts[pieceAt(index, game?.openingSeat, game?.settings)] += 1; });
   const turn = game?.turn ?? 'X';
   const mover = occupantOf(turn);
-  const moverName = mover?.profile.name ?? `Seat ${turn}`;
+  const moverName = mover?.profile.name ?? t('room.seatLabel', { seat: turn });
 
   const seatView = (seat: Seat): SeatView => {
     const occupant = occupantOf(seat);
@@ -412,14 +443,14 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     const moveClock = isTurn && settings && settings.turnTimeSeconds > 0 && clocks ? Math.ceil(clocks.turn / 1000) : 0;
     if (!occupant) {
       return {
-        name: 'Open seat',
+        name: t('room.openSeat'),
         piece: seat,
         clock: bank,
         moveClock: 0,
         isTurn: false,
-        title: `Seat ${seat} is open`,
+        title: t('room.seatIsOpen', { seat }),
         empty: true,
-        action: openSeat === seat ? { label: `Take seat ${seat}`, onClick: () => room.takeSeat(seat), tone: 'primary' } : undefined,
+        action: openSeat === seat ? { label: t('room.takeSeatN', { seat }), onClick: () => room.takeSeat(seat), tone: 'primary' } : undefined,
       };
     }
     const isMine = occupant.id === me;
@@ -430,9 +461,9 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       clock: bank,
       moveClock,
       isTurn,
-      tag: isMine ? 'You' : occupant.isHost ? 'Host' : undefined,
+      tag: isMine ? t('common.you') : occupant.isHost ? t('common.host') : undefined,
       onClick: isMine ? onViewMyProfile : () => onViewProfile(memberProfile(occupant)),
-      title: isMine ? 'View and edit your profile' : `View ${occupant.profile.name}'s profile`,
+      title: isMine ? t('room.viewEditProfile') : t('room.roster.viewProfile', { name: occupant.profile.name }),
       reconnectingSeconds: room.graceSecondsLeft(occupant.id),
     };
   };
@@ -469,16 +500,16 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
 
   const announcement =
     phase === 'paused'
-      ? 'Game paused'
+      ? t('room.ann.paused')
       : phase === 'ended'
-      ? 'Game over'
+      ? t('room.ann.over')
       : phase === 'countdown'
-      ? 'Get ready'
+      ? t('room.getReady')
       : mySeat
       ? turn === mySeat
-        ? 'Your turn'
-        : `${moverName}'s turn`
-      : `${moverName} (${turn}) to move`;
+        ? t('room.ann.yourTurn')
+        : t('room.ann.turnOf', { name: moverName })
+      : t('room.ann.toMove', { name: moverName, seat: turn });
 
   // ---- the paused overlay
   // On the Spreadsheet board it is a Sheets dialog in the middle of the grid,
@@ -491,17 +522,17 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         ? `Hoàn tất chỉnh sửa sau ${secondsLeft}s`
         : 'Hoàn tất chỉnh sửa'
       : secondsLeft && secondsLeft > 0
-      ? `Claim win in ${secondsLeft}s`
-      : 'Claim disconnect win';
+      ? t('room.claimIn', { seconds: secondsLeft })
+      : t('room.claimDisconnect');
   let paused: { title: string; body?: string; actions?: React.ReactNode } | null = null;
   if (room.status === 'host_lost' && (phase === 'playing' || phase === 'paused')) {
     const host = members.find((member) => member.isHost);
     const canClaimWin = Boolean(game && game.settings.playerMode === 'oneVsOne' && mySeat && host && occupantOf(otherSeat(mySeat))?.id === host.id);
     paused = {
-      title: sheetTheme ? 'Đang kết nối lại…' : 'Waiting for the host…',
+      title: sheetTheme ? 'Đang kết nối lại…' : t('room.paused.waitingHost'),
       body: sheetTheme
         ? 'Mất kết nối với máy chủ. Các thay đổi sẽ được đồng bộ khi có kết nối lại.'
-        : 'The clocks are stopped. You can claim the win after the host has been gone for 120 seconds.',
+        : t('room.paused.hostBody'),
       actions: canClaimWin ? (
         <button
           onClick={room.claimLostHostWin}
@@ -516,7 +547,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     const away = SEATS.map(occupantOf).find((m) => m && !m.connected) ?? null;
     if (emptySeat) {
       const lastChange = [...game.seatLog].reverse().find((c) => c.seat === emptySeat && c.to === null);
-      const previousName = lastChange?.from?.name ?? 'the last player';
+      const previousName = lastChange?.from?.name ?? t('room.lastPlayer');
       const vacatedAt = game.vacatedAt[emptySeat];
       const guardLeft = vacatedAt === null ? 0 : Math.max(0, DISCARD_GUARD_MS - (room.hostNow() - vacatedAt));
       const canEnd = room.isHost || (mySeat !== null && guardLeft === 0);
@@ -525,7 +556,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
           <button
             onClick={requestDiscard}
             disabled={!canEnd}
-            title={canEnd ? undefined : 'A viewer gets a moment to take the seat first'}
+            title={canEnd ? undefined : t('room.endHint')}
             className="btn btn-ghost"
           >
             {sheetTheme
@@ -533,8 +564,8 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
                 ? 'Hủy thay đổi'
                 : `Hủy thay đổi sau ${Math.ceil(guardLeft / 1000)}s`
               : canEnd
-              ? 'End game (no result)'
-              : `End game in ${Math.ceil(guardLeft / 1000)}s`}
+              ? t('room.endGame')
+              : t('room.endGameIn', { seconds: Math.ceil(guardLeft / 1000) })}
           </button>
         ) : null;
       if (sheetTheme) {
@@ -558,13 +589,13 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         };
       } else if (isViewer) {
         paused = {
-          title: `Seat ${emptySeat} is open`,
-          body: `Take it to continue ${previousName}'s game as ${emptySeat} from this position.`,
+          title: t('room.seatIsOpen', { seat: emptySeat }),
+          body: t('room.paused.openBody', { name: previousName, seat: emptySeat }),
           actions: (
             <>
               {openSeat && (
                 <button onClick={() => room.takeSeat(openSeat)} className="btn btn-primary">
-                  Take seat {openSeat}
+                  {t('room.takeSeatN', { seat: openSeat })}
                 </button>
               )}
               {endButton}
@@ -573,12 +604,12 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         };
       } else {
         paused = {
-          title: `${previousName} ${LEFT_HOW[lastChange?.reason ?? 'stood'] ?? 'stood up'}`,
-          body: `The clocks are stopped until someone takes seat ${emptySeat}.`,
+          title: `${previousName} ${t(LEFT_HOW[lastChange?.reason ?? 'stood'] ?? 'room.left.stood')}`,
+          body: t('room.paused.clocksStopped', { seat: emptySeat }),
           actions: (
             <>
               <button onClick={requestBecomeViewer} className="btn btn-secondary">
-                Become viewer
+                {t('room.becomeViewer')}
               </button>
               {endButton}
             </>
@@ -595,10 +626,10 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         mySeat !== null &&
         occupantOf(otherSeat(mySeat))?.id === away.id;
       paused = {
-        title: sheetTheme ? 'Đang chờ người cộng tác' : 'Game paused',
+        title: sheetTheme ? 'Đang chờ người cộng tác' : t('room.paused.title'),
         body: sheetTheme
           ? `Đang kết nối lại… ${formatReconnectTime(reconnectSeconds)}`
-          : `Waiting for ${away.profile.name} to reconnect… ${formatReconnectTime(reconnectSeconds)}`,
+          : t('room.paused.waitingReconnect', { name: away.profile.name, time: formatReconnectTime(reconnectSeconds) }),
         actions: canClaimWin ? (
           <button
             onClick={room.claimDisconnectWin}
@@ -610,7 +641,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         ) : undefined,
       };
     } else {
-      paused = sheetTheme ? { title: 'Đang đồng bộ…' } : { title: 'Game paused', body: 'Resuming shortly…' };
+      paused = sheetTheme ? { title: 'Đang đồng bộ…' } : { title: t('room.paused.title'), body: t('room.paused.resuming') };
     }
   }
 
@@ -622,21 +653,21 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     const mineInResult = mySeat && shownResult.players[mySeat].memberId === me ? mySeat : null;
     resultView = mineInResult
       ? winner === null
-        ? { headline: 'Draw', tone: 'text-warning', winnerPiece: null }
+        ? { headline: t('room.draw'), tone: 'text-warning', winnerPiece: null }
         : winner === mineInResult
-        ? { headline: 'You win!', tone: 'text-accent-text', winnerPiece: winner }
-        : { headline: 'You lose', tone: 'text-danger', winnerPiece: winner }
+        ? { headline: t('room.youWin'), tone: 'text-accent-text', winnerPiece: winner }
+        : { headline: t('room.youLose'), tone: 'text-danger', winnerPiece: winner }
       : winner === null
-      ? { headline: 'Draw', tone: 'text-warning', winnerPiece: null }
-      : { headline: `${shownResult.players[winner].name} wins as ${winner}`, tone: 'text-ink', winnerPiece: winner };
+      ? { headline: t('room.draw'), tone: 'text-warning', winnerPiece: null }
+      : { headline: t('room.winsAs', { name: shownResult.players[winner].name, seat: winner }), tone: 'text-ink', winnerPiece: winner };
     ratingNote = describeRating(shownResult, mineInResult, room.ratingNotes[shownResult.gameId]);
   }
 
   const countdownCaption = s.countdown?.resuming
-    ? `Resuming: ${moverName} (${turn}) to move`
+    ? t('room.resumingMove', { name: moverName, seat: turn })
     : mySeat === turn
-    ? `You move first, as ${turn}`
-    : `${occupantOf(turn)?.profile.name ?? turn} moves first, as ${turn}`;
+    ? t('room.youMoveFirst', { seat: turn })
+    : t('room.movesFirst', { name: occupantOf(turn)?.profile.name ?? turn, seat: turn });
 
   const rps = game?.firstMove.method === 'rockPaperScissors' ? game.firstMove : null;
   const myRpsChoice = mySeat === 'X' || mySeat === 'O' ? rps?.choices?.[mySeat] : null;
@@ -646,7 +677,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     ? (s.seats.X === hostMember.id ? 'X' : s.seats.O === hostMember.id ? 'O' : null)
     : null;
   const coinChooserSeat = hostSeat && game ? (game.number % 2 === 1 ? hostSeat : otherSeat(hostSeat)) : null;
-  const coinChooserName = coinChooserSeat ? occupantOf(coinChooserSeat)?.profile.name ?? coinChooserSeat : 'A player';
+  const coinChooserName = coinChooserSeat ? occupantOf(coinChooserSeat)?.profile.name ?? coinChooserSeat : t('room.aPlayer');
   const coinCallerName = coin?.callerMemberId ? s.members.find((member) => member.id === coin.callerMemberId)?.profile.name : undefined;
   const preGame = game?.firstMove.method === 'rockPaperScissors' && (phase === 'opening' || phase === 'countdown') && rps
     ? <RockPaperScissorsModal
@@ -683,16 +714,16 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         pending: doubleDownMine,
         active: doubleDownActive,
         title: doubleDownActive
-          ? `this game is worth ±${DOUBLE_DOWN_BONUS} extra points`
+          ? t('room.dd.active', { bonus: DOUBLE_DOWN_BONUS })
           : doubleDownMine
-          ? 'waiting for your opponent to answer'
+          ? t('room.dd.waiting')
           : doubleDownUsed
-          ? 'you have already used your one offer this game'
+          ? t('room.dd.used')
           : doubleDownState?.pending
-          ? 'your opponent has an offer waiting for you in the chat'
+          ? t('room.dd.offerWaiting')
           : phase !== 'playing'
-          ? 'available while a game is being played'
-          : `offer your opponent ±${DOUBLE_DOWN_BONUS} extra points on this game (once per game)`,
+          ? t('room.dd.unavailable')
+          : t('room.dd.offer', { bonus: DOUBLE_DOWN_BONUS }),
       }
     : undefined;
 
@@ -714,7 +745,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
             seats={order.map(seatView)}
             score={order.map(scoreOf)}
             announcement={announcement}
-            scoreLabel={`Score: ${order.map((seat) => `${seatView(seat).name} ${scoreOf(seat)}`).join(', ')}`}
+            scoreLabel={t('room.scoreLabel', { scores: order.map((seat) => `${seatView(seat).name} ${scoreOf(seat)}`).join(', ') })}
           />
         }
         rosterNode={roster}
@@ -740,9 +771,9 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
               resultReason={shownResult ? resultReason(shownResult) : undefined}
               ratingNote={ratingNote}
               countdown={phase === 'countdown' ? room.countdownSecondsLeft : null}
-              countdownTitle={s.countdown?.resuming ? 'Resuming' : game?.firstMove.method === 'coinFlip' ? 'Golden coin flip' : 'Get ready'}
+              countdownTitle={s.countdown?.resuming ? t('room.resuming') : game?.firstMove.method === 'coinFlip' ? t('room.coinFlip') : t('room.getReady')}
               countdownCaption={game?.firstMove.method === 'coinFlip' && game.firstMove.winner
-                ? `The coin chose ${game.firstMove.winner}.`
+                ? t('room.coinChose', { seat: game.firstMove.winner })
                 : countdownCaption}
               coinFlip={phase === 'countdown' && !preGame && game?.firstMove.method === 'coinFlip' && game.firstMove.winner
                 ? { winner: game.firstMove.winner }
@@ -758,6 +789,8 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         opponent={opponent ? memberProfile(opponent) : null}
         myUser={user}
         chatMessages={chatMessages}
+        chatReceipt={chatReceipt}
+        onChatSeen={room.markChatSeen}
         doubleDown={doubleDown}
         onOfferDoubleDown={() => room.offerDoubleDown()}
         onAnswerDoubleDown={(accept) => room.answerDoubleDown(accept)}
@@ -771,7 +804,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         onProposeRematch={() => room.offerRematch()}
         onResign={requestResign}
         onExitMatch={requestExit}
-        exitLabel={room.isHost ? 'Close room' : 'Leave room'}
+        exitLabel={room.isHost ? t('common.closeRoom') : t('common.leaveRoom')}
         gameStatus={phase === 'ended' ? 'ended' : 'playing'}
         allowUndo={settings?.allowUndo ?? false}
         isAiMode={false}
@@ -787,7 +820,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         openSeat={openSeat}
         onTakeSeat={() => openSeat && room.takeSeat(openSeat)}
         canResign={phase === 'playing' && bothSeated}
-        chatEmptyText="No messages yet. Say hello to the room."
+        chatEmptyText={t('room.chatEmptyRoom')}
         sheetMatch={sheetMatch}
       />
 
@@ -799,19 +832,19 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby="undo-request-title">
           <div className="w-full max-w-sm space-y-4 rounded-lg border border-line bg-surface p-6 text-center">
             <h3 id="undo-request-title" className="text-base font-semibold text-ink">
-              {sheetDisguise ? 'Khôi phục phiên bản trước?' : 'Take back a move?'}
+              {sheetDisguise ? 'Khôi phục phiên bản trước?' : t('room.undo.title')}
             </h3>
             <p className="text-xs text-muted">
               {sheetDisguise
                 ? `${occupantOf(undoFrom)?.profile.name ?? 'Người cộng tác'} muốn khôi phục phiên bản trước của tệp.`
-                : `${occupantOf(undoFrom)?.profile.name ?? 'Your opponent'} wants to take back their last move.`}
+                : t('room.undo.body', { name: occupantOf(undoFrom)?.profile.name ?? t('room.yourOpponent') })}
             </p>
             <div className="flex gap-2 pt-2">
               <button onClick={() => room.answerUndo(true)} className="btn btn-primary btn-sm flex-1">
-                {sheetDisguise ? 'Cho phép' : 'Allow it'}
+                {sheetDisguise ? 'Cho phép' : t('room.allowIt')}
               </button>
               <button onClick={() => room.answerUndo(false)} className="btn btn-secondary btn-sm flex-1">
-                {sheetDisguise ? 'Từ chối' : 'Decline'}
+                {sheetDisguise ? 'Từ chối' : t('room.decline')}
               </button>
             </div>
           </div>
@@ -822,19 +855,19 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby="rematch-title">
           <div className="w-full max-w-sm space-y-4 rounded-lg border border-line bg-surface p-6 text-center">
             <h3 id="rematch-title" className="text-base font-semibold text-ink">
-              {sheetDisguise ? 'Tạo bản sao mới?' : 'Play again?'}
+              {sheetDisguise ? 'Tạo bản sao mới?' : t('room.rematch.title')}
             </h3>
             <p className="text-xs text-muted">
               {sheetDisguise
                 ? `${occupantOf(rematchFrom)?.profile.name ?? 'Người cộng tác'} muốn tạo một bản sao mới của tệp.`
-                : `${occupantOf(rematchFrom)?.profile.name ?? 'Your opponent'} wants to play another game with the same rules.`}
+                : t('room.rematch.body', { name: occupantOf(rematchFrom)?.profile.name ?? t('room.yourOpponent') })}
             </p>
             <div className="flex gap-2 pt-2">
               <button onClick={() => room.answerRematch(true)} className="btn btn-primary btn-sm flex-1">
-                {sheetDisguise ? 'Tạo bản sao' : 'Play again'}
+                {sheetDisguise ? 'Tạo bản sao' : t('room.rematch.accept')}
               </button>
               <button onClick={() => room.answerRematch(false)} className="btn btn-secondary btn-sm flex-1">
-                {sheetDisguise ? 'Không, cảm ơn' : 'No thanks'}
+                {sheetDisguise ? 'Không, cảm ơn' : t('room.rematch.decline')}
               </button>
             </div>
           </div>
@@ -849,12 +882,12 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
           role="status"
           className="fixed bottom-24 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-surface px-3 py-2 shadow-lg"
         >
-          <span className="text-xs font-medium text-ink">Seat {seatPrompt} is open</span>
+          <span className="text-xs font-medium text-ink">{t('room.seatIsOpen', { seat: seatPrompt })}</span>
           <button onClick={() => room.takeSeat(seatPrompt)} className="btn btn-primary btn-sm">
-            Take seat {seatPrompt}
+            {t('room.takeSeatN', { seat: seatPrompt })}
           </button>
           <button onClick={() => setDismissedPromptAt(room.seatOpened?.at ?? null)} className="btn btn-ghost btn-sm">
-            Not now
+            {t('room.notNow')}
           </button>
         </div>
       )}

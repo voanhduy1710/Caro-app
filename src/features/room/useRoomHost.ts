@@ -64,12 +64,13 @@ export const createRoomHost = ({ state, setMirror, receive, writeSnapshot, hello
 
   const announce = () => {
     const room = state.engine?.room;
-    if (!room || !room.isPublic) return;
+    // Chat rooms are invite-only and never listed.
+    if (!room || !room.isPublic || room.mode === 'chat') return;
     if (room.members.length >= MAX_MEMBERS) { roomDiscoveryManager.stopHostingRoom(room.roomId); return; }
     const seatsFilled = activeSeats(room.settings).filter((seat) => room.seats[seat] !== null).length;
     const host = room.members[0];
     const info: HostedRoomInfo = {
-      hostName: host.profile.name, hostAvatar: host.profile.avatar ?? undefined, boardSize: room.settings.boardSize, mode: room.mode ?? 'ranked',
+      hostName: host.profile.name, hostAvatar: host.profile.avatar ?? undefined, boardSize: room.settings.boardSize, mode: room.mode === 'casual' ? 'casual' : 'ranked',
       createdAt: room.createdAt, seatsFilled: seatsFilled as 0 | 1 | 2, viewers: room.members.length - seatsFilled,
       members: room.members.length, capacity: MAX_MEMBERS, status: room.phase === 'countdown' || room.phase === 'opening' ? 'playing' : room.phase,
       openSeat: seatsFilled < activeSeats(room.settings).length && room.phase !== 'countdown' && room.phase !== 'opening',

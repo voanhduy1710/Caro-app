@@ -6,6 +6,8 @@ import type { HostMessagePayloads, RejectReason } from './protocol';
 import { cryptoEnv } from './roomEngine';
 import type { HostSnapshot, RoomState } from './roomEngine';
 import type { LastRoom } from './useRoomTypes';
+import { t } from '../i18n/language';
+import type { StringKey } from '../i18n/strings';
 
 const TOKENS_KEY = 'caro_room_tokens';
 const LAST_ROOM_KEY = 'caro_last_room';
@@ -308,18 +310,19 @@ export const shrinkImage = async (dataUrl: string, maxChars: number): Promise<st
   return null;
 };
 
-const REJECTION_TEXT: Partial<Record<RejectReason, string>> = {
-  seat_taken: 'Someone else took that seat.', same_account: 'That account is already sitting in the other seat.', countdown: 'Wait for the count-in to finish.', time_out: 'Too late: the clock ran out.', locked: 'The rules are locked during a game.', too_long: 'That message is too long.', bad_image: 'That image is too large to send. Try a smaller screenshot.', undo_off: 'Take-backs are turned off for this game.', undo_pending: 'A take-back is already waiting for an answer.', offer_pending: 'A rematch offer is already waiting for an answer.', seat_empty: 'Both seats need a player first.', not_host: 'Only the host can do that.',
+const REJECTION_TEXT: Partial<Record<RejectReason, StringKey>> = {
+  seat_taken: 'room.rej.seatTaken', same_account: 'room.rej.sameAccount', countdown: 'room.rej.countdown', time_out: 'room.rej.timeOut', locked: 'room.rej.locked', too_long: 'room.rej.tooLong', bad_image: 'room.rej.badImage', undo_off: 'room.rej.undoOff', undo_pending: 'room.rej.undoPending', offer_pending: 'room.rej.offerPending', seat_empty: 'room.rej.seatEmpty', not_host: 'room.rej.notHost',
 };
 
 export const rejectionText = (payload: HostMessagePayloads['REJECTED']): string | null => {
   const seconds = payload.retryInMs ? Math.ceil(payload.retryInMs / 1000) : null;
-  if (payload.reason === 'cooldown') return `Give it ${seconds ?? 'a few'} more second${seconds === 1 ? '' : 's'} before teasing again.`;
-  if (payload.reason === 'too_soon') return `Give the viewers a moment to take the seat first (${seconds ?? 15}s).`;
-  if (payload.reason === 'rate_limited') return payload.type === 'CHAT' ? 'Slow down a little.' : null;
-  if (payload.reason === 'reconnect_grace') return `You can claim the win in ${seconds ?? 'a moment'} second${seconds === 1 ? '' : 's'}.`;
+  if (payload.reason === 'cooldown') return seconds === 1 ? t('room.rej.cooldownOne') : t('room.rej.cooldown', { seconds: seconds ?? t('room.aFew') });
+  if (payload.reason === 'too_soon') return t('room.rej.tooSoon', { seconds: seconds ?? 15 });
+  if (payload.reason === 'rate_limited') return payload.type === 'CHAT' ? t('room.rej.slowDown') : null;
+  if (payload.reason === 'reconnect_grace') return seconds === 1 ? t('room.rej.claimOne') : t('room.rej.claim', { seconds: seconds ?? t('room.aMoment') });
   if (payload.type === 'RATING_REPORT' || payload.type === 'PONG' || payload.type === 'STATE_REQUEST') return null;
-  return REJECTION_TEXT[payload.reason] ?? null;
+  const key = REJECTION_TEXT[payload.reason];
+  return key ? t(key) : null;
 };
 
 export const signed = (value: number) => `${value >= 0 ? '+' : '−'}${Math.abs(value)}`;

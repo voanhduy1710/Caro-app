@@ -3,6 +3,7 @@ import confetti from 'canvas-confetti';
 import type { CellValue } from '../../shared/utils/gomokuLogic';
 import { columnLabel } from '../../shared/utils/gomokuLogic';
 import { useTheme } from '../theme/ThemeContext';
+import { useT } from '../i18n/language';
 import { useDisplayPrefs } from './displayPrefs';
 import { BoardCell } from './BoardCells';
 import {
@@ -53,6 +54,7 @@ export const Board: React.FC<BoardProps> = ({
   threePlayer = false,
   placementCorners,
 }) => {
+  const t = useT();
   const { theme } = useTheme();
   const prefs = useDisplayPrefs();
   const disguised = useDisguiseMode();
@@ -73,10 +75,10 @@ export const Board: React.FC<BoardProps> = ({
   const outcome = resultView
     ? { headline: resultView.headline, tone: resultView.tone }
     : isWin
-    ? { headline: 'You win!', tone: 'text-accent-text' }
+    ? { headline: t('game.youWin'), tone: 'text-accent-text' }
     : isLoss
-    ? { headline: 'You lose', tone: 'text-danger' }
-    : { headline: 'Draw', tone: 'text-warning' };
+    ? { headline: t('game.youLose'), tone: 'text-danger' }
+    : { headline: t('game.draw'), tone: 'text-warning' };
   const [isResultToastVisible, setIsResultToastVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   // Full-width wrapper, used only as the width source for the cell measurement.
@@ -825,14 +827,14 @@ export const Board: React.FC<BoardProps> = ({
                 </div>
               )}
               {rpsReveal && (
-                <div className="rps-reveal mb-3" aria-label={`Hands revealed: X ${rpsReveal.X}, O ${rpsReveal.O}. ${rpsReveal.winner} goes first.`}>
+                <div className="rps-reveal mb-3" aria-label={t('game.handsRevealed', { x: t(`game.${rpsReveal.X}`), o: t(`game.${rpsReveal.O}`), winner: rpsReveal.winner })}>
                   <span className="rps-reveal__hand">{rpsReveal.X === 'rock' ? '✊' : rpsReveal.X === 'paper' ? '✋' : '✌️'}</span>
                   <span className="rps-reveal__vs">VS</span>
                   <span className="rps-reveal__hand">{rpsReveal.O === 'rock' ? '✊' : rpsReveal.O === 'paper' ? '✋' : '✌️'}</span>
                 </div>
               )}
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">
-                {countdownTitle ?? 'Get ready'}
+                {countdownTitle ?? t('game.getReady')}
               </p>
               <p className="mt-1 font-mono text-5xl font-semibold tabular-nums text-ink">
                 {countdown}
@@ -840,8 +842,8 @@ export const Board: React.FC<BoardProps> = ({
               <p className="mt-2 text-xs text-muted">
                 {countdownCaption ??
                   (isMyTurn
-                    ? `You move first, as ${myPiece}`
-                    : `${opponent?.displayName || 'Your opponent'} moves first`)}
+                    ? t('game.youMoveFirst', { piece: myPiece ?? '' })
+                    : t('game.movesFirst', { name: opponent?.displayName || t('game.yourOpponent') }))}
               </p>
             </div>
           </div>

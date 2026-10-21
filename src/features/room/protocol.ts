@@ -228,6 +228,8 @@ export interface IntentPayloads {
   FIRST_MOVE_CHOICE: { gameId: string; choice: 'rock' | 'paper' | 'scissors' };
   COIN_CALL: { gameId: string; call: 'X' | 'O' };
   CHAT: { id: string; text: string; image?: string; replyTo?: string };
+  /** A seated player has read the chat up to and including this message. */
+  CHAT_SEEN: { messageId: string };
   BUZZ: Record<string, never>;
   TEASE: { targetMemberId: string };
   RATING_REPORT: {
@@ -322,6 +324,8 @@ export interface HostMessagePayloads {
     state: RoomState;
     /** The last text-only chat lines, so a late joiner or a refresh does not see an empty chat. */
     chatBacklog: RoomChatMessage[];
+    /** The last message each seated player has read, by member id. */
+    chatSeen?: Record<string, string>;
   };
   ROOM_STATE: { state: RoomState };
   MOVE_APPLIED: {
@@ -340,6 +344,7 @@ export interface HostMessagePayloads {
   REJECTED: { type: IntentType; reason: RejectReason; retryInMs?: number };
   EVENT: { kind: EventKind; seat?: Seat; by?: string; why?: string };
   CHAT: { message: RoomChatMessage };
+  CHAT_SEEN: { memberId: string; messageId: string };
   BUZZ: { fromSeat: Seat; fromName: string };
   TEASE: { fromMemberId: string; fromName: string; toMemberId: string; toName: string; at: number };
   PING: { t: number };
@@ -415,6 +420,7 @@ const VALIDATORS: { [K in IntentType]: (p: Record<string, unknown>) => boolean }
   COIN_CALL: (p) => hasGameId(p) && (p.call === 'X' || p.call === 'O'),
   CHAT: (p) =>
     isId(p.id) && typeof p.text === 'string' && (p.image === undefined || typeof p.image === 'string') && (p.replyTo === undefined || isId(p.replyTo)),
+  CHAT_SEEN: (p) => isId(p.messageId),
   BUZZ: () => true,
   TEASE: (p) => isId(p.targetMemberId),
   RATING_REPORT: (p) =>

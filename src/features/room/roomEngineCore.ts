@@ -2,10 +2,10 @@ import type { RoomSettings } from '../settings/types';
 import { PROTOCOL_VERSION, isAllowedSettings, sanitizeProfile } from './protocol';
 import type { HostMessage, Intent } from './protocol';
 import { GRACE_MS, LOST_AFTER_MS, MALFORMED_KICK_COUNT, MALFORMED_WINDOW_MS, STALE_MOVER_MS } from './roomEngineTypes';
-import type { EngineEnv, EngineResult, EngineState, RoomState } from './roomEngineTypes';
+import type { EngineEnv, EngineResult, EngineState, RoomMode, RoomState } from './roomEngineTypes';
 import { bothSeatedAndConnected, findMember, liveClocksAt, nextSeat, occupant, otherSeat, seatOf } from './roomEngineHelpers';
 import { abortCountdown, bankClocks, cloneState, endGame, expiredClock, finalize, newCtx, pause, reject, removeMember, sendEvent, vacateSeat } from './roomEngineLifecycle';
-import { handleBuzz, handleChat, handleClaimDisconnectWin, handleClearSeat, handleCoinCall, handleDiscard, handleDoubleDownAnswer, handleDoubleDownOffer, handleFirstMoveChoice, handleHello, handleKickMember, handleLeaveRoom, handleMove, handleRatingReport, handleRematchAnswer, handleRematchOffer, handleResign, handleTakeSeat, handleTease, handleUndoAnswer, handleUndoRequest, handleUpdateSettings, refundedBankAt } from './roomEngineHandlers';
+import { handleBuzz, handleChat, handleChatSeen, handleClaimDisconnectWin, handleClearSeat, handleCoinCall, handleDiscard, handleDoubleDownAnswer, handleDoubleDownOffer, handleFirstMoveChoice, handleHello, handleKickMember, handleLeaveRoom, handleMove, handleRatingReport, handleRematchAnswer, handleRematchOffer, handleResign, handleTakeSeat, handleTease, handleUndoAnswer, handleUndoRequest, handleUpdateSettings, refundedBankAt } from './roomEngineHandlers';
 export * from './roomEngineTypes';
 export * from './roomEngineHelpers';
 
@@ -23,7 +23,7 @@ export const cryptoEnv: EngineEnv = {
 export interface CreateRoomOptions {
   roomId: string;
   isPublic: boolean;
-  mode?: 'casual' | 'ranked';
+  mode?: RoomMode;
   settings: RoomSettings;
   hostProfile: unknown;
   hostTabId?: string;
@@ -39,14 +39,14 @@ export const createRoom = (opts: CreateRoomOptions, now: number, env: EngineEnv 
       v: PROTOCOL_VERSION, roomId: opts.roomId, rev: 1, isPublic: opts.isPublic, mode: opts.mode ?? 'ranked', createdAt: now,
       settings: { ...opts.settings, playerMode: opts.settings.playerMode ?? 'oneVsOne' },
       members: [{ id: hostId, profile, isHost: true, connected: true, graceMsLeft: null, joinedAt: now }],
-      seats: { X: hostId, O: null, T: null }, phase: 'waiting', countdown: null, autoStartArmed: true,
+      seats: { X: opts.mode === 'chat' ? null : hostId, O: null, T: null }, phase: 'waiting', countdown: null, autoStartArmed: true,
       game: null, results: [], gamesPlayed: 0, score: { pair: '', X: 0, O: 0, T: 0 }, sentAt: now,
     },
     host: {
       hostMemberId: hostId, tokens: {}, tabIds: opts.hostTabId ? { [hostId]: opts.hostTabId } : {},
       lastSeenAt: {}, graceEndsAt: {}, runningSince: null, countdownEndsAt: null, teaseBySender: {},
       teaseByPair: {}, lastChatAt: {}, lastImageAt: null, lastBuzzAt: {}, malformedAt: {},
-      chatBacklog: [], recentQuotes: [],
+      chatBacklog: [], recentQuotes: [], chatSeen: {},
     },
   };
 };
@@ -200,6 +200,7 @@ export const applyIntent = (state: EngineState, intent: Intent, fromMemberId: st
     case 'FIRST_MOVE_CHOICE': handleFirstMoveChoice(d, m, intent.payload, ctx); break;
     case 'COIN_CALL': handleCoinCall(d, m, intent.payload, ctx); break;
     case 'CHAT': handleChat(d, m, intent.payload, ctx); break;
+    case 'CHAT_SEEN': handleChatSeen(d, m, intent.payload, ctx); break;
     case 'BUZZ': handleBuzz(d, m, ctx); break;
     case 'TEASE': handleTease(d, m, intent.payload, ctx); break;
     case 'RATING_REPORT': handleRatingReport(d, m, intent.payload, ctx); break;

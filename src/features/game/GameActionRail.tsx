@@ -4,6 +4,7 @@ import { setDisplayPref } from './displayPrefs';
 import type { DisplayPrefs } from './displayPrefs';
 import { PREF_ROWS, RailButton } from './GameControlsShared';
 import type { GameControlsProps } from './GameControlsShared';
+import { useT } from '../i18n/language';
 
 export interface GameActionRailProps extends Pick<GameControlsProps, 'exitLabel' | 'isAiMode' | 'onExitMatch' | 'role' | 'openSeat' | 'onTakeSeat' | 'onProposeUndo' | 'allowUndo' | 'gameStatus' | 'canUndo' | 'undoPending' | 'onProposeRematch' | 'rematchPending' | 'onResign' | 'canResign' | 'doubleDown' | 'onOfferDoubleDown'> {
   simulationCount: number; undoTitle: string; rematchDisabled: boolean; prefs: DisplayPrefs;
@@ -12,13 +13,14 @@ export interface GameActionRailProps extends Pick<GameControlsProps, 'exitLabel'
 }
 
 export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
+  const t = useT();
   const { exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown } = props;
   return (
     <div className="flex flex-wrap items-center justify-center gap-0.5">
       <RailButton
         icon={<LogOut size={17} strokeWidth={2.25} aria-hidden="true" />}
         label={exitLabel}
-        title={isAiMode ? 'go back to the home screen' : 'leave this room'}
+        title={isAiMode ? t('game.exitHomeTitle') : t('game.exitRoomTitle')}
         onClick={onExitMatch}
       />
 
@@ -26,8 +28,8 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
 
       <RailButton
         icon={<Eraser size={17} strokeWidth={2.25} aria-hidden="true" />}
-        label="Clear simulations"
-        title="Clear your local simulated moves"
+        label={t('game.clearSimulations')}
+        title={t('game.clearSimulationsTitle')}
         onClick={() => window.dispatchEvent(new Event('caro:clear-simulations'))}
         disabled={simulationCount === 0}
         tone={simulationCount > 0 ? 'warning' : 'default'}
@@ -35,16 +37,16 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
 
       <RailButton
         icon={<Crosshair size={17} strokeWidth={2.25} aria-hidden="true" />}
-        label="Centre board"
-        title="Centre the board"
+        label={t('game.centreBoard')}
+        title={t('game.centreBoardTitle')}
         onClick={() => window.dispatchEvent(new Event('caro:center-board'))}
       />
 
       {role === 'viewer' ? (
         <RailButton
           icon={<Armchair size={17} strokeWidth={2.25} aria-hidden="true" />}
-          label={openSeat ? `Take seat ${openSeat}` : 'Take seat'}
-          title={openSeat ? 'sit down and play from this position' : 'Both seats are taken'}
+          label={openSeat ? t('game.takeSeatN', { seat: openSeat }) : t('game.takeSeat')}
+          title={openSeat ? t('game.takeSeatTitle') : t('game.seatsFull')}
           onClick={() => onTakeSeat?.()}
           disabled={!openSeat || !onTakeSeat}
           tone={openSeat ? 'primary' : 'default'}
@@ -53,7 +55,7 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
       <>
       <RailButton
         icon={<Undo2 size={17} strokeWidth={2.25} aria-hidden="true" />}
-        label="Take back"
+        label={t('game.takeBack')}
         title={undoTitle}
         onClick={onProposeUndo}
         disabled={!allowUndo || gameStatus !== 'playing' || !canUndo}
@@ -65,13 +67,13 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
           Mid-match it is the destructive option, so it does not lead. */}
       <RailButton
         icon={<RefreshCw size={17} strokeWidth={2.25} aria-hidden="true" />}
-        label={isAiMode ? 'New game' : 'Rematch'}
+        label={isAiMode ? t('game.newGame') : t('game.rematch')}
         title={
           isAiMode
-            ? 'start a fresh game against the bot'
+            ? t('game.newGameTitle')
             : gameStatus === 'ended'
-            ? 'offer your opponent another round'
-            : 'available once this match has finished'
+            ? t('game.rematchOfferTitle')
+            : t('game.rematchLaterTitle')
         }
         onClick={onProposeRematch}
         disabled={rematchDisabled}
@@ -84,8 +86,8 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
       {!isAiMode && (
         <RailButton
           icon={<Flag size={17} strokeWidth={2.25} aria-hidden="true" />}
-          label="Resign"
-          title="give up this match and record it as a loss"
+          label={t('game.resign')}
+          title={t('game.resignTitle')}
           onClick={onResign}
           disabled={canResign === undefined ? gameStatus !== 'playing' : !canResign}
           tone="danger"
@@ -104,8 +106,8 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
           onClick={() => setIsPrefsOpen((open) => !open)}
           aria-haspopup="true"
           aria-expanded={isPrefsOpen}
-          title="Board display and sound"
-          aria-label="Board display and sound"
+          title={t('game.displayAndSound')}
+          aria-label={t('game.displayAndSound')}
           className="btn btn-ghost btn-icon h-10 w-10 rounded-full"
         >
           <Settings size={17} strokeWidth={2.25} aria-hidden="true" />
@@ -115,11 +117,11 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
           <div
             ref={prefsRef}
             role="dialog"
-            aria-label="Board display and sound"
+            aria-label={t('game.displayAndSound')}
             className="absolute right-0 top-12 z-30 w-60 rounded-lg border border-line bg-surface p-2 shadow-2xl"
           >
             <p className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.09em] text-muted">
-              This device only
+              {t('game.thisDeviceOnly')}
             </p>
             {PREF_ROWS.map((row) => (
               <button
@@ -130,7 +132,7 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
                 onClick={() => setDisplayPref(row.key, !prefs[row.key])}
                 className="flex w-full items-center justify-between gap-3 rounded-md p-2 text-left text-[13px] font-medium transition-colors hover:bg-surface-2"
               >
-                <span>{row.label}</span>
+                <span>{t(row.label)}</span>
                 <span
                   aria-hidden="true"
                   className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
@@ -157,8 +159,9 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
 };
 
 const DoubleDownButton: React.FC<{ doubleDown: NonNullable<GameActionRailProps['doubleDown']>; onOffer?: () => void }> = ({ doubleDown, onOffer }) => {
+  const t = useT();
   const { canOffer, pending, active, title } = doubleDown;
-  const label = active ? 'Double down is on' : 'Double down';
+  const label = active ? t('game.doubleDownOn') : t('game.doubleDown');
   return (
     <button
       type="button"

@@ -17,6 +17,8 @@ import type { UserProfile } from '../auth/AuthContext';
 import type { ChatMessage } from '../webrtc/types';
 import type { DataConnection } from 'peerjs';
 import { PROTOCOL_VERSION, TEASE_PHRASE } from './protocol';
+import { t } from '../i18n/language';
+import type { StringKey } from '../i18n/strings';
 import type {
   HostMessage,
   HostMessagePayloads,
@@ -106,6 +108,8 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
   const [memberId, setMemberId] = useState<string | null>(null);
   const [state, setState] = useState<RoomState | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  /** The last message each seated player has read, by member id. */
+  const [chatSeen, setChatSeen] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [closedReason, setClosedReason] = useState<ClosedReason | null>(null);
   const [pendingMove, setPendingMove] = useState<[number, number] | null>(null);
@@ -154,6 +158,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       lastClockSyncAt: 0,
       lastSnapshotAt: 0,
       lastChatEcho: null as string | null,
+      lastSeenSent: null as string | null,
       games: new Map<string, Game>(),
       resultClocks: new Map<string, Clocks | null>(),
       handled: new Set<string>(readHandled()),
@@ -180,10 +185,10 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       // An offer dropped because someone stood up was never answered.
       if (prev.seats.X !== next.seats.X || prev.seats.O !== next.seats.O) return;
       const answerer = next.members.find((m) => m.id === next.seats[before.pending === 'X' ? 'O' : 'X']);
-      const name = answerer?.profile.name ?? 'The opponent';
-      if (after.accepted) systemLine(`${name} accepted the Double down. This game is worth ±${DOUBLE_DOWN_BONUS} extra points.`);
-      else if (after.expired) systemLine(`The Double down offer was automatically rejected after ${DOUBLE_DOWN_ANSWER_MOVES} moves.`);
-      else if (next.phase === 'playing' || next.phase === 'paused') systemLine(`${name} rejected the Double down.`);
+      const name = answerer?.profile.name ?? t('room.theOpponent');
+      if (after.accepted) systemLine(t('room.n.ddAccepted', { name, bonus: DOUBLE_DOWN_BONUS }));
+      else if (after.expired) systemLine(t('room.n.ddExpired', { moves: DOUBLE_DOWN_ANSWER_MOVES }));
+      else if (next.phase === 'playing' || next.phase === 'paused') systemLine(t('room.n.ddRejected', { name }));
     };
 
     /** Replaces the mirror, noting what the ending game's clocks looked like here. */
@@ -266,7 +271,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       }
       if (r.hostLostSince === null) return;
       if (now - r.hostLostSince > HOST_LOST_GIVE_UP_MS) {
-        finish('host_lost', 'The host disconnected and did not come back, so the game ended for everyone.');
+        finish('host_lost', t('room.n.hostLost'));
       } else if (now - r.lastRetryAt >= HOST_RETRY_MS) {
         r.lastRetryAt = now;
         connectToHost();
@@ -342,7 +347,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           closeConn(conn);
           finish(
             'old_version',
-            'This room was opened with an older version of Caro. Ask the host to refresh their page, then join again.',
+            t('room.n.oldVersion'),
           );
         }
         return;
@@ -410,8 +415,10 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           setMirror(p.state);
           const backlog = Array.isArray(p.chatBacklog) ? p.chatBacklog : [];
           setChatMessages((prev) => mergeChat(p.resumed ? prev : [], backlog));
+          setChatSeen(isRecord(p.chatSeen) ? (p.chatSeen as Record<string, string>) : {});
+          r.lastSeenSent = null;
           setStatus('connected');
-          if (p.expired) notice('You were away too long, so your seat was given up.');
+          if (p.expired) notice(t('room.n.awayTooLong'));
           return;
         }
         case 'ROOM_STATE': {
@@ -452,30 +459,32 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
             if (p.seat) setSeatOpened({ seat: p.seat, at: Date.now() });
             return;
           }
-          const texts: Record<string, string> = {
-            undo_declined: 'Your opponent declined the take-back.',
-            undo_expired: 'Your take-back request expired.',
-            rematch_declined:
-              p.why === 'rules_changed'
-                ? 'The rules changed, so the rematch offer was withdrawn.'
-                : 'Your opponent declined the rematch.',
+          const texts: Record<string, StringKey> = {
+            undo_declined: 'room.n.undoDeclined',
+            undo_expired: 'room.n.undoExpired',
+            rematch_declined: p.why === 'rules_changed' ? 'room.n.rulesChanged' : 'room.n.rematchDeclined',
           };
-          if (texts[p.kind]) notice(texts[p.kind]);
+          if (texts[p.kind]) notice(t(texts[p.kind]));
           return;
         }
         case 'CHAT':
           if (isRecord(message.payload.message)) appendChat(message.payload.message as RoomChatMessage);
           return;
+        case 'CHAT_SEEN': {
+          const { memberId: reader, messageId } = message.payload;
+          if (typeof reader === 'string' && typeof messageId === 'string') setChatSeen((prev) => ({ ...prev, [reader]: messageId }));
+          return;
+        }
         case 'BUZZ': {
           const p = message.payload;
-          systemLine(`🔔 ${p.fromName} buzzed`, { buzzFrom: p.fromName });
+          systemLine(t('room.n.buzzed', { name: p.fromName }), { buzzFrom: p.fromName });
           const mine = r.mirror ? seatOf(r.mirror, r.memberId) : null;
           if (mine && mine !== p.fromSeat) handlersRef.current.onBuzzed?.();
           return;
         }
         case 'TEASE': {
           const p = message.payload;
-          systemLine(`😡 ${p.fromName} → ${p.toName}: ${TEASE_PHRASE}!`);
+          systemLine(t('room.n.tease', { from: p.fromName, to: p.toName, phrase: TEASE_PHRASE }));
           if (p.toMemberId === r.memberId) {
             setTease({ fromMemberId: p.fromMemberId, fromName: p.fromName, at: Date.now() });
             handlersRef.current.onTeased?.();
@@ -486,17 +495,17 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           if (!hostSide && r.hostConn) send(r.hostConn, { v: PROTOCOL_VERSION, type: 'PONG', payload: { t: message.payload.t } });
           return;
         case 'ROOM_FULL':
-          finish('full', `Room ${r.roomId} is full (${message.payload.capacity} of ${message.payload.capacity}).`);
+          finish('full', t('room.n.full', { roomId: r.roomId ?? '', capacity: message.payload.capacity }));
           return;
         case 'ROOM_CLOSED':
           if (message.payload.reason === 'kicked') {
-            finish('kicked', `${message.payload.hostName} removed you from room ${r.roomId}. You can join again with the invite link.`);
+            finish('kicked', t('room.n.kicked', { host: message.payload.hostName, roomId: r.roomId ?? '' }));
             return;
           }
-          finish('host_left', `${message.payload.hostName} was hosting and left, so the game ended for everyone.`);
+          finish('host_left', t('room.n.hostLeft', { host: message.payload.hostName }));
           return;
         case 'SUPERSEDED':
-          finish('superseded', 'This room is open in another tab.');
+          finish('superseded', t('room.n.superseded'));
           return;
       }
     };
@@ -535,6 +544,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       setMemberId,
       setState,
       setChatMessages,
+      setChatSeen,
       setError,
       setClosedReason,
       setHostLostSince,
@@ -665,6 +675,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
     mySeat,
     state,
     chatMessages,
+    chatSeen,
     error,
     closedReason,
     pendingMove,

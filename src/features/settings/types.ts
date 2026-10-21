@@ -1,3 +1,5 @@
+import { t } from '../i18n/language';
+
 export interface RoomSettings {
   boardSize: number; // 15, 19, 30, 50
   totalTimeMinutes: number; // 5, 15, 30, 0 (0 = Unlimited)
@@ -27,6 +29,8 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
 
 /** How the win condition actually behaves, in the words a player would use. */
 export const WIN_RULE_TEXT = 'Five or more of your pieces in a row wins: across, down or diagonally.';
+/** Translated at call time; prefer this over WIN_RULE_TEXT in render code. */
+export const getWinRuleText = () => t('settings.winRule');
 
 export interface RoomSettingsFact {
   label: string;
@@ -39,24 +43,26 @@ export interface RoomSettingsFact {
  * clock only once the first move is due.
  */
 export const summariseRoomSettings = (settings: RoomSettings): RoomSettingsFact[] => [
-  { label: 'Board', value: `${settings.boardSize}x${settings.boardSize}` },
+  { label: t('settings.fact.board'), value: `${settings.boardSize}x${settings.boardSize}` },
   {
-    label: 'Total time',
-    value: settings.totalTimeMinutes === 0 ? 'Unlimited' : `${settings.totalTimeMinutes} min each`,
+    label: t('settings.fact.totalTime'),
+    value: settings.totalTimeMinutes === 0
+      ? t('settings.fact.unlimited')
+      : t('settings.fact.minEach', { n: settings.totalTimeMinutes }),
   },
   {
-    label: 'Per move',
-    value: settings.turnTimeSeconds === 0 ? 'Unlimited' : `${settings.turnTimeSeconds}s`,
+    label: t('settings.fact.perMove'),
+    value: settings.turnTimeSeconds === 0 ? t('settings.fact.unlimited') : `${settings.turnTimeSeconds}s`,
   },
-  { label: 'Take back', value: settings.allowUndo ? 'Allowed' : 'Off' },
-  { label: 'Mode', value: settings.placementMode === 'lmao' ? 'LMAO' : 'Normal' },
-  { label: 'Players', value: settings.playerMode === 'oneVsOneVsOne' ? '1v1v1' : '1v1' },
+  { label: t('settings.fact.takeBack'), value: settings.allowUndo ? t('settings.allowed') : t('settings.off') },
+  { label: t('settings.fact.mode'), value: settings.placementMode === 'lmao' ? 'LMAO' : t('settings.normal') },
+  { label: t('settings.fact.players'), value: settings.playerMode === 'oneVsOneVsOne' ? '1v1v1' : '1v1' },
   {
-    label: 'First move',
+    label: t('settings.fact.firstMove'),
     value: settings.firstMoveMethod === 'rockPaperScissors'
-      ? 'Rock paper scissors'
+      ? t('settings.rockPaperScissors')
       : settings.firstMoveMethod === 'coinFlip'
-      ? 'Coin flip'
-      : 'Default',
+      ? t('settings.coinFlip')
+      : t('settings.default'),
   },
 ];

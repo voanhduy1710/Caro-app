@@ -2,6 +2,7 @@ import React from 'react';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { useTheme } from '../theme/ThemeContext';
 import { formatReconnectDuration } from '../../shared/utils/formatDuration';
+import { useT } from '../i18n/language';
 
 /**
  * One seat as the header draws it. The header does not know whether it is a
@@ -124,6 +125,7 @@ const Seat: React.FC<SeatProps> = ({
   reconnectingSeconds = null,
   action,
 }) => {
+  const t = useT();
   /* The move clock ends the match when it runs out, so it has to be on screen
      rather than inferred. It sits beside the total clock, not in place of it,
      and it takes the warning colour itself: the total clock turning red at five
@@ -131,6 +133,7 @@ const Seat: React.FC<SeatProps> = ({
   const hasMoveClock = moveClock > 0;
   const isUrgent = hasMoveClock && moveClock <= 5;
   const away = reconnectingSeconds !== null;
+  const thinking = t('game.thinking');
 
   /* The ring is the player's actual piece colour, so a seat and the marks it
      is putting on the board are visibly the same player. It thickens on turn
@@ -238,7 +241,7 @@ const Seat: React.FC<SeatProps> = ({
         {tag && (
           <span
             className={`chip chip-accent shrink-0 max-lg:px-1.5 max-lg:py-0 max-lg:text-[11px] max-lg:leading-4 ${
-              tag === 'Thinking' ? 'max-lg:hidden' : ''
+              tag === thinking ? 'max-lg:hidden' : ''
             }`}
           >
             {tag}
@@ -255,10 +258,10 @@ const Seat: React.FC<SeatProps> = ({
       >
         {away && (
           <span className="chip shrink-0 px-1.5 py-0 text-[11px] leading-4 text-warning">
-            Reconnecting {formatReconnectDuration(reconnectingSeconds)}
+            {t('game.reconnecting', { time: formatReconnectDuration(reconnectingSeconds) })}
           </span>
         )}
-        {tag === 'Thinking' && (
+        {tag === thinking && (
           <span className="chip chip-accent shrink-0 px-1.5 py-0 text-[11px] leading-4 lg:hidden">{tag}</span>
         )}
         {!away && clock > 0 && (
@@ -268,11 +271,11 @@ const Seat: React.FC<SeatProps> = ({
         )}
         {!away && hasMoveClock && (
           <span className={`${clockPill(true, isUrgent)} font-mono tabular-nums`}>
-            {moveClock}s<span className="sr-only"> left for this move</span>
+            {moveClock}s<span className="sr-only">{t('game.leftForMove')}</span>
           </span>
         )}
         {!away && clock <= 0 && isTurn && !hasMoveClock && (
-          <span className={`${clockPill(true)} lg:min-w-[4.5rem]`} style={{ backgroundColor: color, color: readableInk(color) }}>Playing</span>
+          <span className={`${clockPill(true)} lg:min-w-[4.5rem]`} style={{ backgroundColor: color, color: readableInk(color) }}>{t('game.playing')}</span>
         )}
       </span>
     </span>

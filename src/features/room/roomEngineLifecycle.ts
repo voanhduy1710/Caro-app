@@ -49,6 +49,8 @@ export const cloneState = (state: EngineState): EngineState => {
       chatBacklog: [...h.chatBacklog],
       // Older saved rooms predate quotes.
       recentQuotes: [...(h.recentQuotes ?? [])],
+      // Older saved rooms predate read receipts.
+      chatSeen: { ...(h.chatSeen ?? {}) },
     },
   };
 };
@@ -276,6 +278,7 @@ export const removeMember = (d: EngineState, memberId: string, ctx: Ctx): void =
   delete host.lastChatAt[memberId];
   delete host.lastBuzzAt[memberId];
   delete host.malformedAt[memberId];
+  delete host.chatSeen[memberId];
   for (const key of Object.keys(host.teaseByPair)) {
     const [from, to] = key.split('>');
     if (from === memberId || to === memberId) delete host.teaseByPair[key];
@@ -413,6 +416,7 @@ export const finalize = (before: EngineState, d: EngineState, ctx: Ctx): EngineR
           ...(expired ? { expired: true } : {}),
           state: toWire(d, ctx.now),
           chatBacklog: [...d.host.chatBacklog],
+          chatSeen: { ...d.host.chatSeen },
         },
       },
     });

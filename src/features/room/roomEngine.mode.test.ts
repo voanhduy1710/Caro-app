@@ -34,4 +34,18 @@ describe('room modes', () => {
     expect(offered.state.room.game!.doubleDown?.pending).toBeNull();
     expect(offered.replies.some((reply) => reply.message.type === 'REJECTED')).toBe(true);
   });
+
+  it('never seats anyone or starts a game in a chat room', () => {
+    const created = createRoom({ roomId: 'ABCDE', isPublic: false, mode: 'chat', settings: DEFAULT_ROOM_SETTINGS, hostProfile: host }, 0);
+    expect(created.room.seats).toEqual({ X: null, O: null, T: null });
+    const joined = applyIntent(created, { type: 'HELLO', payload: { profile: friend, tabId: 'friend' } }, null, 1);
+    expect(joined.state.room.seats).toEqual({ X: null, O: null, T: null });
+    const friendId = joined.state.room.members[1].id;
+    const sat = applyIntent(joined.state, { type: 'TAKE_SEAT', payload: { seat: 'X' } }, friendId, 2);
+    expect(sat.state.room.seats.X).toBeNull();
+    expect(sat.state.room.phase).toBe('waiting');
+    expect(sat.state.room.game).toBeNull();
+    const chatted = applyIntent(sat.state, { type: 'CHAT', payload: { id: 'msg1', text: 'hi' } }, friendId, 3);
+    expect(chatted.events.some((e) => e.kind === 'broadcast' && e.message.type === 'CHAT')).toBe(true);
+  });
 });

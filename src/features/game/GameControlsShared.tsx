@@ -4,6 +4,8 @@ import type { UserProfile } from '../auth/AuthContext';
 import type { ChatMessage, ChatQuote } from '../webrtc/types';
 import { Loader2 } from 'lucide-react';
 import type { SheetMatch } from './sheetBridge';
+import type { StringKey } from '../i18n/strings';
+import { t } from '../i18n/language';
 
 export interface GameControlsProps {
   headerNode?: React.ReactNode;
@@ -13,6 +15,10 @@ export interface GameControlsProps {
   opponent: UserProfile | null;
   myUser: UserProfile | null;
   chatMessages: ChatMessage[];
+  /** Whether this player's newest line has been read by an opponent. Rooms only. */
+  chatReceipt?: ChatReceipt | null;
+  /** Reports the newest line this player has read. Rooms only. */
+  onChatSeen?: (messageId: string) => void;
   onSendChat: (text: string, image?: string, replyTo?: ChatMessage) => void;
   onSendBuzz?: () => boolean | void;
   onProposeUndo: () => void;
@@ -64,6 +70,11 @@ export interface GameControlsProps {
   sheetMatch?: SheetMatch | null;
 }
 
+export interface ChatReceipt {
+  messageId: string;
+  seen: boolean;
+}
+
 export interface DoubleDownView {
   /** This player still has their one offer and nothing stands in the way. */
   canOffer: boolean;
@@ -76,10 +87,10 @@ export interface DoubleDownView {
 }
 
 /** The three board settings worth reaching for without leaving the match. */
-export const PREF_ROWS: Array<{ key: keyof DisplayPrefs; label: string }> = [
-  { key: 'showCoordinates', label: 'Show coordinates' },
-  { key: 'markLastMove', label: 'Mark the last move' },
-  { key: 'soundEnabled', label: 'Sound' },
+export const PREF_ROWS: Array<{ key: keyof DisplayPrefs; label: StringKey }> = [
+  { key: 'showCoordinates', label: 'game.pref.showCoordinates' },
+  { key: 'markLastMove', label: 'game.pref.markLastMove' },
+  { key: 'soundEnabled', label: 'game.pref.sound' },
 ];
 
 export const CHAT_OPEN_STORAGE_KEY = 'caro_chat_panel_open';
@@ -219,4 +230,4 @@ export const RailButton: React.FC<RailButtonProps> = ({
 );
 
 /** One line for a quoted message: its text, or a word for an image-only one. */
-export const quoteSnippet = (quote: Pick<ChatQuote, 'text' | 'hasImage'>): string => quote.text || (quote.hasImage ? '📷 Image' : '…');
+export const quoteSnippet = (quote: Pick<ChatQuote, 'text' | 'hasImage'>): string => quote.text || (quote.hasImage ? t('game.quoteImage') : '…');

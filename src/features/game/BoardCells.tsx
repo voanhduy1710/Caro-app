@@ -4,6 +4,7 @@ import { columnLabel } from '../../shared/utils/gomokuLogic';
 import type { PieceTheme } from '../theme/types';
 import type { BoardCorner } from './BoardTypes';
 import { SheetGlyph, SHEET_TRIANGLE_COLOR } from './BoardSheetParts';
+import { useT } from '../i18n/language';
 
 interface PieceGlyphProps {
   piece: Exclude<CellValue, null>;
@@ -167,6 +168,7 @@ export const BoardCell = memo<BoardCellProps>(({
   lmaoMode,
   sheet,
 }) => {
+  const t = useT();
   const placementClass =
     !lmaoMode || placementCorner === 'center'
       ? 'flex h-full w-full items-center justify-center'
@@ -272,7 +274,7 @@ export const BoardCell = memo<BoardCellProps>(({
     onContextMenu={(event) => onContextMenu(event, row, col)}
     onMouseEnter={(event) => onHover(row, col, clickCorner(event))}
     onMouseMove={(event) => onHover(row, col, clickCorner(event))}
-    aria-label={`Coordinate ${columnLabel(col)}${row + 1}${cell ? `, ${cell}` : ', empty'}`}
+    aria-label={cell ? t('game.coordinate', { coord: `${columnLabel(col)}${row + 1}`, cell }) : t('game.coordinateEmpty', { coord: `${columnLabel(col)}${row + 1}` })}
     style={{ width: `${cellSize}px`, height: `${cellSize}px` }}
     className={`board-cell relative flex shrink-0 aspect-square items-center justify-center transition-all duration-100 ${
       cell ? 'board-cell--filled' : ''

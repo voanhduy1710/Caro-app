@@ -1,28 +1,32 @@
 import React from 'react';
-import { Bot, Globe, Lock } from 'lucide-react';
+import { Bot, Globe, Lock, MessageCircle } from 'lucide-react';
+import type { RoomMode } from '../features/room/roomEngineTypes';
 import { stagger } from './AppViewShared';
 import { RankedRoomSwords } from './RankedRoomSwords';
+import { useT } from '../features/i18n/language';
 
 export interface HomePlayActionsProps {
-  isRoomPublic: boolean; setIsRoomPublic: React.Dispatch<React.SetStateAction<boolean>>; onStartBot: () => void; onCreate: (isPublic: boolean, mode?: 'casual' | 'ranked') => void;
+  isRoomPublic: boolean; setIsRoomPublic: React.Dispatch<React.SetStateAction<boolean>>; onStartBot: () => void; onCreate: (isPublic: boolean, mode?: RoomMode) => void;
   inputRoomCode: string; setInputRoomCode: React.Dispatch<React.SetStateAction<string>>; onJoin: (code: string) => void;
 }
 
-export const HomePlayActions: React.FC<HomePlayActionsProps> = ({ isRoomPublic, setIsRoomPublic, onStartBot, onCreate, inputRoomCode, setInputRoomCode, onJoin }) => (
+export const HomePlayActions: React.FC<HomePlayActionsProps> = ({ isRoomPublic, setIsRoomPublic, onStartBot, onCreate, inputRoomCode, setInputRoomCode, onJoin }) => {
+  const t = useT();
+  return (
   <div className="home-lobby__play grid gap-4 text-left md:grid-cols-5">
               {/* Play alone. Listed first because it is the only option that
                   works with nobody else around. */}
               <div className="card animate-pop-in flex flex-col gap-4 p-5 md:col-span-2" style={stagger(3)}>
-                <h2 className="text-xl text-ink">Play the bot</h2>
+                <h2 className="text-xl text-ink">{t('home.playBot')}</h2>
 
                 {/* The sprite is the opponent's portrait, and it is what keeps
                     this column from being a white void beside the taller form. */}
-                <div className="grid flex-1 place-items-center rounded-md bg-accent-soft py-5">
+                <div className="grid flex-1 place-items-center rounded-md bg-accent-soft py-3">
                   <img
                     src="/Avatar/Rotar Zairo.gif"
                     alt=""
                     aria-hidden="true"
-                    className="pixel-art h-32 w-32 object-contain"
+                    className="pixel-art h-20 w-20 object-contain"
                   />
                 </div>
 
@@ -31,13 +35,22 @@ export const HomePlayActions: React.FC<HomePlayActionsProps> = ({ isRoomPublic, 
                   className="btn btn-primary btn-lg w-full"
                 >
                   <Bot size={20} strokeWidth={2.25} aria-hidden="true" />
-                  <span>Play vs Bot</span>
+                  <span>{t('home.playVsBot')}</span>
+                </button>
+
+                {/* A private room with no board: only the invite link and the chat. */}
+                <button
+                  onClick={() => onCreate(false, 'chat')}
+                  className="btn btn-secondary btn-lg w-full"
+                >
+                  <MessageCircle size={20} strokeWidth={2.25} aria-hidden="true" />
+                  <span>{t('home.justChatting')}</span>
                 </button>
               </div>
 
               {/* Play someone else. */}
               <div className="card animate-pop-in space-y-4 p-5 md:col-span-3" style={stagger(4)}>
-                <h2 className="text-xl text-ink">Play a friend</h2>
+                <h2 className="text-xl text-ink">{t('home.playFriend')}</h2>
 
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 rounded-md bg-surface-3 p-1">
@@ -50,7 +63,7 @@ export const HomePlayActions: React.FC<HomePlayActionsProps> = ({ isRoomPublic, 
                       }`}
                     >
                       <Globe size={14} strokeWidth={2.25} aria-hidden="true" />
-                      <span>Public</span>
+                      <span>{t('home.public')}</span>
                     </button>
                     <button
                       type="button"
@@ -61,31 +74,31 @@ export const HomePlayActions: React.FC<HomePlayActionsProps> = ({ isRoomPublic, 
                       }`}
                     >
                       <Lock size={14} strokeWidth={2.25} aria-hidden="true" />
-                      <span>Private</span>
+                      <span>{t('home.private')}</span>
                     </button>
                   </div>
                   <p className="field-hint">
-                    {isRoomPublic ? 'Anyone can find it, join a free seat or watch.' : 'Only with your code or link.'}
+                    {isRoomPublic ? t('home.publicHint') : t('home.privateHint')}
                   </p>
                 </div>
 
                 {isRoomPublic ? (
                   <div className="grid gap-2">
-                    <button onClick={() => onCreate(true, 'casual')} className="btn btn-secondary btn-lg w-full">Create a Casual room</button>
+                    <button onClick={() => onCreate(true, 'casual')} className="btn btn-secondary btn-lg w-full">{t('home.createCasual')}</button>
                     <button onClick={() => onCreate(true, 'ranked')} className="btn btn-ranked btn-lg w-full">
                       <RankedRoomSwords side="left" />
-                      <span>Create a Ranked room</span>
+                      <span>{t('home.createRanked')}</span>
                       <RankedRoomSwords side="right" />
                     </button>
                   </div>
                 ) : (
-                  <button onClick={() => onCreate(false, 'ranked')} className="btn btn-primary btn-lg w-full">Create a private room</button>
+                  <button onClick={() => onCreate(false, 'ranked')} className="btn btn-primary btn-lg w-full">{t('home.createPrivate')}</button>
                 )}
-                {isRoomPublic && <p className="field-hint">Casual games are unrecorded. Ranked games affect your rating and stats.</p>}
+                {isRoomPublic && <p className="field-hint">{t('home.rankedHint')}</p>}
 
                 <div className="relative flex items-center py-1">
                   <div className="flex-grow border-t border-line"></div>
-                  <span className="mx-3 flex-shrink text-xs text-subtle">or</span>
+                  <span className="mx-3 flex-shrink text-xs text-subtle">{t('home.or')}</span>
                   <div className="flex-grow border-t border-line"></div>
                 </div>
 
@@ -98,7 +111,7 @@ export const HomePlayActions: React.FC<HomePlayActionsProps> = ({ isRoomPublic, 
                   }}
                 >
                   <label htmlFor="room-code" className="field-label">
-                    Join with a code
+                    {t('home.joinWithCode')}
                   </label>
                   <div className="flex gap-2">
                     <input
@@ -120,10 +133,11 @@ export const HomePlayActions: React.FC<HomePlayActionsProps> = ({ isRoomPublic, 
                       disabled={!inputRoomCode.trim()}
                       className="btn btn-primary shrink-0"
                     >
-                      Join
+                      {t('common.join')}
                     </button>
                   </div>
                 </form>
               </div>
             </div>
-);
+  );
+};

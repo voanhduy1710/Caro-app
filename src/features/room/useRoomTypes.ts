@@ -1,5 +1,6 @@
 import type { RoomSettings } from '../settings/types';
 import type { Seat } from './protocol';
+import type { RoomMode } from './roomEngineTypes';
 
 export type RoomStatus = 'idle' | 'opening' | 'joining' | 'connected' | 'host_lost' | 'claimed' | 'closed' | 'error';
 export type ClosedReason = 'host_left' | 'host_lost' | 'full' | 'kicked' | 'superseded' | 'old_version' | 'not_found' | 'id_taken';
@@ -8,4 +9,4 @@ export interface TeaseNotice { fromMemberId: string; fromName: string; at: numbe
 export interface SeatOpenedNotice { seat: Seat; at: number; }
 export interface LastRoom { roomId: string; hostName: string; leftAt: number; reason: 'left' | 'dropped'; }
 export interface RoomHandlers { onNotice?: (text: string) => void; onMoveApplied?: () => void; onBuzzed?: () => void; onTeased?: () => void; onRated?: () => void; }
-export interface CreateRoomInput { code?: string; isPublic: boolean; mode?: 'casual' | 'ranked'; settings: RoomSettings; }
+export interface CreateRoomInput { code?: string; isPublic: boolean; mode?: RoomMode; settings: RoomSettings; }

@@ -4,14 +4,16 @@ import type { BoardCorner } from '../features/game/Board';
 import type { UserProfile } from '../features/auth/AuthContext';
 import type { RoomSettings } from '../features/settings/types';
 import { getAvatarPublicUrl } from '../features/avatar/avatarService';
+import { t } from '../features/i18n/language';
+import type { StringKey } from '../features/i18n/strings';
 
 export type PracticePiece = 'X' | 'O' | 'T';
 export interface MoveHistoryItem { row: number; col: number; piece: PracticePiece; corner?: BoardCorner; }
 export const lmaoCornerFor = (row: number, col: number): BoardCorner => (['top-left', 'top', 'top-right', 'left', 'right', 'bottom-left', 'bottom', 'bottom-right'] as const)[Math.abs(row * 31 + col) % 8];
 export const nextPracticePiece = (piece: PracticePiece, threePlayer: boolean): PracticePiece => threePlayer ? (piece === 'X' ? 'O' : piece === 'O' ? 'T' : 'X') : piece === 'X' ? 'O' : 'X';
-const RESULT_REASONS: Record<string, string> = { '5_in_a_row': 'Five in a row completed the line.', board_full: 'The board filled up with nobody in a row.', turn_timeout: 'The clock for that move ran out.', total_time_out: 'A player used up their total time.', resigned: 'A player resigned.' };
-export const describeResultReason = (reason?: string) => (reason && RESULT_REASONS[reason]) || 'The match is over.';
-export const ROOM_STATUS_TEXT = (room: ActiveRoomInfo) => room.status === 'waiting' ? 'Waiting for a player' : room.status === 'playing' ? 'Playing' : room.status === 'paused' ? room.openSeat ? 'Paused, seat open' : 'Paused' : 'Finished';
+const RESULT_REASONS: Record<string, StringKey> = { '5_in_a_row': 'game.reason5InARow', board_full: 'game.reasonBoardFull', turn_timeout: 'game.reasonTurnTimeout', total_time_out: 'game.reasonTotalTimeOut', resigned: 'game.reasonResigned' };
+export const describeResultReason = (reason?: string) => t((reason && RESULT_REASONS[reason]) || 'game.reasonOver');
+export const ROOM_STATUS_TEXT = (room: ActiveRoomInfo) => room.status === 'waiting' ? t('home.statusWaiting') : room.status === 'playing' ? t('home.statusPlaying') : room.status === 'paused' ? room.openSeat ? t('home.statusPausedOpen') : t('home.statusPaused') : t('home.statusFinished');
 export const stagger = (i: number) => ({ '--i': i }) as React.CSSProperties;
 export type ConfirmCopy = { title: string; body: string; confirmLabel: string; };
 export type ConfirmSpec = ConfirmCopy & {
@@ -59,4 +61,4 @@ export const settingsUpdateFor = (current: RoomSettings, next: RoomSettings, inP
 /** What the bot says when it wins a practice game. */
 export const BOT_WIN_QUIPS = ['EZ', 'IZI', 'EZ game EZ life', 'Oh god so ez', 'lul', 'Lmao', '=))', ':))'] as const;
 /** The bot's thought bubble after a game; `seed` keeps one line steady for the whole result screen. */
-export const botQuip = (outcome: 'won' | 'lost', seed: number): string => outcome === 'lost' ? "I'll win next time" : BOT_WIN_QUIPS[((seed % BOT_WIN_QUIPS.length) + BOT_WIN_QUIPS.length) % BOT_WIN_QUIPS.length];
+export const botQuip = (outcome: 'won' | 'lost', seed: number): string => outcome === 'lost' ? t('game.botLostQuip') : BOT_WIN_QUIPS[((seed % BOT_WIN_QUIPS.length) + BOT_WIN_QUIPS.length) % BOT_WIN_QUIPS.length];

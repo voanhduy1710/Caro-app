@@ -99,3 +99,57 @@ describe('chat replies', () => {
     expect(reply.replyTo).toBeUndefined();
   });
 });
+
+describe('chat read receipts', () => {
+  const chat = (state: EngineState, from: string, id: string, now: number) =>
+    applyIntent(state, { type: 'CHAT', payload: { id, text: 'hi' } }, from, now).state;
+  const seen = (state: EngineState, from: string, messageId: string, now = 2_000) =>
+    applyIntent(state, { type: 'CHAT_SEEN', payload: { messageId } }, from, now);
+  const receipts = (result: ReturnType<typeof seen>) =>
+    result.events.filter((e) => e.kind === 'broadcast' && e.message.type === 'CHAT_SEEN');
+
+  const room = () => {
+    const g = hello(fresh(), guest, 'tabguest', 1);
+    const v = hello(g.state, viewer, 'tabviewer', 2);
+    const hostId = v.state.host.hostMemberId;
+    let state = chat(v.state, hostId, 'msg1', 10);
+    state = chat(state, hostId, 'msg2', 1_000);
+    return { state, hostId, playerId: g.id, viewerId: v.id };
+  };
+
+  it('records and broadcasts what a seated player has read', () => {
+    const { state, playerId } = room();
+    const result = seen(state, playerId, 'msg2');
+    expect(result.state.host.chatSeen[playerId]).toBe('msg2');
+    expect(receipts(result)).toEqual([
+      { kind: 'broadcast', message: { type: 'CHAT_SEEN', payload: { memberId: playerId, messageId: 'msg2' } }, except: [playerId] },
+    ]);
+  });
+
+  it('ignores a viewer', () => {
+    const { state, viewerId } = room();
+    const result = seen(state, viewerId, 'msg2');
+    expect(result.state.host.chatSeen[viewerId]).toBeUndefined();
+    expect(receipts(result)).toEqual([]);
+    expect(result.replies.some((r) => r.message.type === 'REJECTED')).toBe(false);
+  });
+
+  it('only moves forward and only to a message the host knows', () => {
+    const { state, playerId } = room();
+    const read = seen(state, playerId, 'msg2').state;
+    const back = seen(read, playerId, 'msg1');
+    expect(back.state.host.chatSeen[playerId]).toBe('msg2');
+    expect(receipts(back)).toEqual([]);
+    const unknown = seen(read, playerId, 'nosuchmsg');
+    expect(unknown.state.host.chatSeen[playerId]).toBe('msg2');
+    expect(receipts(unknown)).toEqual([]);
+  });
+
+  it('hands a rejoining member the receipts in WELCOME', () => {
+    const { state, playerId } = room();
+    const read = seen(state, playerId, 'msg1').state;
+    const late = hello(read, account, 'tablate', 3_000);
+    const welcome = late.result.replies.find((r) => r.message.type === 'WELCOME');
+    expect(welcome?.message.type === 'WELCOME' ? welcome.message.payload.chatSeen : null).toEqual({ [playerId]: 'msg1' });
+  });
+});

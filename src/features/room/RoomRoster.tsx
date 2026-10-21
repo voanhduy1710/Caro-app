@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Link2, UserMinus, UserX } from 'lucide-react';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { formatReconnectDuration } from '../../shared/utils/formatDuration';
+import { useT } from '../i18n/language';
 import type { Seat } from './protocol';
 import { SEATS } from './roomEngine';
 import type { Member } from './roomEngine';
@@ -22,6 +23,8 @@ interface RoomRosterProps {
   onCopyInvite?: () => void;
   /** Collapsed to one line until opened: a phone has no room for the list by default. */
   collapsible?: boolean;
+  /** A chat room has no seats, so nobody is "watching" either. */
+  showSeats?: boolean;
 }
 
 /**
@@ -40,11 +43,13 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
   onViewProfile,
   onCopyInvite,
   collapsible = false,
+  showSeats = true,
 }) => {
+  const t = useT();
   const [open, setOpen] = useState(!collapsible);
   const me = members.find((m) => m.id === myMemberId);
   const iAmHost = Boolean(me?.isHost);
-  const watching = members.filter((m) => !SEATS.some((seat) => seats[seat] === m.id)).length;
+  const watching = showSeats ? members.filter((m) => !SEATS.some((seat) => seats[seat] === m.id)).length : 0;
 
   const seatOfMember = (id: string): Seat | null => SEATS.find((seat) => seats[seat] === id) ?? null;
 
@@ -57,13 +62,13 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
           aria-expanded={open}
           className="flex min-w-0 items-center gap-1.5 text-left text-xs font-semibold text-ink"
         >
-          <span>In the room · {members.length}/{capacity}</span>
-          {watching > 0 && <span className="chip px-1.5 py-0 text-[11px]">{watching} watching</span>}
+          <span>{t('room.roster.inRoom', { count: members.length, capacity })}</span>
+          {watching > 0 && <span className="chip px-1.5 py-0 text-[11px]">{t('room.roster.watchingCount', { count: watching })}</span>}
           {open ? <ChevronUp size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
         </button>
       ) : (
         <h2 className="text-xs font-semibold text-ink">
-          In the room · {members.length}/{capacity}
+          {t('room.roster.inRoom', { count: members.length, capacity })}
         </h2>
       )}
       {onCopyInvite && (
@@ -71,8 +76,8 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
           type="button"
           onClick={onCopyInvite}
           className="btn btn-ghost btn-icon h-8 w-8 shrink-0 rounded-full"
-          title="Copy invite link"
-          aria-label="Copy invite link"
+          title={t('common.copyInviteLink')}
+          aria-label={t('common.copyInviteLink')}
         >
           <Link2 size={15} strokeWidth={2.25} aria-hidden="true" />
         </button>
@@ -81,7 +86,7 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
   );
 
   return (
-    <section className="panel mx-3 mb-3 overflow-hidden" aria-label="People in the room">
+    <section className="panel mx-3 mb-3 overflow-hidden" aria-label={t('room.roster.people')}>
       {header}
       {open && (
         <ul className="max-h-72 space-y-1 overflow-y-auto border-t border-line px-2 py-2">
@@ -96,8 +101,8 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
                   onClick={() => onViewProfile?.(member)}
                   disabled={!onViewProfile}
                   className="relative shrink-0"
-                  title={`View ${member.profile.name}'s profile`}
-                  aria-label={`View ${member.profile.name}'s profile`}
+                  title={t('room.roster.viewProfile', { name: member.profile.name })}
+                  aria-label={t('room.roster.viewProfile', { name: member.profile.name })}
                 >
                   <img
                     src={getAvatarPublicUrl(member.profile.avatar)}
@@ -119,25 +124,25 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1">
                     <span className="min-w-0 truncate text-[13px] font-semibold text-ink">{member.profile.name}</span>
-                    {member.isHost && <span className="chip px-1.5 py-0 text-[10px]">Host</span>}
-                    {seat ? (
+                    {member.isHost && <span className="chip px-1.5 py-0 text-[10px]">{t('common.host')}</span>}
+                    {showSeats && (seat ? (
                       <span className="chip chip-accent px-1.5 py-0 text-[10px]">{seat}</span>
                     ) : (
-                      <span className="chip px-1.5 py-0 text-[10px]">Watching</span>
-                    )}
-                    {isMe && <span className="chip chip-accent px-1.5 py-0 text-[10px]">You</span>}
+                      <span className="chip px-1.5 py-0 text-[10px]">{t('room.roster.watching')}</span>
+                    ))}
+                    {isMe && <span className="chip chip-accent px-1.5 py-0 text-[10px]">{t('common.you')}</span>}
                     {/* Guests are already named "Guest 4821"; only a guest who
                         picked another name needs telling apart from an account. */}
                     {member.profile.guest && !isMe && !/^guest\b/i.test(member.profile.name) && (
-                      <span className="text-[10px] text-subtle">guest</span>
+                      <span className="text-[10px] text-subtle">{t('room.roster.guest')}</span>
                     )}
                   </div>
                   {grace !== null && (
-                    <p className="mt-0.5 text-[11px] font-medium text-warning">Reconnecting {formatReconnectDuration(grace)}</p>
+                    <p className="mt-0.5 text-[11px] font-medium text-warning">{t('room.reconnecting', { time: formatReconnectDuration(grace) })}</p>
                   )}
                   {isMe && seat && watching > 0 && onPassBaton && (
                     <button type="button" onClick={onPassBaton} className="btn btn-secondary btn-sm mt-1 h-7 px-2 text-[11px]">
-                      Pass baton
+                      {t('room.roster.passBaton')}
                     </button>
                   )}
                 </div>
@@ -147,8 +152,8 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
                     type="button"
                     onClick={() => onClearSeat(seat)}
                     className="btn btn-ghost btn-icon h-8 w-8 shrink-0 rounded-full text-muted hover:text-danger"
-                    title={`Remove ${member.profile.name} from seat ${seat}. They stay in the room as a viewer.`}
-                    aria-label={`Remove ${member.profile.name} from seat ${seat}`}
+                    title={t('room.roster.removeFromSeatTitle', { name: member.profile.name, seat })}
+                    aria-label={t('room.roster.removeFromSeat', { name: member.profile.name, seat })}
                   >
                     <UserMinus size={15} strokeWidth={2.25} aria-hidden="true" />
                   </button>
@@ -158,8 +163,8 @@ export const RoomRoster: React.FC<RoomRosterProps> = ({
                     type="button"
                     onClick={() => onKick(member)}
                     className="btn btn-ghost btn-icon h-8 w-8 shrink-0 rounded-full text-muted hover:text-danger"
-                    title={`Kick ${member.profile.name} out of the room`}
-                    aria-label={`Kick ${member.profile.name} out of the room`}
+                    title={t('room.roster.kick', { name: member.profile.name })}
+                    aria-label={t('room.roster.kick', { name: member.profile.name })}
                   >
                     <UserX size={15} strokeWidth={2.25} aria-hidden="true" />
                   </button>

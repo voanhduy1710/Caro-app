@@ -94,6 +94,13 @@ describe('getBestAiMove', () => {
     expect(winner).toBe('O');
   });
 
+  it('takes the corner of a 3x3 trap before the fourth stone lands', { timeout: 20_000 }, () => {
+    // X has two in a row and one below the corner (9,9); a fourth stone at (11,9)
+    // would leave (9,9) as a double open three. Seen in a scripted trap game.
+    const board = boardWith(19, [[9, 7, 'X'], [9, 8, 'X'], [10, 9, 'X'], [7, 5, 'O'], [7, 7, 'O']]);
+    expect(getBestAiMove(board, 19, 'O', { timeLimitMs: 3000 })).toEqual([9, 9]);
+  });
+
   it('never plays on a T stone', () => {
     const board = boardWith(SIZE, [
       [7, 4, 'O'], [7, 5, 'O'], [7, 6, 'O'], [7, 7, 'O'], [7, 8, 'T'],

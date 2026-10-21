@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { TEASE_PHRASE } from './protocol';
 import type { Seat } from './protocol';
 import type { TeaseNotice } from './useRoom';
+import { useT } from '../i18n/language';
 
 const VISIBLE_MS = 4_000;
 /** Long enough to reach the Take seat button without it vanishing under the thumb. */
@@ -16,6 +17,7 @@ interface TeaseToastProps {
 }
 
 export const TeaseToast: React.FC<TeaseToastProps> = ({ notice, onDismiss, openSeat = null, onTakeSeat }) => {
+  const t = useT();
   const hasAction = Boolean(openSeat && onTakeSeat);
 
   useEffect(() => {
@@ -46,10 +48,10 @@ export const TeaseToast: React.FC<TeaseToastProps> = ({ notice, onDismiss, openS
           }}
           className="btn btn-primary btn-sm shrink-0"
         >
-          Take seat {openSeat}
+          {t('room.takeSeatN', { seat: openSeat })}
         </button>
       )}
-      <button type="button" onClick={onDismiss} className="btn btn-ghost btn-sm shrink-0" aria-label="Dismiss">
+      <button type="button" onClick={onDismiss} className="btn btn-ghost btn-sm shrink-0" aria-label={t('room.dismiss')}>
         OK
       </button>
     </div>

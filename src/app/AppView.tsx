@@ -18,6 +18,7 @@ import { saveMatchRecord, resendPendingRatedResults } from '../features/history/
 import { syncPracticeHistory } from '../features/history/practiceSync';
 import { useRoom, readLastRoom, clearLastRoom } from '../features/room/useRoom';
 import type { LastRoom } from '../features/room/useRoom';
+import type { RoomMode } from '../features/room/roomEngineTypes';
 import { PublicRoomList } from './PublicRoomList';
 import { HomePlayActions } from './HomePlayActions';
 import { HomeLobbyMeta } from './HomeLobbyMeta';
@@ -28,7 +29,9 @@ import { ActiveMatchStage } from './ActiveMatchStage';
 import { AI_BOARD_SIZE, aiThinkMs, lmaoCornerFor, nextPracticePiece, settingsUpdateFor, sheetNoticeText } from './AppViewShared';
 import type { MoveHistoryItem, PracticePiece } from './AppViewShared';
 import type { ConfirmSpec } from './AppViewShared';
+import { useT } from '../features/i18n/language';
 export const App: React.FC = () => {
+  const t = useT();
   const { user, loading: authLoading, openProfileModal, refreshUserProfile, signInWithCredentials, createAccount } = useAuth();
 
   // A rated result that could not be sent, because the tab closed mid-request
@@ -533,9 +536,9 @@ export const App: React.FC = () => {
       return;
     }
     setConfirmSpec({
-      title: 'Leave this practice game?',
-      body: 'The board will be discarded. Practice games are not counted as a loss.',
-      confirmLabel: 'Leave and go home',
+      title: t('home.leavePracticeTitle'),
+      body: t('home.leavePracticeBody'),
+      confirmLabel: t('home.leavePracticeConfirm'),
       sheet: {
         title: 'Đóng tệp?',
         body: 'Các thay đổi chưa lưu trong tệp này sẽ bị mất.',
@@ -543,7 +546,7 @@ export const App: React.FC = () => {
       },
       onConfirm: goHome,
     });
-  }, [roomActive, room, gameStatus, goHome]);
+  }, [roomActive, room, gameStatus, goHome, t]);
 
   // Keep the ref so the history listener below never has to re-subscribe.
   const requestExitMatchRef = useRef(requestExitMatch);
@@ -576,7 +579,7 @@ export const App: React.FC = () => {
     setGameStatus('lobby');
   };
 
-  const handleCreateRoom = (isPublic: boolean, mode: 'casual' | 'ranked' = 'ranked') => {
+  const handleCreateRoom = (isPublic: boolean, mode: RoomMode = 'ranked') => {
     leavePractice();
     setRejoinCode(null);
     room.createRoom({ isPublic, mode, settings: roomSettings });
@@ -602,9 +605,9 @@ export const App: React.FC = () => {
     // Practice has no one to ask, so only a live board needs confirming.
     if (gameStatus === 'playing' && moveHistory.length > 0) {
       setConfirmSpec({
-        title: 'Start a new game?',
-        body: 'The game you are playing will be discarded.',
-        confirmLabel: 'Start a new game',
+        title: t('home.newGameTitle'),
+        body: t('home.newGameBody'),
+        confirmLabel: t('home.newGameConfirm'),
         sheet: {
           title: 'Tạo bảng tính mới?',
           body: 'Nội dung hiện tại của trang tính sẽ bị thay thế.',
@@ -627,7 +630,7 @@ export const App: React.FC = () => {
   const homeError = roomActive || roomClosedDialog
     ? null
     : room.closedReason === 'not_found' && rejoinCode
-    ? 'That room has closed.'
+    ? t('home.roomClosedError')
     : room.error;
 
   const roomPhase = room.state?.phase ?? 'waiting';
@@ -646,7 +649,7 @@ export const App: React.FC = () => {
           <div className="home-lobby w-full max-w-6xl">
             <HomeLobbyMeta user={user} error={homeError} onDismissError={room.reset} lastRoom={lastRoom} onRejoin={handleRejoin} onDismissLast={() => { clearLastRoom(); setLastRoom(null); }} settings={roomSettings} onOpenRules={() => setSettingsAndThemeOpen(true)} />
             <HomePlayActions {...{ isRoomPublic, setIsRoomPublic, onStartBot: handleStartAiMode, onCreate: handleCreateRoom, inputRoomCode, setInputRoomCode, onJoin: handleJoinRoom }} />
-            <PublicRoomList rooms={availableRooms} scanDone={roomScanDone} onCreate={(mode) => handleCreateRoom(true, mode)} onJoin={handleJoinRoom} />
+            <PublicRoomList rooms={availableRooms} scanDone={roomScanDone} onJoin={handleJoinRoom} />
           </div>
         )}
 
@@ -655,7 +658,7 @@ export const App: React.FC = () => {
       </main>
 
       <AppFeedback sheetDisguise={sheetDisguise} notice={notice}roomClosed={roomClosedDialog} roomError={room.error} onResetRoom={room.reset} confirm={confirmSpec} onDismissConfirm={() => setConfirmSpec(null)} />
-      <AppModalStack settingsOpen={settingsAndThemeOpen} onCloseSettings={() => setSettingsAndThemeOpen(false)} settings={roomActive && room.state ? room.state.settings : isAiMode ? practiceSettings : roomSettings} onUpdateSettings={(next) => { if (roomActive) room.updateSettings(next); else setRoomSettings(settingsUpdateFor(roomSettings, next, isAiMode)); }} isHost={!roomActive || room.isHost} gameStatus={roomActive ? (roomPhase === 'waiting' || roomPhase === 'ended' ? 'lobby' : 'playing') : gameStatus} myPiece={roomActive ? (room.mySeat ?? undefined) : myPiece} leaderboardOpen={leaderboardOpen} onCloseLeaderboard={() => setLeaderboardOpen(false)} historyOpen={historyOpen} onCloseHistory={() => setHistoryOpen(false)} onSelectOpponent={setSelectedOpponentProfile} opponent={selectedOpponentProfile} onPlayNow={() => { setHistoryOpen(false); if (roomActive) { setConfirmSpec({ title: 'Leave the room and play the bot?', body: room.isHost ? 'The room closes for everyone in it.' : 'If you are playing, the game pauses and your seat opens for someone else.', confirmLabel: 'Leave and play the bot', tone: 'danger', onConfirm: handleStartAiMode }); } else handleStartAiMode(); }} confirmRoomExit={setConfirmSpec} />
+      <AppModalStack settingsOpen={settingsAndThemeOpen} onCloseSettings={() => setSettingsAndThemeOpen(false)} settings={roomActive && room.state ? room.state.settings : isAiMode ? practiceSettings : roomSettings} onUpdateSettings={(next) => { if (roomActive) room.updateSettings(next); else setRoomSettings(settingsUpdateFor(roomSettings, next, isAiMode)); }} isHost={!roomActive || room.isHost} gameStatus={roomActive ? (roomPhase === 'waiting' || roomPhase === 'ended' ? 'lobby' : 'playing') : gameStatus} myPiece={roomActive ? (room.mySeat ?? undefined) : myPiece} leaderboardOpen={leaderboardOpen} onCloseLeaderboard={() => setLeaderboardOpen(false)} historyOpen={historyOpen} onCloseHistory={() => setHistoryOpen(false)} onSelectOpponent={setSelectedOpponentProfile} opponent={selectedOpponentProfile} onPlayNow={() => { setHistoryOpen(false); if (roomActive) { setConfirmSpec({ title: t('home.leaveRoomBotTitle'), body: room.isHost ? t('home.leaveRoomBotBodyHost') : t('home.leaveRoomBotBodyGuest'), confirmLabel: t('home.leaveRoomBotConfirm'), tone: 'danger', onConfirm: handleStartAiMode }); } else handleStartAiMode(); }} confirmRoomExit={setConfirmSpec} />
 
     </div>
   );

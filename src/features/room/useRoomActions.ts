@@ -11,6 +11,7 @@ interface RoomActionState {
   mirror: RoomState | null;
   memberId: string | null;
   lastChatEcho: string | null;
+  lastSeenSent: string | null;
 }
 
 interface CreateRoomActionsOptions {
@@ -55,6 +56,13 @@ export const createRoomActions = ({ state, sendIntent, appendChat, notice, setPe
     callCoin: (call: 'X' | 'O') => { const id = gameId(); return id ? sendIntent({ type: 'COIN_CALL', payload: { gameId: id, call } }) : false; },
     buzz: () => sendIntent({ type: 'BUZZ', payload: {} }),
     tease: (targetMemberId: string) => sendIntent({ type: 'TEASE', payload: { targetMemberId } }),
+    /** Tells the room a seated player has read up to this message. Viewers' reading is not reported. */
+    markChatSeen: (messageId: string) => {
+      if (messageId === state.lastSeenSent || !state.mirror || !seatOf(state.mirror, state.memberId)) return false;
+      const sent = sendIntent({ type: 'CHAT_SEEN', payload: { messageId } });
+      if (sent) state.lastSeenSent = messageId;
+      return sent;
+    },
     sendChat: async (text: string, image?: string, replyTo?: ChatMessage) => {
       const trimmed = text.trim();
       if (!trimmed && !image) return;

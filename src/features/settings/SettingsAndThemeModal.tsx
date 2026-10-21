@@ -6,6 +6,8 @@ import { useUiTheme } from '../../shared/hooks/useUiTheme';
 import type { UiTheme } from '../../shared/hooks/useUiTheme';
 import { useTheme } from '../theme/ThemeContext';
 import type { BoardTheme, PieceTheme } from '../theme/types';
+import type { StringKey } from '../i18n/strings';
+import { LANGUAGES, setLanguage, useLanguage, useT } from '../i18n/language';
 
 interface SettingsAndThemeModalProps {
   isOpen: boolean;
@@ -18,35 +20,35 @@ interface SettingsAndThemeModalProps {
   myPiece?: 'X' | 'O' | 'T';
 }
 
-const BOARD_THEMES: Array<{ id: BoardTheme; name: string }> = [
-  { id: 'graph_paper', name: 'Graph paper' },
-  { id: 'light_wood', name: 'Bamboo' },
-  { id: 'laser_futuristic', name: 'Laser grid' },
-  { id: 'spreadsheet', name: 'Spreadsheet' },
+const BOARD_THEMES: Array<{ id: BoardTheme; nameKey: StringKey }> = [
+  { id: 'graph_paper', nameKey: 'settings.boardTheme.graphPaper' },
+  { id: 'light_wood', nameKey: 'settings.boardTheme.bamboo' },
+  { id: 'laser_futuristic', nameKey: 'settings.boardTheme.laser' },
+  { id: 'spreadsheet', nameKey: 'settings.boardTheme.spreadsheet' },
 ];
 
-const PIECE_THEMES: Array<{ id: PieceTheme; name: string }> = [
-  { id: 'calligraphic', name: 'Brush' },
-  { id: 'classic', name: 'Marker' },
-  { id: 'laser', name: 'Neon' },
-  { id: 'gomoku_3d', name: 'Go stones' },
+const PIECE_THEMES: Array<{ id: PieceTheme; nameKey: StringKey }> = [
+  { id: 'calligraphic', nameKey: 'settings.pieceTheme.brush' },
+  { id: 'classic', nameKey: 'settings.pieceTheme.marker' },
+  { id: 'laser', nameKey: 'settings.pieceTheme.neon' },
+  { id: 'gomoku_3d', nameKey: 'settings.pieceTheme.goStones' },
 ];
 
-const UI_THEMES: Array<{ id: UiTheme; label: string; icon: typeof Sun }> = [
-  { id: 'light', label: 'Light', icon: Sun },
-  { id: 'dark', label: 'Dark', icon: Moon },
-  { id: 'system', label: 'System', icon: Monitor },
+const UI_THEMES: Array<{ id: UiTheme; labelKey: StringKey; icon: typeof Sun }> = [
+  { id: 'light', labelKey: 'settings.ui.light', icon: Sun },
+  { id: 'dark', labelKey: 'settings.ui.dark', icon: Moon },
+  { id: 'system', labelKey: 'settings.ui.system', icon: Monitor },
 ];
 
 /** Swatch names. A hex is neither speakable nor meaningful read aloud. */
-const COLOUR_NAMES: Record<string, string> = {
-  '#006699': 'ocean blue', '#2563eb': 'blue', '#10b981': 'green', '#00f0ff': 'cyan',
-  '#8b5cf6': 'purple', '#f59e0b': 'amber', '#0f172a': 'near-black',
-  '#e11d24': 'red', '#dc2626': 'crimson', '#ef4444': 'coral', '#ff007f': 'hot pink',
-  '#ec4899': 'pink', '#f97316': 'orange', '#ffffff': 'white',
-  '#64748b': 'slate', '#475569': 'dark slate', '#334155': 'charcoal',
-  '#b45309': 'brown', '#d97706': 'dark amber', '#c05621': 'burnt orange',
-  '#78350f': 'dark brown',
+const COLOUR_NAMES: Record<string, StringKey> = {
+  '#006699': 'settings.colour.oceanBlue', '#2563eb': 'settings.colour.blue', '#10b981': 'settings.colour.green',
+  '#00f0ff': 'settings.colour.cyan', '#8b5cf6': 'settings.colour.purple', '#f59e0b': 'settings.colour.amber',
+  '#0f172a': 'settings.colour.nearBlack', '#e11d24': 'settings.colour.red', '#dc2626': 'settings.colour.crimson',
+  '#ef4444': 'settings.colour.coral', '#ff007f': 'settings.colour.hotPink', '#ec4899': 'settings.colour.pink',
+  '#f97316': 'settings.colour.orange', '#ffffff': 'settings.colour.white', '#64748b': 'settings.colour.slate',
+  '#475569': 'settings.colour.darkSlate', '#334155': 'settings.colour.charcoal', '#b45309': 'settings.colour.brown',
+  '#d97706': 'settings.colour.darkAmber', '#c05621': 'settings.colour.burntOrange', '#78350f': 'settings.colour.darkBrown',
 };
 
 const X_PRESETS = ['#006699', '#2563eb', '#10b981', '#00f0ff', '#8b5cf6', '#f59e0b', '#0f172a'];
@@ -123,6 +125,7 @@ const ColourPickerRow: React.FC<{
   presets: string[];
   onChange: (hex: string) => void;
 }> = ({ label, value, presets, onChange }) => {
+  const t = useT();
   const labelId = React.useId();
   return (
   <div>
@@ -132,7 +135,7 @@ const ColourPickerRow: React.FC<{
         type="color"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        aria-label={`${label}: pick any colour`}
+        aria-label={t('settings.pickAnyColour', { label })}
         className="h-7 w-9 cursor-pointer rounded-sm border-2 border-line-strong bg-transparent p-0"
       />
     </div>
@@ -143,7 +146,7 @@ const ColourPickerRow: React.FC<{
           type="button"
           onClick={() => onChange(c)}
           aria-pressed={value === c}
-          aria-label={`${label}: ${COLOUR_NAMES[c] ?? c}`}
+          aria-label={`${label}: ${COLOUR_NAMES[c] ? t(COLOUR_NAMES[c]) : c}`}
           title={c}
           className={`h-6 w-6 rounded-full border-2 transition hover:scale-110 ${
             value === c ? 'border-ink ring-2 ring-accent' : 'border-surface-3'
@@ -167,6 +170,8 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
 }) => {
   const dialogProps = useModalChrome(isOpen, onClose, 'settings-modal-title');
   const { theme: uiTheme, setTheme: setUiTheme } = useUiTheme();
+  const language = useLanguage();
+  const t = useT();
   const {
     theme,
     setBoardTheme,
@@ -180,7 +185,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
   if (!isOpen) return null;
 
   const canEditRules = isHost && gameStatus !== 'playing';
-  const lockNote = gameStatus === 'playing' ? 'Locked during a game' : 'Host only';
+  const lockNote = gameStatus === 'playing' ? t('settings.lockedDuringGame') : t('settings.hostOnly');
 
   /* xColor always paints the X glyph and oColor always paints the O glyph,
      whichever seat the player is in. The host plays X, so for a guest a row
@@ -190,12 +195,12 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
   const pieceRows =
     myPiece === 'O'
       ? [
-          { label: 'Your O pieces', value: theme.oColor || '#e11d24', presets: O_PRESETS, onChange: setOColor },
-          { label: 'Their X pieces', value: theme.xColor || '#006699', presets: X_PRESETS, onChange: setXColor },
+          { label: t('settings.yourOPieces'), value: theme.oColor || '#e11d24', presets: O_PRESETS, onChange: setOColor },
+          { label: t('settings.theirXPieces'), value: theme.xColor || '#006699', presets: X_PRESETS, onChange: setXColor },
         ]
       : [
-          { label: 'Your X pieces', value: theme.xColor || '#006699', presets: X_PRESETS, onChange: setXColor },
-          { label: 'Their O pieces', value: theme.oColor || '#e11d24', presets: O_PRESETS, onChange: setOColor },
+          { label: t('settings.yourXPieces'), value: theme.xColor || '#006699', presets: X_PRESETS, onChange: setXColor },
+          { label: t('settings.theirOPieces'), value: theme.oColor || '#e11d24', presets: O_PRESETS, onChange: setOColor },
         ];
 
   return (
@@ -203,9 +208,9 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
       <div className="modal-panel relative flex max-h-[99vh] max-w-3xl flex-col overflow-hidden p-6">
         <div className="mb-4 flex shrink-0 items-center justify-between border-b border-line pb-3">
           <h2 id="settings-modal-title" className="text-xl text-ink">
-            Settings
+            {t('settings.title')}
           </h2>
-          <button onClick={onClose} className="btn btn-ghost btn-icon" aria-label="Close">
+          <button onClick={onClose} className="btn btn-ghost btn-icon" aria-label={t('common.close')}>
             <X size={18} strokeWidth={2.25} aria-hidden="true" />
           </button>
         </div>
@@ -214,11 +219,11 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
           {/* MATCH. The rules both players are bound by. */}
           <div className="space-y-5 border-b border-line pb-5 md:border-b-0 md:border-r md:pb-0 md:pr-6">
             <div className="flex items-center justify-between gap-2 border-b border-line pb-2">
-              <h3 className="text-base text-ink">Match</h3>
+              <h3 className="text-base text-ink">{t('settings.match')}</h3>
               {!canEditRules && <span className="chip">{lockNote}</span>}
             </div>
 
-            <Group label="Board size" cols={4}>
+            <Group label={t('settings.boardSize')} cols={4}>
               {[15, 19, 30, 50].map((val) => (
                 <Choice
                   key={val}
@@ -231,12 +236,12 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
               ))}
             </Group>
 
-            <Group label="Total time" cols={4}>
+            <Group label={t('settings.totalTime')} cols={4}>
               {[
-                { label: '5 min', val: 5 },
-                { label: '15 min', val: 15 },
-                { label: '30 min', val: 30 },
-                { label: 'None', val: 0 },
+                { label: t('settings.minutes', { n: 5 }), val: 5 },
+                { label: t('settings.minutes', { n: 15 }), val: 15 },
+                { label: t('settings.minutes', { n: 30 }), val: 30 },
+                { label: t('settings.none'), val: 0 },
               ].map((opt) => (
                 <Choice
                   key={opt.val}
@@ -249,12 +254,12 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
               ))}
             </Group>
 
-            <Group label="Per move" cols={4}>
+            <Group label={t('settings.perMove')} cols={4}>
               {[
                 { label: '10s', val: 10 },
                 { label: '30s', val: 30 },
                 { label: '60s', val: 60 },
-                { label: 'None', val: 0 },
+                { label: t('settings.none'), val: 0 },
               ].map((opt) => (
                 <Choice
                   key={opt.val}
@@ -269,10 +274,10 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
 
             {/* A boolean is still "pick one of these", so it is the same control
                 rather than the one checkbox in the dialog. */}
-            <Group label="Take backs" cols={2}>
+            <Group label={t('settings.takeBacks')} cols={2}>
               {[
-                { label: 'Allowed', val: true },
-                { label: 'Off', val: false },
+                { label: t('settings.allowed'), val: true },
+                { label: t('settings.off'), val: false },
               ].map((opt) => (
                 <Choice
                   key={String(opt.val)}
@@ -285,9 +290,9 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
               ))}
             </Group>
 
-            <Group label="Placement mode" cols={2}>
+            <Group label={t('settings.placementMode')} cols={2}>
               {[
-                { label: 'Normal', val: 'normal' as const },
+                { label: t('settings.normal'), val: 'normal' as const },
                 { label: 'LMAO', val: 'lmao' as const },
               ].map((opt) => (
                 <Choice key={opt.val} selected={settings.placementMode === opt.val} disabled={!canEditRules}
@@ -297,7 +302,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
               ))}
             </Group>
 
-            <Group label="Players" cols={2}>
+            <Group label={t('settings.players')} cols={2}>
               {[
                 { label: '1v1', val: 'oneVsOne' as const },
                 { label: '1v1v1', val: 'oneVsOneVsOne' as const },
@@ -309,17 +314,17 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
               ))}
             </Group>
 
-            <Group label="Who goes first" cols={3}>
+            <Group label={t('settings.whoGoesFirst')} cols={3}>
               {[
-                { label: 'Default', val: 'default' as const },
-                { label: 'Coin flip', val: 'coinFlip' as const },
-                { label: 'Rock paper scissors', val: 'rockPaperScissors' as const },
+                { label: t('settings.default'), val: 'default' as const },
+                { label: t('settings.coinFlip'), val: 'coinFlip' as const },
+                { label: t('settings.rockPaperScissors'), val: 'rockPaperScissors' as const },
               ].map((opt) => (
                 <Choice key={opt.val} selected={(settings.firstMoveMethod ?? 'default') === opt.val}
                   disabled={!canEditRules || settings.playerMode === 'oneVsOneVsOne'}
                   onClick={() => onUpdateSettings({ ...settings, firstMoveMethod: opt.val })}>
                   {opt.val === 'rockPaperScissors' ? (
-                    <img src="/Rock-paper-scissors-icon.png" alt="Rock paper scissors" className="h-6 w-auto" />
+                    <img src="/Rock-paper-scissors-icon.png" alt={t('settings.rockPaperScissors')} className="h-6 w-auto" />
                   ) : opt.label}
                 </Choice>
               ))}
@@ -329,10 +334,18 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
           {/* LOOK. This device only, and never sent to the other player. */}
           <div className="space-y-5">
             <div className="border-b border-line pb-2">
-              <h3 className="text-base text-ink">Look</h3>
+              <h3 className="text-base text-ink">{t('settings.look')}</h3>
             </div>
 
-            <Group label="Appearance" cols={3}>
+            <Group label={t('common.language')} cols={2}>
+              {LANGUAGES.map((opt) => (
+                <Choice key={opt.id} selected={language === opt.id} onClick={() => setLanguage(opt.id)}>
+                  {opt.label}
+                </Choice>
+              ))}
+            </Group>
+
+            <Group label={t('settings.appearance')} cols={3}>
               {UI_THEMES.map((opt) => {
                 const Icon = opt.icon;
                 return (
@@ -342,32 +355,32 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
                     onClick={() => setUiTheme(opt.id)}
                   >
                     <Icon size={15} strokeWidth={2.25} aria-hidden="true" />
-                    {opt.label}
+                    {t(opt.labelKey)}
                   </Choice>
                 );
               })}
             </Group>
 
-            <Group label="Pieces" cols={2}>
+            <Group label={t('settings.pieces')} cols={2}>
               {PIECE_THEMES.map((pt) => (
                 <Choice
                   key={pt.id}
                   selected={theme.pieceTheme === pt.id}
                   onClick={() => setPieceTheme(pt.id)}
                 >
-                  {pt.name}
+                  {t(pt.nameKey)}
                 </Choice>
               ))}
             </Group>
 
-            <Group label="Board" cols={2}>
+            <Group label={t('settings.board')} cols={2}>
               {BOARD_THEMES.map((bt) => (
                 <Choice
                   key={bt.id}
                   selected={theme.boardTheme === bt.id}
                   onClick={() => setBoardTheme(bt.id)}
                 >
-                  {bt.name}
+                  {t(bt.nameKey)}
                 </Choice>
               ))}
             </Group>
@@ -381,13 +394,13 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
             {/* The right-click scratchpad marks, which only this device draws. */}
             <div className="space-y-4 border-t border-line pt-4">
               <ColourPickerRow
-                label="Your ghost moves"
+                label={t('settings.yourGhostMoves')}
                 value={theme.selfSimulatedColor}
                 presets={SELF_SIM_PRESETS}
                 onChange={setSelfSimulatedColor}
               />
               <ColourPickerRow
-                label="Their ghost moves"
+                label={t('settings.theirGhostMoves')}
                 value={theme.opponentSimulatedColor}
                 presets={OPPONENT_SIM_PRESETS}
                 onChange={setOpponentSimulatedColor}

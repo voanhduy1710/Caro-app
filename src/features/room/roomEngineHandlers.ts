@@ -142,7 +142,7 @@ export const handleHello = (d: EngineState, p: IntentPayloads['HELLO'], from: st
   host.lastSeenAt[id] = ctx.now;
   // A friend opening the invite link to a fresh room plays at once. Later
   // arrivals watch, and one account never fills both seats.
-  if (room.phase === 'waiting') {
+  if (room.phase === 'waiting' && room.mode !== 'chat') {
     const fits = (s: Seat) => !sameAccountInOtherSeat(d, s, profile.uid);
     const seats = activeSeats(room.settings);
     const open = seats.find((s) => room.seats[s] === null && fits(s));
@@ -156,6 +156,7 @@ export const handleHello = (d: EngineState, p: IntentPayloads['HELLO'], from: st
 
 export const handleTakeSeat = (d: EngineState, m: Member, seat: Seat, ctx: Ctx): void => {
   const { room } = d;
+  if (room.mode === 'chat') return reject(ctx, m.id, 'TAKE_SEAT', 'locked');
   if (seatOf(d, m.id)) return reject(ctx, m.id, 'TAKE_SEAT', 'already_seated');
   // seat_taken comes before the count-in check: the loser of a race for the
   // last seat arrives just after the winner's sit started a count-in, and
@@ -550,6 +551,23 @@ export const handleChat = (d: EngineState, m: Member, p: IntentPayloads['CHAT'],
   // Images go out live, mid-game included: shrinkImage and CHAT_IMAGE_MAX keep
   // one small enough that a move queued behind it on the channel barely waits.
   ctx.events.push({ kind: 'broadcast', message: { type: 'CHAT', payload: { message } }, except: [m.id] });
+};
+
+/**
+ * Read receipts are a nicety, so a receipt that does not apply is dropped
+ * quietly rather than answered with REJECTED. Only seated players send them,
+ * only for a message the host still remembers, and only forward: an older id
+ * cannot unsee a newer one, which also bounds how often a member can broadcast.
+ */
+export const handleChatSeen = (d: EngineState, m: Member, p: IntentPayloads['CHAT_SEEN'], ctx: Ctx): void => {
+  const { host } = d;
+  if (!seatOf(d, m.id)) return;
+  const at = host.recentQuotes.findIndex((q) => q.id === p.messageId);
+  if (at < 0) return;
+  const previous = host.chatSeen[m.id];
+  if (previous !== undefined && host.recentQuotes.findIndex((q) => q.id === previous) >= at) return;
+  host.chatSeen[m.id] = p.messageId;
+  ctx.events.push({ kind: 'broadcast', message: { type: 'CHAT_SEEN', payload: { memberId: m.id, messageId: p.messageId } }, except: [m.id] });
 };
 
 export const handleBuzz = (d: EngineState, m: Member, ctx: Ctx): void => {

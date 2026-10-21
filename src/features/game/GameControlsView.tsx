@@ -4,6 +4,7 @@ import type { ChatMessage } from '../webrtc/types';
 import { useDisplayPrefs } from './displayPrefs';
 import { useIsDesktop } from '../../shared/hooks/useMediaQuery';
 import { useTheme } from '../theme/ThemeContext';
+import { useT } from '../i18n/language';
 import { useDisguiseMode } from './disguiseMode';
 import { EMPTY_SHEET_ACTIONS, sheetActionsStore, sheetChatStore, sheetMatchStore, updateSheetUi, useSheetUi } from './sheetBridge';
 import type { SheetMatch } from './sheetBridge';
@@ -26,6 +27,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
   myUser,
   opponent,
   chatMessages,
+  chatReceipt,
+  onChatSeen,
   onSendChat,
   onSendBuzz,
   onProposeUndo,
@@ -55,6 +58,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
   onAnswerDoubleDown,
   sheetMatch = null,
 }) => {
+  const t = useT();
   const isDesktop = useIsDesktop();
   const prefs = useDisplayPrefs();
   const { theme } = useTheme();
@@ -126,11 +130,11 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
   const lastMessage = chatMessages[chatMessages.length - 1];
   const lastMessagePreview = useMemo(() => {
-    if (!lastMessage) return 'No messages yet';
-    const body = lastMessage.text || (lastMessage.image ? 'Sent an image' : '');
-    const who = isOwnMessage(lastMessage) ? 'You' : lastMessage.sender;
+    if (!lastMessage) return t('game.noMessagesYet');
+    const body = lastMessage.text || (lastMessage.image ? t('game.sentImage') : '');
+    const who = isOwnMessage(lastMessage) ? t('common.you') : lastMessage.sender;
     return lastMessage.system ? body : `${who}: ${body}`;
-  }, [lastMessage, isOwnMessage]);
+  }, [lastMessage, isOwnMessage, t]);
 
   useEffect(() => {
     let receivedMessage = false;
@@ -439,14 +443,14 @@ export const GameControls: React.FC<GameControlsProps> = ({
   /* ------------------------------- sub-views ------------------------------- */
 
   const undoTitle = !allowUndo
-    ? 'Take-backs are turned off for this match'
+    ? t('game.undoOff')
     : !canUndo
-    ? 'There is no move to take back yet'
+    ? t('game.undoNoMove')
     : undoPending
-    ? 'Waiting for your opponent to answer'
+    ? t('game.undoWaiting')
     : isAiMode
-    ? 'Take back your last move'
-    : 'Within 5s of your own move this is instant; after that your opponent has to agree';
+    ? t('game.undoBot')
+    : t('game.undoRoom');
 
   // A rematch restarts the board, so it is only offered once the match is over.
   // Practice keeps a "New game" button, which asks before discarding a live game.
@@ -522,6 +526,27 @@ export const GameControls: React.FC<GameControlsProps> = ({
         .slice(Math.min(sheetSeenCount, chatMessages.length))
         .filter((message) => !message.system && !isOwnMessage(message)).length;
 
+  // Read receipts: the newest line from someone else counts as read once the
+  // chat is on screen, the tab is visible and the feed is not holding unread
+  // lines below the fold.
+  const lastReadableId = useMemo(() => {
+    for (let i = chatMessages.length - 1; i >= 0; i--) {
+      const message = chatMessages[i];
+      if (!message.system && !message.doubleDownOffer && !isOwnMessage(message)) return message.id;
+    }
+    return null;
+  }, [chatMessages, isOwnMessage]);
+  const feedCaughtUp = sheetDisguise || !hasNewBelow;
+  useEffect(() => {
+    if (!onChatSeen || !lastReadableId || !chatInView || !feedCaughtUp) return;
+    const report = () => {
+      if (document.visibilityState === 'visible') onChatSeen(lastReadableId);
+    };
+    report();
+    document.addEventListener('visibilitychange', report);
+    return () => document.removeEventListener('visibilitychange', report);
+  }, [onChatSeen, lastReadableId, chatInView, feedCaughtUp]);
+
   // The comments panel sends text, emote shortcuts, images, replies and buzzes.
   const sendChatRef = useRef(onSendChat);
   const answerOfferRef = useRef(onAnswerDoubleDown);
@@ -569,7 +594,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const actionButtons = <GameActionRail {...{ exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown }} />;
   const reactionRow = <GameReactionPicker open={isReactionsOpen} isAiMode={isAiMode} anchorRef={emoteButtonRef} onPick={handlePickEmote} onClose={() => setIsReactionsOpen(false)} />;
 
-  const chatFeed = <GameChatFeed messages={chatMessages} emptyText={chatEmptyText} opponent={opponent} avatarFor={avatarFor} listRef={listRef} onScroll={handleFeedScroll} isOwn={isOwnMessage} onOpenImage={setLightboxImage} onReply={isAiMode ? undefined : startReply} onAnswerDoubleDown={onAnswerDoubleDown} hasNewBelow={hasNewBelow} onShowNew={() => scrollFeedToBottom(true)} />;
+  const chatFeed = <GameChatFeed messages={chatMessages} emptyText={chatEmptyText} opponent={opponent} avatarFor={avatarFor} listRef={listRef} onScroll={handleFeedScroll} isOwn={isOwnMessage} receipt={chatReceipt} onOpenImage={setLightboxImage} onReply={isAiMode ? undefined : startReply} onAnswerDoubleDown={onAnswerDoubleDown} hasNewBelow={hasNewBelow} onShowNew={() => scrollFeedToBottom(true)} />;
   const composer = <GameChatComposer {...{ attachedImage, setAttachedImage, reactionRow, handleChatSubmit, isAiMode, isReactionsOpen, setIsReactionsOpen, attachmentInputRef, handleAttachmentChange, emoteButtonRef, textareaRef, chatText, setChatText, handleKeyDown, handlePaste, role: role ?? 'player', handleBuzzClick, isBuzzCooldown, replyingTo, onCancelReply: () => setReplyingTo(null) }} />;
   const chatHeader = <GameChatHeader open={isChatOpen} unreadCount={unreadCount} messageCount={chatMessages.length} preview={lastMessagePreview} onToggle={() => setIsChatOpen((open) => !open)} />;
 
@@ -582,7 +607,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const actionsCell = () => (
     <div className="area-actions relative flex min-h-12 items-center justify-center p-1.5">
       {playerTimers.length > 0 && (
-        <div className="absolute left-3 hidden items-start gap-7 xl:flex" aria-label="Player clocks">
+        <div className="absolute left-3 hidden items-start gap-7 xl:flex" aria-label={t('game.playerClocks')}>
           {playerTimers.map(({ piece, seconds, isTurn, moves }) => {
             const color = piece === 'X' ? theme.xColor : piece === 'O' ? theme.oColor : '#7c3aed';
             return (
@@ -592,7 +617,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
                   isTurn ? 'opacity-100' : 'opacity-70'
                 }`}
                 style={{ color }}
-                title={`${piece} time remaining: ${formatElapsed(seconds)}`}
+                title={t('game.timeRemaining', { piece, time: formatElapsed(seconds) })}
               >
                 <span className="flex items-center gap-2 font-display text-base font-extrabold leading-4">
                   <span>{piece === 'T' ? '△' : piece}</span>
@@ -610,9 +635,9 @@ export const GameControls: React.FC<GameControlsProps> = ({
       {actionButtons}
       <div
         className="absolute right-2 flex flex-col items-end px-2 py-1 font-mono font-semibold text-muted tabular-nums"
-        title={`${moveCount} moves; match elapsed time`}
+        title={t('game.movesElapsed', { count: moveCount })}
       >
-        <span className="text-[10px] leading-3">{moveCount} {moveCount === 1 ? 'move' : 'moves'}</span>
+        <span className="text-[10px] leading-3">{moveCount} {moveCount === 1 ? t('game.moveOne') : t('game.moveMany')}</span>
         <span className="flex items-center gap-2 text-sm">
           <Timer size={16} strokeWidth={2.5} aria-hidden="true" />
           <span>{formatElapsed(elapsedGameTime)}</span>
@@ -721,8 +746,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
               onClick={() => setIsChatOpen(true)}
               aria-label={
                 unreadCount > 0
-                  ? `Open chat, ${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`
-                  : 'Open chat'
+                  ? t(unreadCount === 1 ? 'game.openChatUnreadOne' : 'game.openChatUnreadMany', { count: unreadCount })
+                  : t('game.openChat')
               }
               aria-expanded={isChatOpen}
               aria-controls="chat-sheet"
@@ -778,12 +803,12 @@ export const GameControls: React.FC<GameControlsProps> = ({
             }}
           >
             <div className="flex shrink-0 items-center justify-between border-b border-line px-2 py-1">
-              <h2 id="chat-sheet-title" className="px-2 text-base text-ink">Chat</h2>
+              <h2 id="chat-sheet-title" className="px-2 text-base text-ink">{t('game.chat')}</h2>
               <button
                 type="button"
                 onClick={closeChatSheet}
                 className="btn btn-ghost btn-icon h-10 w-10 shrink-0 text-muted hover:bg-surface-2 hover:text-ink"
-                aria-label="Close chat"
+                aria-label={t('game.closeChat')}
               >
                 <ChevronDown size={20} strokeWidth={2} />
               </button>

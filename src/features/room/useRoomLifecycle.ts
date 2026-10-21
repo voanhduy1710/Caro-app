@@ -26,7 +26,7 @@ interface Options {
   hostLoop: () => void; memberLoop: () => void; connectToHost: () => void; startHostLost: () => void;
   acceptConnection: (connection: DataConnection) => void; announce: () => void; publishHost: (now: number, force?: boolean) => void; saveSnapshot: (now: number) => void;
   setStatus: (value: any) => void; setRoomId: (value: string | null) => void; setIsHost: (value: boolean) => void; setMemberId: (value: string | null) => void;
-  setState: (value: RoomState | null) => void; setChatMessages: (value: any) => void; setError: (value: string | null) => void; setClosedReason: (value: ClosedReason | null) => void;
+  setState: (value: RoomState | null) => void; setChatMessages: (value: any) => void; setChatSeen: (value: Record<string, string>) => void; setError: (value: string | null) => void; setClosedReason: (value: ClosedReason | null) => void;
   setHostLostSince: (value: number | null) => void; setPendingMove: (value: [number, number] | null) => void; setTease: (value: null) => void; setSeatOpened: (value: null) => void;
 }
 
@@ -49,7 +49,7 @@ export const createRoomLifecycle = (options: Options) => {
     stopTimers(); dropPeer(); state.conns.clear(); state.connMember.clear(); state.pending.clear(); state.hostConn = null; state.engine = null; state.role = null; state.roomId = null; state.memberId = null; state.token = null; state.welcomed = false; state.terminal = false; state.hostLostSince = null; state.mirror = null; state.peerAttempt = 0;
     removeKey(sessionStorage, sessionKey);
     if (!clearUi) return;
-    setUrlRoom(null); options.setStatus('idle'); options.setRoomId(null); options.setIsHost(false); options.setMemberId(null); options.setState(null); options.setChatMessages([]); options.setPendingMove(null); options.setHostLostSince(null); options.setTease(null); options.setSeatOpened(null);
+    setUrlRoom(null); options.setStatus('idle'); options.setRoomId(null); options.setIsHost(false); options.setMemberId(null); options.setState(null); options.setChatMessages([]); options.setChatSeen({}); options.setPendingMove(null); options.setHostLostSince(null); options.setTease(null); options.setSeatOpened(null);
   };
   const finish = (reason: ClosedReason | null, message: string) => {
     const wasHost = state.role === 'host'; const code = state.roomId; state.terminal = true; stopTimers(); dropPeer(); state.hostConn = null; removeKey(sessionStorage, sessionKey); // id_taken means another tab is hosting this room: its backup is not ours to delete.
@@ -151,7 +151,7 @@ export const createRoomLifecycle = (options: Options) => {
     let engine: EngineState; let restored = false;
     try { engine = stored ? restore(stored, now) : fresh(); restored = Boolean(stored); } catch { engine = fresh(); }
     state.engine = engine; state.memberId = engine.host.hostMemberId; state.idRetryUntil = restored ? now + idRetryWindowMs : 0; writeJson(sessionStorage, sessionKey, { roomId: code, isHost: true, memberId: state.memberId });
-    setUrlRoom(code); options.setRoomId(code); options.setIsHost(true); options.setMemberId(state.memberId); options.setError(null); options.setClosedReason(null); options.setHostLostSince(null); options.setChatMessages(restored ? [...engine.host.chatBacklog] : []); options.setStatus('opening'); options.publishHost(now, true);
+    setUrlRoom(code); options.setRoomId(code); options.setIsHost(true); options.setMemberId(state.memberId); options.setError(null); options.setClosedReason(null); options.setHostLostSince(null); options.setChatMessages(restored ? [...engine.host.chatBacklog] : []); options.setChatSeen(restored ? { ...engine.host.chatSeen } : {}); options.setStatus('opening'); options.publishHost(now, true);
     // A duplicated tab copies sessionStorage and would fight the live tab for the room id.
     if (input.code && hostLiveElsewhere(code)) { finish('id_taken', 'This room is already open in another tab.'); return code; }
     void loadIceServers().then(() => { if (state.role === 'host' && state.roomId === code && !state.terminal && !state.peer) openHostPeer(code); }); return code;
@@ -180,7 +180,7 @@ export const createRoomLifecycle = (options: Options) => {
     }
     const saved = readJson<SavedSession>(sessionStorage, sessionKey); const resume = saved && !saved.isHost && saved.roomId === code && saved.memberId && saved.token ? { memberId: saved.memberId, token: saved.token } : readToken(code);
     teardown(false); state.role = 'member'; state.roomId = code; state.memberId = resume?.memberId ?? null; state.token = resume?.token ?? null; state.connectAttempts = 0;
-    setUrlRoom(code); options.setRoomId(code); options.setIsHost(false); options.setMemberId(null); options.setState(null); options.setChatMessages([]); options.setError(null); options.setClosedReason(null); options.setHostLostSince(null); options.setStatus('joining');
+    setUrlRoom(code); options.setRoomId(code); options.setIsHost(false); options.setMemberId(null); options.setState(null); options.setChatMessages([]); options.setChatSeen({}); options.setError(null); options.setClosedReason(null); options.setHostLostSince(null); options.setStatus('joining');
     void loadIceServers().then(() => { if (state.role === 'member' && state.roomId === code && !state.terminal && !state.peer) openMemberPeer(code); });
     startLoop(options.memberLoop, 1000); return code;
   };

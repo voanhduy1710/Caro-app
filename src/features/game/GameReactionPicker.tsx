@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CHAT_EMOTES, emoteSrc } from './chatEmotes';
+import { useT } from '../i18n/language';
 
 interface BubblePlacement { left: number; bottom: number; width: number; arrowLeft: number; columns: number }
 
@@ -24,6 +25,7 @@ export const GameReactionPicker: React.FC<{
   open: boolean; isAiMode: boolean; anchorRef: React.RefObject<HTMLElement | null>;
   onPick: (code: string) => void; onClose: () => void;
 }> = ({ open, isAiMode, anchorRef, onPick, onClose }) => {
+  const t = useT();
   const visible = open && !isAiMode;
   const bubbleRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<BubblePlacement | null>(null);
@@ -91,7 +93,7 @@ export const GameReactionPicker: React.FC<{
     <div
       ref={bubbleRef}
       role="dialog"
-      aria-label="Emoticons"
+      aria-label={t('game.emoticons')}
       style={{ left: placement.left, bottom: placement.bottom, width: placement.width }}
       className="fixed z-[70] rounded-sm border border-line-strong bg-surface px-2 py-3 shadow-e2 animate-pop-in"
     >
@@ -104,7 +106,7 @@ export const GameReactionPicker: React.FC<{
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onPick(emote.codes[0])}
             title={`${emote.label}  ${emote.codes.join('  ')}`}
-            aria-label={`${emote.label}, shortcut ${emote.codes.join(' or ')}`}
+            aria-label={t('game.emoteAria', { label: emote.label, codes: emote.codes.join(t('game.orJoin')) })}
             className="flex items-center justify-center rounded-sm p-1 transition-transform hover:scale-110 hover:bg-surface-2 active:scale-95"
           >
             <img src={emoteSrc(emote)} alt="" draggable={false} className="h-7 w-7 object-contain" />

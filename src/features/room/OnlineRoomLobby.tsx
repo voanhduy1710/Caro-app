@@ -3,6 +3,7 @@ import { Check, Copy, Globe, Lock, Share2 } from 'lucide-react';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { summariseRoomSettings } from '../settings/types';
 import { formatReconnectDuration } from '../../shared/utils/formatDuration';
+import { useT } from '../i18n/language';
 import type { Member, RoomState } from './roomEngine';
 import type { Seat } from './protocol';
 import type { RoomApi } from './useRoom';
@@ -16,6 +17,7 @@ export interface OnlineRoomLobbyProps {
 }
 
 export const OnlineRoomLobby: React.FC<OnlineRoomLobbyProps> = ({ room, s, me, isViewer, connected, occupantOf, copyState, roomLink, copyRoomLink, shareRoomLink, onOpenRules, requestExit, roster, hostLostStrip, confirmDialog, teaseToast }) => {
+    const t = useT();
     const seatRow = (seat: Seat) => {
       const occupant = occupantOf(seat);
       const isMine = occupant?.id === me;
@@ -44,17 +46,17 @@ export const OnlineRoomLobby: React.FC<OnlineRoomLobbyProps> = ({ room, s, me, i
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1">
               <span className={`truncate text-sm font-semibold ${occupant ? 'text-ink' : 'text-subtle'}`}>
-                {occupant ? occupant.profile.name : 'Open seat'}
+                {occupant ? occupant.profile.name : t('room.openSeat')}
               </span>
-              {isMine && <span className="chip chip-accent px-1.5 py-0 text-[10px]">You</span>}
-              {occupant?.isHost && <span className="chip px-1.5 py-0 text-[10px]">Host</span>}
+              {isMine && <span className="chip chip-accent px-1.5 py-0 text-[10px]">{t('common.you')}</span>}
+              {occupant?.isHost && <span className="chip px-1.5 py-0 text-[10px]">{t('common.host')}</span>}
             </div>
-            {grace !== null && <p className="text-[11px] font-medium text-warning">Reconnecting {formatReconnectDuration(grace)}</p>}
+            {grace !== null && <p className="text-[11px] font-medium text-warning">{t('room.reconnecting', { time: formatReconnectDuration(grace) })}</p>}
           </div>
           {/* A seat held by someone who dropped is free to take between games. */}
           {(!occupant || (!occupant.connected && !occupant.isHost && (s.phase === 'waiting' || s.phase === 'ended'))) && isViewer && connected && (
             <button onClick={() => room.takeSeat(seat)} className="btn btn-primary btn-sm shrink-0">
-              Take seat
+              {t('room.takeSeat')}
             </button>
           )}
         </li>
@@ -66,17 +68,17 @@ export const OnlineRoomLobby: React.FC<OnlineRoomLobbyProps> = ({ room, s, me, i
         <div className="panel space-y-4 p-5">
           <div className="flex items-start justify-between gap-3 border-b border-line pb-3">
             <div>
-              <span className="block text-xs font-semibold text-muted">Room code</span>
+              <span className="block text-xs font-semibold text-muted">{t('room.code')}</span>
               <span className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-subtle">
                 {s.isPublic ? (
                   <>
                     <Globe size={13} strokeWidth={2.25} aria-hidden="true" />
-                    <span>Public {s.mode === 'casual' ? 'Casual' : 'Ranked'} room</span>
+                    <span>{t('room.kindPublic', { mode: t(s.mode === 'casual' ? 'room.modeCasual' : 'room.modeRanked') })}</span>
                   </>
                 ) : (
                   <>
                     <Lock size={13} strokeWidth={2.25} aria-hidden="true" />
-                    <span>Private {s.mode === 'casual' ? 'Casual' : 'Ranked'} room</span>
+                    <span>{t('room.kindPrivate', { mode: t(s.mode === 'casual' ? 'room.modeCasual' : 'room.modeRanked') })}</span>
                   </>
                 )}
               </span>
@@ -89,19 +91,19 @@ export const OnlineRoomLobby: React.FC<OnlineRoomLobbyProps> = ({ room, s, me, i
               {copyState === 'copied' ? (
                 <>
                   <Check size={14} strokeWidth={2} aria-hidden="true" />
-                  <span>Link copied</span>
+                  <span>{t('common.linkCopied')}</span>
                 </>
               ) : (
                 <>
                   <Copy size={14} strokeWidth={2.25} aria-hidden="true" />
-                  <span>Copy invite link</span>
+                  <span>{t('common.copyInviteLink')}</span>
                 </>
               )}
             </button>
             {typeof navigator !== 'undefined' && 'share' in navigator && (
               <button onClick={shareRoomLink} className="btn btn-secondary btn-sm shrink-0">
                 <Share2 size={14} strokeWidth={2.25} aria-hidden="true" />
-                <span>Share</span>
+                <span>{t('room.share')}</span>
               </button>
             )}
           </div>
@@ -111,7 +113,7 @@ export const OnlineRoomLobby: React.FC<OnlineRoomLobbyProps> = ({ room, s, me, i
           {copyState === 'failed' && (
             <div className="field">
               <label htmlFor="manual-room-link" className="field-label">
-                Your browser blocked the clipboard. Copy this link by hand:
+                {t('room.clipboardBlocked')}
               </label>
               <input
                 id="manual-room-link"
@@ -124,14 +126,13 @@ export const OnlineRoomLobby: React.FC<OnlineRoomLobbyProps> = ({ room, s, me, i
             </div>
           )}
 
-          <ul className="space-y-2" aria-label="Seats">
+          <ul className="space-y-2" aria-label={t('room.seats')}>
             {seatRow('X')}
             {seatRow('O')}
             {s.settings.playerMode === 'oneVsOneVsOne' && seatRow('T')}
           </ul>
           <p className="text-xs text-muted">
-            The game starts by itself when {s.settings.playerMode === 'oneVsOneVsOne' ? 'all three seats are filled' : 'both seats are filled'}.
-            The opening turn rotates after every game.
+            {t(s.settings.playerMode === 'oneVsOneVsOne' ? 'room.autoStart3' : 'room.autoStart2')}
           </p>
 
           <div className="space-y-2 rounded-md border border-line bg-surface-2 p-3">
@@ -145,13 +146,13 @@ export const OnlineRoomLobby: React.FC<OnlineRoomLobbyProps> = ({ room, s, me, i
             </div>
             {room.isHost && (
               <button type="button" onClick={onOpenRules} className="btn btn-secondary btn-sm">
-                Change rules
+                {t('room.changeRules')}
               </button>
             )}
           </div>
 
           <button onClick={requestExit} className="btn btn-secondary w-full">
-            {room.isHost ? 'Close room' : 'Leave room'}
+            {room.isHost ? t('common.closeRoom') : t('common.leaveRoom')}
           </button>
         </div>
 
