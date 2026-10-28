@@ -100,6 +100,7 @@ export const game = defineStrings(
     'game.leftForMove': ' left for this move',
     'game.playing': 'Playing',
     'game.thinking': 'Thinking',
+    'game.botFirst': 'Let bot play first',
 
     // Practice
     'game.viewProfileMine': 'View and edit your profile',
@@ -228,6 +229,7 @@ export const game = defineStrings(
     'game.leftForMove': ' còn lại cho nước này',
     'game.playing': 'Đang đánh',
     'game.thinking': 'Đang nghĩ',
+    'game.botFirst': 'Cho máy đi trước',
 
     'game.viewProfileMine': 'Xem và sửa hồ sơ của bạn',
     'game.viewProfileOpponent': 'Xem hồ sơ và thống kê đối thủ',

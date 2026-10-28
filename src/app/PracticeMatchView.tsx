@@ -8,7 +8,7 @@ import type { RoomSettings } from '../features/settings/types';
 import type { BoardMatrix } from '../shared/utils/gomokuLogic';
 import type { SheetMatch } from '../features/game/sheetBridge';
 import type { ChatMessage } from '../features/webrtc/types';
-import { BOT_USER, botQuip, describeResultReason, SHEET_BOT_NAME, SHEET_TRIANGLE_BOT_NAME, TRIANGLE_BOT_USER } from './AppViewShared';
+import { BOT_USER, botQuip, canLetBotOpen, describeResultReason, SHEET_BOT_NAME, SHEET_TRIANGLE_BOT_NAME, TRIANGLE_BOT_USER } from './AppViewShared';
 import type { MoveHistoryItem, PracticePiece } from './AppViewShared';
 import { useT } from '../features/i18n/language';
 
@@ -25,7 +25,7 @@ export interface PracticeMatchViewProps {
   lastMove: [number, number] | null; winningLine: Array<[number, number]> | null; currentTurn: PracticePiece; myPiece: PracticePiece;
   gameStatus: 'lobby' | 'playing' | 'ended'; gameResult: { winner: string; reason: string } | null; ratingNote: string | null;
   p1TotalTime: number; p2TotalTime: number; p1ElapsedTime: number; p2ElapsedTime: number; turnTimeLeft: number; isAiThinking: boolean; elapsedGameTime: number; moveHistory: MoveHistoryItem[];
-  sessionScore: { mine: number; theirs: number; triangle: number }; onUndo: () => void; onRematch: () => void; onExit: () => void;
+  sessionScore: { mine: number; theirs: number; triangle: number }; onUndo: () => void; onRematch: () => void; onExit: () => void; onBotFirst: () => void;
 }
 
 export const PracticeMatchView: React.FC<PracticeMatchViewProps> = (p) => {
@@ -44,7 +44,11 @@ export const PracticeMatchView: React.FC<PracticeMatchViewProps> = (p) => {
     : winnerPiece === botPiece || (!three && p.gameResult.winner === 'Defeat!') ? 'won'
     : null;
   const botBubble = botOutcome ? botQuip(botOutcome, p.sessionScore.mine + p.sessionScore.theirs + p.sessionScore.triangle + p.moveHistory.length) : undefined;
-  const bot = { name: BOT_USER.displayName, bubble: botBubble, photoURL: BOT_USER.photoURL, piece: botPiece, clock: botPiece === 'X' ? p.p1TotalTime : p.p2TotalTime, moveClock: botTurn ? p.turnTimeLeft : 0, isTurn: botTurn, tag: p.isAiThinking ? t('game.thinking') : undefined, onClick: () => p.setOpponent(BOT_USER), title: t('game.viewProfileOpponent') };
+  // Shown under the bot's portrait until a stone is down, so the opening can be handed over.
+  const botAction = canLetBotOpen({ gameStatus: p.gameStatus, moveCount: p.moveHistory.length, threePlayer: three, currentTurn: p.currentTurn, myPiece: p.myPiece, isAiThinking: p.isAiThinking })
+    ? { label: t('game.botFirst'), onClick: p.onBotFirst, tone: 'secondary' as const }
+    : undefined;
+  const bot = { name: BOT_USER.displayName, bubble: botBubble, action: botAction, photoURL: BOT_USER.photoURL, piece: botPiece, clock: botPiece === 'X' ? p.p1TotalTime : p.p2TotalTime, moveClock: botTurn ? p.turnTimeLeft : 0, isTurn: botTurn, tag: p.isAiThinking ? t('game.thinking') : undefined, onClick: () => p.setOpponent(BOT_USER), title: t('game.viewProfileOpponent') };
   const triangle = { name: TRIANGLE_BOT_USER.displayName, photoURL: TRIANGLE_BOT_USER.photoURL, piece: 'T' as const, clock: 0, moveClock: p.currentTurn === 'T' ? p.turnTimeLeft : 0, isTurn: p.currentTurn === 'T', tag: p.currentTurn === 'T' && p.isAiThinking ? t('game.thinking') : undefined, onClick: () => p.setOpponent(TRIANGLE_BOT_USER), title: t('game.viewProfileOpponent') };
   const triangleTurn = p.gameStatus === 'playing' && p.currentTurn === 'T';
   // The same seats MatchHeader draws, as the Spreadsheet disguise shows them:

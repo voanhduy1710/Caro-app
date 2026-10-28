@@ -26,7 +26,8 @@ import { AppFeedback } from './AppFeedback';
 import { AppModalStack } from './AppModalStack';
 import { AppNavbar } from './AppNavbar';
 import { ActiveMatchStage } from './ActiveMatchStage';
-import { AI_BOARD_SIZE, aiThinkMs, lmaoCornerFor, nextPracticePiece, settingsUpdateFor, sheetNoticeText } from './AppViewShared';
+import { AI_BOARD_SIZE, aiThinkMs, canLetBotOpen, firstTurnFor, lmaoCornerFor, nextPracticePiece, settingsUpdateFor, sheetNoticeText } from './AppViewShared';
+import { setBotUrl, shouldAutoStartBot } from './botRoute';
 import type { MoveHistoryItem, PracticePiece } from './AppViewShared';
 import type { ConfirmSpec } from './AppViewShared';
 import { useT } from '../features/i18n/language';
@@ -147,6 +148,8 @@ export const App: React.FC = () => {
   // A rematch used to let an old search write its old board back over the new
   // one, which could leave a completed five-in-a-row game playable.
   const practiceGameGenerationRef = useRef(0);
+  /** Set by "Let bot play first": an emptied board (after take back) then gives the opening to the bot again. */
+  const botOpensRef = useRef(false);
 
   /** The room this player last left, offered back on the home screen for a while. */
   const [lastRoom, setLastRoom] = useState<LastRoom | null>(() => readLastRoom());
@@ -172,6 +175,11 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (resumedRef.current || authLoading) return;
     resumedRef.current = true;
+    // /bot is the bot page: opening it goes straight into a game against the bot.
+    if (shouldAutoStartBot(window.location.pathname, window.location.search)) {
+      handleStartAiMode();
+      return;
+    }
     room.resumeFromUrl(roomSettings);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading]);
@@ -356,7 +364,7 @@ export const App: React.FC = () => {
       setCurrentTurn(nextPracticePiece(last.piece, roomSettings.playerMode === 'oneVsOneVsOne'));
     } else {
       setLastMove(null);
-      setCurrentTurn('X');
+      setCurrentTurn(firstTurnFor(botOpensRef.current));
     }
     setTurnTimeLeft(roomSettings.turnTimeSeconds);
   }, [cancelAiMove, roomSettings.turnTimeSeconds]);
@@ -475,6 +483,7 @@ export const App: React.FC = () => {
     setMoveHistory([]);
     setWinningLine(null);
     setGameResult(null);
+    botOpensRef.current = false;
     setCurrentTurn('X');
     setTurnTimeLeft(roomSettings.turnTimeSeconds);
     setP1TotalTime(roomSettings.totalTimeMinutes * 60);
@@ -488,6 +497,8 @@ export const App: React.FC = () => {
 
   const handleStartAiMode = () => {
     if (roomActive) room.leaveRoom();
+    setBotUrl(true);
+    botOpensRef.current = false;
     practiceGameGenerationRef.current += 1;
     matchOverRef.current = false;
     cancelAiMove();
@@ -510,6 +521,14 @@ export const App: React.FC = () => {
     setP2ElapsedTime(0);
   };
 
+  // Hands the opening move to the bot. Only on a fresh board; the bot then answers like on any of its turns.
+  const handleBotFirst = () => {
+    if (!canLetBotOpen({ gameStatus, moveCount: moveHistory.length, threePlayer: roomSettings.playerMode === 'oneVsOneVsOne', currentTurn, myPiece, isAiThinking })) return;
+    botOpensRef.current = true;
+    setCurrentTurn(firstTurnFor(true));
+    setTurnTimeLeft(roomSettings.turnTimeSeconds);
+  };
+
   /* ----------------------------- navigation ------------------------------ */
 
   /** The home screen: no practice game, nothing still running in the background. */
@@ -521,6 +540,7 @@ export const App: React.FC = () => {
     setSessionScore({ mine: 0, theirs: 0, triangle: 0 });
     resetMatchState();
     setGameStatus('lobby');
+    setBotUrl(false);
   }, [cancelAiMove, resetMatchState]);
 
   // One exit flow for the board button, the brand logo and the Back gesture,
@@ -577,6 +597,7 @@ export const App: React.FC = () => {
     setIsAiMode(false);
     resetMatchState();
     setGameStatus('lobby');
+    setBotUrl(false);
   };
 
   const handleCreateRoom = (isPublic: boolean, mode: RoomMode = 'ranked') => {
@@ -653,7 +674,7 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        <ActiveMatchStage roomActive={roomActive} room={room} user={user} onRules={() => setSettingsAndThemeOpen(true)} onMyProfile={openProfileModal} onOpponent={setSelectedOpponentProfile} exitRef={roomExitRef} practice={practiceInMatch ? { user, openProfileModal, settings: practiceSettings, board, placementCorners: practicePlacementCorners, onCellClick: handleCellClick, lastMove, winningLine, currentTurn, myPiece, gameStatus, gameResult, ratingNote, p1TotalTime, p2TotalTime, p1ElapsedTime, p2ElapsedTime, turnTimeLeft, isAiThinking, elapsedGameTime, moveHistory, sessionScore, onUndo: handleUndoButtonClick, onRematch: handleRematchButtonClick, onExit: requestExitMatch, setOpponent: setSelectedOpponentProfile } : null} />
+        <ActiveMatchStage roomActive={roomActive} room={room} user={user} onRules={() => setSettingsAndThemeOpen(true)} onMyProfile={openProfileModal} onOpponent={setSelectedOpponentProfile} exitRef={roomExitRef} practice={practiceInMatch ? { user, openProfileModal, settings: practiceSettings, board, placementCorners: practicePlacementCorners, onCellClick: handleCellClick, lastMove, winningLine, currentTurn, myPiece, gameStatus, gameResult, ratingNote, p1TotalTime, p2TotalTime, p1ElapsedTime, p2ElapsedTime, turnTimeLeft, isAiThinking, elapsedGameTime, moveHistory, sessionScore, onUndo: handleUndoButtonClick, onRematch: handleRematchButtonClick, onExit: requestExitMatch, onBotFirst: handleBotFirst, setOpponent: setSelectedOpponentProfile } : null} />
 
       </main>
 

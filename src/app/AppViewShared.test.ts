@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AI_BOARD_SIZE, BOT_WIN_QUIPS, aiThinkMs, botQuip, settingsUpdateFor } from './AppViewShared';
+import { AI_BOARD_SIZE, BOT_WIN_QUIPS, aiThinkMs, botQuip, canLetBotOpen, firstTurnFor, settingsUpdateFor } from './AppViewShared';
 
 describe('practice bot settings', () => {
   it('uses a 19x19 board', () => {
@@ -44,5 +44,38 @@ describe('botQuip', () => {
   it('wraps seeds of any size, including negative ones', () => {
     expect(BOT_WIN_QUIPS).toContain(botQuip('won', 1_000_003));
     expect(BOT_WIN_QUIPS).toContain(botQuip('won', -7));
+  });
+});
+
+describe('canLetBotOpen', () => {
+  const fresh = { gameStatus: 'playing' as const, moveCount: 0, threePlayer: false, currentTurn: 'X' as const, myPiece: 'X' as const, isAiThinking: false };
+
+  it('is offered on a fresh one-on-one game', () => {
+    expect(canLetBotOpen(fresh)).toBe(true);
+  });
+
+  it('is not offered once a stone is down', () => {
+    expect(canLetBotOpen({ ...fresh, moveCount: 1 })).toBe(false);
+  });
+
+  it('is not offered outside a live game', () => {
+    expect(canLetBotOpen({ ...fresh, gameStatus: 'lobby' })).toBe(false);
+    expect(canLetBotOpen({ ...fresh, gameStatus: 'ended' })).toBe(false);
+  });
+
+  it('is not offered in a three-player game, whose turn order it would scramble', () => {
+    expect(canLetBotOpen({ ...fresh, threePlayer: true })).toBe(false);
+  });
+
+  it('is not offered once the bot already holds the move', () => {
+    expect(canLetBotOpen({ ...fresh, currentTurn: 'O' })).toBe(false);
+    expect(canLetBotOpen({ ...fresh, isAiThinking: true })).toBe(false);
+  });
+});
+
+describe('firstTurnFor', () => {
+  it('gives the opening to the player by default and to the bot when asked', () => {
+    expect(firstTurnFor(false)).toBe('X');
+    expect(firstTurnFor(true)).toBe('O');
   });
 });

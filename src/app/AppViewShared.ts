@@ -62,3 +62,7 @@ export const settingsUpdateFor = (current: RoomSettings, next: RoomSettings, inP
 export const BOT_WIN_QUIPS = ['EZ', 'IZI', 'EZ game EZ life', 'Oh god so ez', 'lul', 'Lmao', '=))', ':))'] as const;
 /** The bot's thought bubble after a game; `seed` keeps one line steady for the whole result screen. */
 export const botQuip = (outcome: 'won' | 'lost', seed: number): string => outcome === 'lost' ? t('game.botLostQuip') : BOT_WIN_QUIPS[((seed % BOT_WIN_QUIPS.length) + BOT_WIN_QUIPS.length) % BOT_WIN_QUIPS.length];
+/** "Let bot play first" is only for a fresh one-on-one game where the move is still the player's. */
+export const canLetBotOpen = (s: { gameStatus: 'lobby' | 'playing' | 'ended'; moveCount: number; threePlayer: boolean; currentTurn: PracticePiece; myPiece: PracticePiece; isAiThinking: boolean }): boolean => s.gameStatus === 'playing' && s.moveCount === 0 && !s.threePlayer && s.currentTurn === s.myPiece && !s.isAiThinking;
+/** Who moves on an empty board: the player (X) unless they handed the opening to the bot (O). */
+export const firstTurnFor = (botOpens: boolean): PracticePiece => botOpens ? 'O' : 'X';
