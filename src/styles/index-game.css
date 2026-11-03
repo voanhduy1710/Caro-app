@@ -513,12 +513,11 @@ html[data-sheet-disguise="on"][data-sheet-view="report"] [aria-modal="true"]:not
   position: relative;
   display: grid;
   place-items: center;
-  color: #ef2929;
   isolation: isolate;
 }
 .board-ping-sign {
   font: 900 32px/1 system-ui, sans-serif;
-  text-shadow: 0 1px 2px #fff, 0 -1px 2px #fff, 1px 0 2px #fff, -1px 0 2px #fff, 0 0 10px #ff333377;
+  text-shadow: 0 1px 2px #fff, 0 -1px 2px #fff, 1px 0 2px #fff, -1px 0 2px #fff, 0 0 10px currentColor;
   animation: board-ping-pop 260ms ease-out;
 }
 .board-ping-owner {
@@ -526,17 +525,16 @@ html[data-sheet-disguise="on"][data-sheet-view="report"] [aria-modal="true"]:not
   top: 78%;
   padding: 0 2px;
   border-radius: 3px;
-  background: #b91c1c;
   color: #fff;
   font: 700 9px/12px system-ui, sans-serif;
 }
 .board-ping-wave {
   position: absolute;
   inset: 15%;
-  border: 2px solid #ef2929;
+  border: 2px solid currentColor;
   border-radius: 50%;
   opacity: 0;
-  box-shadow: 0 0 5px #ef292966;
+  box-shadow: 0 0 5px currentColor;
   animation: board-ping-wave 7s ease-out infinite;
 }
 .board-ping-wave--delayed { animation-delay: 250ms; }

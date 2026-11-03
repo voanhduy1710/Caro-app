@@ -65,6 +65,7 @@ export const Board: React.FC<BoardProps> = ({
   const disguised = useDisguiseMode();
   const sheetUi = useSheetUi();
   const isSheetTheme = theme.boardTheme === 'spreadsheet';
+  const pingColors = { X: theme.xColor, O: theme.oColor, T: !isSheetTheme && theme.pieceTheme === 'laser' ? '#a855f7' : '#7c3aed' };
   // The disguise is only on screen when the toggle is set AND the board is the
   // Spreadsheet theme; a stale flag under any other theme hides nothing.
   const sheetDisguiseOn = isSheetTheme && disguised;
@@ -727,7 +728,7 @@ export const Board: React.FC<BoardProps> = ({
                     }}
                   >
                     {cells}
-                    {threePlayer && <BoardPingOverlay pings={pings} cellSize={cellSize} />}
+                    {threePlayer && <BoardPingOverlay pings={pings} cellSize={cellSize} colors={pingColors} />}
                   </div>
                 </div>
               </div>
@@ -803,7 +804,7 @@ export const Board: React.FC<BoardProps> = ({
               }}
             >
               {cells}
-              {threePlayer && <BoardPingOverlay pings={pings} cellSize={cellSize} />}
+              {threePlayer && <BoardPingOverlay pings={pings} cellSize={cellSize} colors={pingColors} />}
             </div>
           </div>
         </div>
