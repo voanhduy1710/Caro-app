@@ -834,7 +834,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         sheetMatch={sheetMatch}
       />
 
-      {/* Take-back: only the other seated player is asked. The opponent
+      {/* Take-back: either other seated player may answer in 1v1v1. The opponent
           triggers it at a moment the player does not choose, so under the
           disguise it asks in Sheets' words (and global CSS keeps it out of
           sight while a fake report is up). */}

@@ -289,7 +289,6 @@ export const handleUndoRequest = (d: EngineState, m: Member, p: IntentPayloads['
   const game = room.game;
   if (room.phase !== 'playing' || !game) return reject(ctx, m.id, 'UNDO_REQUEST', 'not_playing');
   if (p.gameId !== game.id) return reject(ctx, m.id, 'UNDO_REQUEST', 'wrong_game');
-  if (game.settings.playerMode === 'oneVsOneVsOne') return reject(ctx, m.id, 'UNDO_REQUEST', 'undo_off');
   if (!game.settings.allowUndo) return reject(ctx, m.id, 'UNDO_REQUEST', 'undo_off');
   const seat = seatOf(d, m.id);
   if (!seat) return reject(ctx, m.id, 'UNDO_REQUEST', 'not_seated');
@@ -313,8 +312,8 @@ export const handleUndoAnswer = (d: EngineState, m: Member, p: IntentPayloads['U
   if (room.phase !== 'playing' || !game) return reject(ctx, m.id, 'UNDO_ANSWER', 'not_playing');
   if (p.gameId !== game.id) return reject(ctx, m.id, 'UNDO_ANSWER', 'wrong_game');
   if (!game.undo) return reject(ctx, m.id, 'UNDO_ANSWER', 'no_undo');
-  if (game.settings.playerMode === 'oneVsOneVsOne') return reject(ctx, m.id, 'UNDO_ANSWER', 'not_addressed');
-  if (seatOf(d, m.id) !== otherSeat(game.undo.from)) return reject(ctx, m.id, 'UNDO_ANSWER', 'not_addressed');
+  const seat = seatOf(d, m.id);
+  if (!seat || seat === game.undo.from || !activeSeats(game.settings).includes(seat)) return reject(ctx, m.id, 'UNDO_ANSWER', 'not_addressed');
   const from = game.undo.from;
   if (p.accept) return takeBack(d, from, ctx);
   game.undo = null;
