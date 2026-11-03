@@ -311,6 +311,7 @@ export const shrinkImage = async (dataUrl: string, maxChars: number): Promise<st
 };
 
 const REJECTION_TEXT: Partial<Record<RejectReason, StringKey>> = {
+  must_block: 'room.rej.mustBlock',
   seat_taken: 'room.rej.seatTaken', same_account: 'room.rej.sameAccount', countdown: 'room.rej.countdown', time_out: 'room.rej.timeOut', locked: 'room.rej.locked', too_long: 'room.rej.tooLong', bad_image: 'room.rej.badImage', undo_off: 'room.rej.undoOff', undo_pending: 'room.rej.undoPending', offer_pending: 'room.rej.offerPending', seat_empty: 'room.rej.seatEmpty', not_host: 'room.rej.notHost',
 };
 

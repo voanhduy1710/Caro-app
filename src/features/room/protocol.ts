@@ -21,6 +21,8 @@ export { ROOM_CODE_PATTERN, parseRoomCode } from '../webrtc/roomCode';
 export const PROTOCOL_VERSION = 2;
 
 export type Seat = 'X' | 'O' | 'T';
+/** One shared attention marker per seated player. */
+export type BoardPings = Partial<Record<Seat, { row: number; col: number }>>;
 /** Where a mark sits inside its logical board cell in LMAO mode. */
 export type MoveCorner =
   | 'center'
@@ -213,6 +215,8 @@ export interface IntentPayloads {
   TAKE_SEAT: { seat: Seat };
   LEAVE_SEAT: Record<string, never>;
   MOVE: { gameId: string; n: number; row: number; col: number; corner?: MoveCorner };
+  BOARD_PING: { gameId: string; row: number; col: number };
+  BOARD_PING_CLEAR: { gameId: string };
   UNDO_REQUEST: { gameId: string };
   UNDO_ANSWER: { gameId: string; accept: boolean };
   REMATCH_OFFER: { gameId: string };
@@ -284,6 +288,7 @@ export type RejectReason =
   | 'stale_move'
   | 'out_of_bounds'
   | 'occupied'
+  | 'must_block'
   | 'time_out'
   | 'undo_off'
   | 'no_move_to_undo'
@@ -338,6 +343,7 @@ export interface HostMessagePayloads {
     clocks: Clocks;
     /** Offer state can change on the responder's move even when no full room snapshot is sent. */
     doubleDown?: DoubleDown;
+    pings?: BoardPings;
     rev: number;
   };
   CLOCK_SYNC: { gameId: string; clocks: Clocks; rev: number };
@@ -396,6 +402,8 @@ const VALIDATORS: { [K in IntentType]: (p: Record<string, unknown>) => boolean }
   LEAVE_SEAT: () => true,
   // null is accepted as "no corner": the binary wire encoding turns undefined into null.
   MOVE: (p) => hasGameId(p) && isCount(p.n) && isCount(p.row) && isCount(p.col) && (p.corner === undefined || p.corner === null || isMoveCorner(p.corner)),
+  BOARD_PING: (p) => hasGameId(p) && isCount(p.row) && isCount(p.col),
+  BOARD_PING_CLEAR: hasGameId,
   UNDO_REQUEST: hasGameId,
   UNDO_ANSWER: (p) => hasGameId(p) && typeof p.accept === 'boolean',
   REMATCH_OFFER: hasGameId,

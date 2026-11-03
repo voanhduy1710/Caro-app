@@ -12,6 +12,7 @@ import type { UserProfile } from '../features/auth/AuthContext';
 import { DEFAULT_ROOM_SETTINGS } from '../features/settings/types';
 import type { RoomSettings } from '../features/settings/types';
 import { createEmptyBoard, checkWin, isBoardFull } from '../shared/utils/gomokuLogic';
+import { forcedFourMoves } from '../shared/utils/forcedFour';
 import type { BoardMatrix } from '../shared/utils/gomokuLogic';
 import { useAiEngine } from '../features/game/useAiEngine';
 import { saveMatchRecord, resendPendingRatedResults } from '../features/history/historyService';
@@ -396,6 +397,10 @@ export const App: React.FC = () => {
 
     // A rematch, undo or return to the lobby may have landed while we waited.
     if (practiceGameGenerationRef.current !== gameGeneration) return;
+    if (roomSettings.playerMode === 'oneVsOneVsOne') {
+      const forced = forcedFourMoves(currentBoard, aiPiece);
+      if (forced && !forced.some(([row, col]) => row === aiRow && col === aiCol)) [aiRow, aiCol] = forced[0];
+    }
     if (currentBoard[aiRow][aiCol] !== null) return;
 
     const nextBoard = currentBoard.map((row) => [...row]);
@@ -409,7 +414,7 @@ export const App: React.FC = () => {
     ]);
     playMoveSound();
 
-    const win = checkWin(nextBoard, aiRow, aiCol, size);
+    const win = checkWin(nextBoard, aiRow, aiCol, size, roomSettings.playerMode === 'oneVsOneVsOne' ? 4 : 5);
     if (win) {
       handleGameOver(aiPiece, win.line, '5_in_a_row');
     } else if (isBoardFull(nextBoard)) {
@@ -436,6 +441,10 @@ export const App: React.FC = () => {
   const handleCellClick = (row: number, col: number, corner: BoardCorner) => {
     if (!isAiMode || gameStatus !== 'playing' || board[row][col] !== null) return;
     if (currentTurn !== myPiece) return;
+    if (roomSettings.playerMode === 'oneVsOneVsOne') {
+      const forced = forcedFourMoves(board, myPiece);
+      if (forced && !forced.some(([r, c]) => r === row && c === col)) return;
+    }
 
     const nextBoard = board.map((r) => [...r]);
     nextBoard[row][col] = myPiece;
@@ -451,7 +460,7 @@ export const App: React.FC = () => {
     setCurrentTurn(nextTurn);
     setTurnTimeLeft(roomSettings.turnTimeSeconds);
 
-    const win = checkWin(nextBoard, row, col, AI_BOARD_SIZE);
+    const win = checkWin(nextBoard, row, col, AI_BOARD_SIZE, roomSettings.playerMode === 'oneVsOneVsOne' ? 4 : 5);
     if (win) {
       handleGameOver(myPiece, win.line, '5_in_a_row');
     } else if (isBoardFull(nextBoard)) {

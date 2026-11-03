@@ -387,6 +387,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           turn: p.turn,
           clocks: p.clocks,
           doubleDown: p.doubleDown ?? game.doubleDown,
+          pings: p.pings ?? game.pings,
           lastMove: { by, at: Date.now() },
         },
       });

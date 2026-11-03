@@ -5,7 +5,7 @@ import { GRACE_MS, LOST_AFTER_MS, MALFORMED_KICK_COUNT, MALFORMED_WINDOW_MS, STA
 import type { EngineEnv, EngineResult, EngineState, RoomMode, RoomState } from './roomEngineTypes';
 import { bothSeatedAndConnected, findMember, liveClocksAt, nextSeat, occupant, otherSeat, seatOf } from './roomEngineHelpers';
 import { abortCountdown, bankClocks, cloneState, endGame, expiredClock, finalize, newCtx, pause, reject, removeMember, sendEvent, vacateSeat } from './roomEngineLifecycle';
-import { handleBuzz, handleChat, handleChatSeen, handleClaimDisconnectWin, handleClearSeat, handleCoinCall, handleDiscard, handleDoubleDownAnswer, handleDoubleDownOffer, handleFirstMoveChoice, handleHello, handleKickMember, handleLeaveRoom, handleMove, handleRatingReport, handleRematchAnswer, handleRematchOffer, handleResign, handleTakeSeat, handleTease, handleUndoAnswer, handleUndoRequest, handleUpdateSettings, refundedBankAt } from './roomEngineHandlers';
+import { handleBoardPingClear, handleBoardPing, handleBuzz, handleChat, handleChatSeen, handleClaimDisconnectWin, handleClearSeat, handleCoinCall, handleDiscard, handleDoubleDownAnswer, handleDoubleDownOffer, handleFirstMoveChoice, handleHello, handleKickMember, handleLeaveRoom, handleMove, handleRatingReport, handleRematchAnswer, handleRematchOffer, handleResign, handleTakeSeat, handleTease, handleUndoAnswer, handleUndoRequest, handleUpdateSettings, refundedBankAt } from './roomEngineHandlers';
 export * from './roomEngineTypes';
 export * from './roomEngineHelpers';
 
@@ -177,6 +177,8 @@ export const applyIntent = (state: EngineState, intent: Intent, fromMemberId: st
     return finalize(state, d, ctx);
   }
   switch (intent.type) {
+    case 'BOARD_PING': handleBoardPing(d, m, intent.payload, ctx); break;
+    case 'BOARD_PING_CLEAR': handleBoardPingClear(d, m, intent.payload, ctx); break;
     case 'TAKE_SEAT': handleTakeSeat(d, m, intent.payload.seat, ctx); break;
     case 'LEAVE_SEAT': {
       const seat = seatOf(d, m.id);

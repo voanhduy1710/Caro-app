@@ -3,6 +3,7 @@ import { defineStrings } from '../defineStrings';
 export const room = defineStrings(
   {
     'room.reason.fiveInRow': 'Five in a row completed the line.',
+    'room.rej.mustBlock': 'Block an immediate threat or win now. Choose a cell with a yellow border.',
     'room.reason.fourInRow': 'Four in a row completed the line.',
     'room.reason.boardFull': 'The board filled up with nobody in a row.',
     'room.reason.turnTimeout': 'The clock for that move ran out.',
@@ -168,6 +169,7 @@ export const room = defineStrings(
   },
   {
     'room.reason.fiveInRow': 'Năm quân liên tiếp đã hoàn thành hàng.',
+    'room.rej.mustBlock': 'Hãy chặn nước thắng ngay của đối thủ hoặc thắng ngay. Chọn ô có viền vàng.',
     'room.reason.fourInRow': 'Bốn quân liên tiếp đã hoàn thành hàng.',
     'room.reason.boardFull': 'Bàn cờ đã đầy mà không ai có hàng.',
     'room.reason.turnTimeout': 'Đã hết giờ cho nước đi đó.',

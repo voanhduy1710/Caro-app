@@ -202,6 +202,7 @@ export const vacate = (d: EngineState, seat: Seat, reason: SeatChange['reason'],
   const { game } = room;
   if (game) {
     game.undo = null;
+    if (game.pings) delete game.pings[seat];
     game.rematch = null;
     // The bet was made between two people; whoever sits down next never agreed to it.
     if (game.doubleDown) game.doubleDown = { ...game.doubleDown, pending: null, accepted: false };
@@ -395,7 +396,7 @@ export const finalize = (before: EngineState, d: EngineState, ctx: Ctx): EngineR
       kind: 'broadcast',
       message: {
         type: 'MOVE_APPLIED',
-        payload: { ...ctx.moveApplied, gameId: game.id, turn: game.turn, clocks: { ...game.clocks }, ...(game.doubleDown ? { doubleDown: { ...game.doubleDown } } : {}), rev: d.room.rev },
+        payload: { ...ctx.moveApplied, gameId: game.id, turn: game.turn, clocks: { ...game.clocks }, ...(game.doubleDown ? { doubleDown: { ...game.doubleDown } } : {}), ...(game.pings ? { pings: structuredClone(game.pings) } : {}), rev: d.room.rev },
       },
       except: [],
     });

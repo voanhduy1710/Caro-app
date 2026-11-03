@@ -1,4 +1,5 @@
 import { checkWin } from '../../shared/utils/gomokuLogic';
+import { forcedFourMoves } from '../../shared/utils/forcedFour';
 import { cutToCodePoints, isAllowedSettings, MAX_NAME_CODE_POINTS, sanitizeProfile } from './protocol';
 import type { IntentPayloads, RatingReportStatus, RoomChatMessage, Seat } from './protocol';
 import { BUZZ_INTERVAL_MS, CHAT_BACKLOG_SIZE, CHAT_IMAGE_MAX, CHAT_QUOTE_MAX, CHAT_QUOTES_SIZE, CHAT_MIN_INTERVAL_MS, CHAT_TEXT_MAX, CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, DOUBLE_DOWN_ANSWER_MOVES, GRACE_MS, INSTANT_UNDO_MS, MAX_MEMBERS, OFFER_TTL_MS, RATING_DELTA_MAX, REFUND_AFTER_LAST_SEEN_MS, ROOM_IMAGE_INTERVAL_MS, STALE_MOVER_MS, TEASE_PAIR_COOLDOWN_MS, TEASE_SENDER_COOLDOWN_MS } from './roomEngineTypes';
@@ -174,6 +175,31 @@ export const handleTakeSeat = (d: EngineState, m: Member, seat: Seat, ctx: Ctx):
 };
 
 /** `prevSeen` is when the mover was last heard from before this MOVE arrived. */
+export const handleBoardPingClear = (d: EngineState, m: Member, p: IntentPayloads['BOARD_PING_CLEAR'], ctx: Ctx): void => {
+  const game = d.room.game;
+  if (!game || p.gameId !== game.id) return reject(ctx, m.id, 'BOARD_PING_CLEAR', 'wrong_game');
+  if (game.settings.playerMode !== 'oneVsOneVsOne') return reject(ctx, m.id, 'BOARD_PING_CLEAR', 'locked');
+  const seat = seatOf(d, m.id);
+  if (!seat) return reject(ctx, m.id, 'BOARD_PING_CLEAR', 'not_seated');
+  if (game.pings) delete game.pings[seat];
+};
+
+export const handleBoardPing = (d: EngineState, m: Member, p: IntentPayloads['BOARD_PING'], ctx: Ctx): void => {
+  const { game, phase } = d.room;
+  if (!game || phase !== 'playing') return reject(ctx, m.id, 'BOARD_PING', 'not_playing');
+  if (p.gameId !== game.id) return reject(ctx, m.id, 'BOARD_PING', 'wrong_game');
+  if (game.settings.playerMode !== 'oneVsOneVsOne') return reject(ctx, m.id, 'BOARD_PING', 'locked');
+  const seat = seatOf(d, m.id);
+  if (!seat) return reject(ctx, m.id, 'BOARD_PING', 'not_seated');
+  const size = game.settings.boardSize;
+  if (p.row >= size || p.col >= size) return reject(ctx, m.id, 'BOARD_PING', 'out_of_bounds');
+  if (game.moves.some(([row, col]) => row === p.row && col === p.col)) return reject(ctx, m.id, 'BOARD_PING', 'occupied');
+  const pings = (game.pings ??= {});
+  const previous = pings[seat];
+  if (previous?.row === p.row && previous.col === p.col) delete pings[seat];
+  else pings[seat] = { row: p.row, col: p.col };
+};
+
 export const handleMove = (
   d: EngineState,
   m: Member,
@@ -193,6 +219,10 @@ export const handleMove = (
   if (p.row >= size || p.col >= size) return reject(ctx, m.id, 'MOVE', 'out_of_bounds');
   const board = boardFromMoves(game.moves, size, game.openingSeat, game.settings);
   if (board[p.row][p.col] !== null) return reject(ctx, m.id, 'MOVE', 'occupied');
+  if (game.settings.playerMode === 'oneVsOneVsOne') {
+    const forced = forcedFourMoves(board, seat);
+    if (forced && !forced.some(([row, col]) => row === p.row && col === p.col)) return reject(ctx, m.id, 'MOVE', 'must_block');
+  }
   // A move that arrives after the mover's clock ran out is too late: the
   // watchdog only looks four times a second, and the gap must not save anyone.
   const expired = expiredClock(d, ctx.now);
@@ -212,6 +242,10 @@ export const handleMove = (
   }
   bankClocks(d, ctx.now);
   game.moves.push([p.row, p.col]);
+  for (const seat of activeSeats(game.settings)) {
+    const ping = game.pings?.[seat];
+    if (ping?.row === p.row && ping.col === p.col) delete game.pings![seat];
+  }
   (game.moveCorners ??= []).push(game.settings.placementMode === 'lmao' ? p.corner ?? 'center' : 'center');
   game.moveBy.push(m.id);
   game.lastMove = { by: m.id, at: ctx.now };

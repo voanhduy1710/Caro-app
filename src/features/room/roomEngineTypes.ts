@@ -186,6 +186,8 @@ export interface Game {
   moves: Array<[number, number]>;
   /** Visual position of each move, index-for-index with `moves`. */
   moveCorners?: import('./protocol').MoveCorner[];
+  /** Persistent shared attention markers, separate from real moves. Optional for older snapshots. */
+  pings?: import('./protocol').BoardPings;
   /** The member who made each move, index for index with `moves`. */
   moveBy: string[];
   turn: Seat;

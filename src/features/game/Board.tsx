@@ -2,10 +2,12 @@ import React, { useRef, useState, useEffect, useLayoutEffect, useCallback, useMe
 import confetti from 'canvas-confetti';
 import type { CellValue } from '../../shared/utils/gomokuLogic';
 import { columnLabel } from '../../shared/utils/gomokuLogic';
+import { forcedFourMoves } from '../../shared/utils/forcedFour';
 import { useTheme } from '../theme/ThemeContext';
 import { useT } from '../i18n/language';
 import { useDisplayPrefs } from './displayPrefs';
 import { BoardCell } from './BoardCells';
+import { BoardPingOverlay } from './BoardPingOverlay';
 import {
   SHEET_COL_HEADER_H,
   SHEET_FAVICON,
@@ -52,6 +54,9 @@ export const Board: React.FC<BoardProps> = ({
   paused = null,
   lmaoMode = false,
   threePlayer = false,
+  pings,
+  onPing,
+  onClearPing,
   placementCorners,
 }) => {
   const t = useT();
@@ -66,6 +71,10 @@ export const Board: React.FC<BoardProps> = ({
   // A fake report tab only exists on the Spreadsheet board. Any other theme
   // always shows the game, whatever the store last said.
   const sheetView = isSheetTheme ? sheetUi.view : 'game';
+  const ownPing = threePlayer && onClearPing ? pings?.[myPiece] : undefined;
+  const forcedMoves = useMemo(() => threePlayer && gameStatus === 'playing' && countdown === null && !paused && !preGame
+    ? forcedFourMoves(board, currentTurn) : null, [threePlayer, gameStatus, countdown, paused, preGame, board, currentTurn]);
+  const forcedMoveKeys = useMemo(() => forcedMoves ? new Set(forcedMoves.map(([row, col]) => `${row}:${col}`)) : null, [forcedMoves]);
 
   const isWin = gameResult?.winner === 'Victory!';
   const isLoss = gameResult?.winner === 'Defeat!';
@@ -332,7 +341,10 @@ export const Board: React.FC<BoardProps> = ({
 
   // The match action rail owns the buttons; the board owns their local state.
   useEffect(() => {
-    const clearSimulations = () => setSimulatedMoves([]);
+    const clearSimulations = () => {
+      setSimulatedMoves([]);
+      if (ownPing) onClearPing?.();
+    };
     const centre = () => centreOnBoard();
     window.addEventListener('caro:clear-simulations', clearSimulations);
     window.addEventListener('caro:center-board', centre);
@@ -340,11 +352,11 @@ export const Board: React.FC<BoardProps> = ({
       window.removeEventListener('caro:clear-simulations', clearSimulations);
       window.removeEventListener('caro:center-board', centre);
     };
-  }, [centreOnBoard]);
+  }, [centreOnBoard, ownPing, onClearPing]);
 
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent<number>('caro:simulation-count', { detail: simulatedMoves.length }));
-  }, [simulatedMoves.length]);
+    window.dispatchEvent(new CustomEvent<number>('caro:simulation-count', { detail: simulatedMoves.length + (ownPing ? 1 : 0) }));
+  }, [simulatedMoves.length, ownPing]);
 
   // While disguised the whole browser tab plays along: global CSS restyles
   // dialogs off the <html> flag, and the tab's favicon is a green sheet rather
@@ -473,8 +485,9 @@ export const Board: React.FC<BoardProps> = ({
   // Stable identities keep BoardCell's memoisation effective.
   const handleSelectCell = useCallback((r: number, c: number, corner: BoardCorner) => {
     if (touchStartRef.current.isMoved) return;
+    if (disabled || (forcedMoveKeys && !forcedMoveKeys.has(`${r}:${c}`))) return;
     onCellClick(r, c, corner);
-  }, [onCellClick]);
+  }, [onCellClick, disabled, forcedMoveKeys]);
 
   const handleHoverCell = useCallback((r: number, c: number, corner: BoardCorner) => {
     setHoveredCell((prev) =>
@@ -485,6 +498,14 @@ export const Board: React.FC<BoardProps> = ({
   // Right-click to toggle a private local simulated move
   const handleCellContextMenu = useCallback((e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
+    if (ownPing?.row === r && ownPing.col === c) {
+      onClearPing?.();
+      return;
+    }
+    if (e.ctrlKey && threePlayer) {
+      if (boardRef.current?.[r]?.[c] === null) onPing?.(r, c);
+      return;
+    }
     if (boardRef.current?.[r]?.[c] != null) return; // never sketch over a real piece
     setSimulatedMoves((prev) => {
       const existingIdx = prev.findIndex((m) => m.row === r && m.col === c);
@@ -506,7 +527,7 @@ export const Board: React.FC<BoardProps> = ({
         : 'X';
       return [...prev, { row: r, col: c, piece: nextPiece }];
     });
-  }, [currentTurn, threePlayer]);
+  }, [currentTurn, threePlayer, onPing, ownPing, onClearPing]);
 
   const getBoardThemeClass = () => {
     if (theme.boardTheme === 'light_wood') return 'board-theme-light-wood';
@@ -572,6 +593,7 @@ export const Board: React.FC<BoardProps> = ({
           cellSize={cellSize}
           isLast={prefs.markLastMove && Boolean(lastMove && lastMove[0] === rIdx && lastMove[1] === cIdx)}
           isWinning={isWinningCell(rIdx, cIdx)}
+          isForced={forcedMoveKeys?.has(`${rIdx}:${cIdx}`) ?? false}
           isHovered={Boolean(
             hoveredCell &&
               hoveredCell.row === rIdx &&
@@ -593,7 +615,7 @@ export const Board: React.FC<BoardProps> = ({
               : undefined
           }
           currentTurn={currentTurn}
-          boardDisabled={disabled}
+          boardDisabled={disabled || (forcedMoveKeys !== null && !forcedMoveKeys.has(`${rIdx}:${cIdx}`))}
           pieceTheme={theme.pieceTheme}
           xColor={theme.xColor}
           oColor={theme.oColor}
@@ -643,7 +665,7 @@ export const Board: React.FC<BoardProps> = ({
           activeCell={sheetActiveCell}
           disguised={disguised}
           onToggleDisguise={toggleDisguised}
-          simulationCount={simulatedMoves.length}
+          simulationCount={simulatedMoves.length + (ownPing ? 1 : 0)}
         />
         <div className={`relative flex w-full flex-col ${sheetDisguiseOn ? 'min-h-0 flex-1' : ''}`}>
           {/* The game stays mounted under a fake report, so its scroll
@@ -695,7 +717,7 @@ export const Board: React.FC<BoardProps> = ({
                   style={{ gridRow: 2, gridColumn: 2, backgroundSize: `${cellSize}px ${cellSize}px` }}
                 >
                   <div
-                    className="grid shrink-0 board-grid-inner"
+                    className="relative grid shrink-0 board-grid-inner"
                     onMouseLeave={() => setHoveredCell(null)}
                     style={{
                       gridTemplateColumns: `repeat(${size}, ${cellSize}px)`,
@@ -705,6 +727,7 @@ export const Board: React.FC<BoardProps> = ({
                     }}
                   >
                     {cells}
+                    {threePlayer && <BoardPingOverlay pings={pings} cellSize={cellSize} />}
                   </div>
                 </div>
               </div>
@@ -771,7 +794,7 @@ export const Board: React.FC<BoardProps> = ({
         >
           <div className="m-auto flex min-h-full min-w-max items-center justify-center">
             <div
-              className="grid m-auto shrink-0 board-grid-inner"
+              className="relative grid m-auto shrink-0 board-grid-inner"
               style={{
                 gridTemplateColumns: `repeat(${size}, ${cellSize}px)`,
                 gridTemplateRows: `repeat(${size}, ${cellSize}px)`,
@@ -780,6 +803,7 @@ export const Board: React.FC<BoardProps> = ({
               }}
             >
               {cells}
+              {threePlayer && <BoardPingOverlay pings={pings} cellSize={cellSize} />}
             </div>
           </div>
         </div>

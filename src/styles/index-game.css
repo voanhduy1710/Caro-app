@@ -490,3 +490,66 @@ html[data-sheet-disguise="on"][data-sheet-view="report"] .modal-scrim,
 html[data-sheet-disguise="on"][data-sheet-view="report"] [aria-modal="true"]:not([data-sheet-dialog]) {
   display: none !important;
 }
+/* An inset border stays visible over every board theme without shifting cells. */
+.board-cell--forced::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 22;
+  pointer-events: none;
+  border: 3px solid #facc15;
+  box-shadow: inset 0 0 9px #facc154d;
+}
+
+/* Shared 1v1v1 attention markers. Rings pulse on placement and every seven seconds. */
+.board-pings {
+  display: grid;
+  grid-template-columns: inherit;
+  grid-template-rows: inherit;
+  gap: inherit;
+  padding: inherit;
+}
+.board-ping {
+  position: relative;
+  display: grid;
+  place-items: center;
+  color: #ef2929;
+  isolation: isolate;
+}
+.board-ping-sign {
+  font: 900 32px/1 system-ui, sans-serif;
+  text-shadow: 0 1px 2px #fff, 0 -1px 2px #fff, 1px 0 2px #fff, -1px 0 2px #fff, 0 0 10px #ff333377;
+  animation: board-ping-pop 260ms ease-out;
+}
+.board-ping-owner {
+  position: absolute;
+  top: 78%;
+  padding: 0 2px;
+  border-radius: 3px;
+  background: #b91c1c;
+  color: #fff;
+  font: 700 9px/12px system-ui, sans-serif;
+}
+.board-ping-wave {
+  position: absolute;
+  inset: 15%;
+  border: 2px solid #ef2929;
+  border-radius: 50%;
+  opacity: 0;
+  box-shadow: 0 0 5px #ef292966;
+  animation: board-ping-wave 7s ease-out infinite;
+}
+.board-ping-wave--delayed { animation-delay: 250ms; }
+@keyframes board-ping-wave {
+  0% { transform: scale(.35); opacity: .95; }
+  20%, 100% { transform: scale(4); opacity: 0; }
+}
+@keyframes board-ping-pop {
+  0% { transform: scale(.35); }
+  65% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-ping-wave { animation: none; }
+  .board-ping-sign { animation: none; }
+}

@@ -28,6 +28,18 @@ export const createRoomActions = ({ state, sendIntent, appendChat, notice, setPe
   return {
     takeSeat: (seat: Seat) => sendIntent({ type: 'TAKE_SEAT', payload: { seat } }),
     becomeViewer: () => sendIntent({ type: 'LEAVE_SEAT', payload: {} }),
+    ping: (row: number, col: number) => {
+      const room = state.mirror;
+      const game = room?.game;
+      if (!room || !game || room.phase !== 'playing' || game.settings.playerMode !== 'oneVsOneVsOne' || !seatOf(room, state.memberId)) return false;
+      return sendIntent({ type: 'BOARD_PING', payload: { gameId: game.id, row, col } });
+    },
+    clearPing: () => {
+      const room = state.mirror;
+      const game = room?.game;
+      if (!room || !game || game.settings.playerMode !== 'oneVsOneVsOne' || !seatOf(room, state.memberId)) return false;
+      return sendIntent({ type: 'BOARD_PING_CLEAR', payload: { gameId: game.id } });
+    },
     clearSeat: (seat: Seat) => sendIntent({ type: 'CLEAR_SEAT', payload: { seat } }),
     kickMember: (memberId: string) => sendIntent({ type: 'KICK_MEMBER', payload: { memberId } }),
     move: (row: number, col: number, corner?: MoveCorner) => {

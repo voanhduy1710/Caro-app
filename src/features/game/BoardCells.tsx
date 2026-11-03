@@ -114,6 +114,7 @@ interface BoardCellProps {
   cellSize: number;
   isLast: boolean;
   isWinning: boolean;
+  isForced: boolean;
   isHovered: boolean;
   /** Sits on a promoted grid line, every fifth column or row. */
   isMajorRight: boolean;
@@ -149,6 +150,7 @@ export const BoardCell = memo<BoardCellProps>(({
   cellSize,
   isLast,
   isWinning,
+  isForced,
   isHovered,
   isMajorRight,
   isMajorBottom,
@@ -240,7 +242,9 @@ export const BoardCell = memo<BoardCellProps>(({
           height: `${cellSize}px`,
           boxShadow: isLast && cell ? `inset 0 0 0 2px ${pieceColor(cell)}` : undefined,
         }}
-        className={`board-cell relative flex shrink-0 items-center justify-center ${
+        data-forced-move={isForced || undefined}
+        title={isForced ? t('game.forcedMove') : undefined}
+        className={`board-cell ${isForced ? 'board-cell--forced' : ''} relative flex shrink-0 items-center justify-center ${
           cell ? 'board-cell--filled' : ''
         } ${isLast ? 'board-cell--sheet-last' : ''} ${isWinning ? 'board-cell--sheet-win' : ''}`}
       >
@@ -276,7 +280,9 @@ export const BoardCell = memo<BoardCellProps>(({
     onMouseMove={(event) => onHover(row, col, clickCorner(event))}
     aria-label={cell ? t('game.coordinate', { coord: `${columnLabel(col)}${row + 1}`, cell }) : t('game.coordinateEmpty', { coord: `${columnLabel(col)}${row + 1}` })}
     style={{ width: `${cellSize}px`, height: `${cellSize}px` }}
-    className={`board-cell relative flex shrink-0 aspect-square items-center justify-center transition-all duration-100 ${
+    data-forced-move={isForced || undefined}
+    title={isForced ? t('game.forcedMove') : undefined}
+    className={`board-cell ${isForced ? 'board-cell--forced' : ''} relative flex shrink-0 aspect-square items-center justify-center transition-all duration-100 ${
       cell ? 'board-cell--filled' : ''
     } ${isMajorRight ? 'board-cell--gx' : ''} ${isMajorBottom ? 'board-cell--gy' : ''} ${
       isLast ? 'z-10 bg-accent/20 ring-2 ring-accent' : ''

@@ -18,6 +18,9 @@ export interface BoardProps {
   onCellClick: (row: number, col: number, corner: BoardCorner) => void;
   lmaoMode?: boolean;
   threePlayer?: boolean;
+  pings?: import('../room/protocol').BoardPings;
+  onPing?: (row: number, col: number) => void;
+  onClearPing?: () => void;
   placementCorners?: Record<string, BoardCorner>;
   lastMove: [number, number] | null;
   winningLine: Array<[number, number]> | null;
