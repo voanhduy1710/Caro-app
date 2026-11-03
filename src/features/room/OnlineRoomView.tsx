@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { Board } from '../game/Board';
+import { createPingSoundNotifier } from '../game/pingSound';
 import type { BoardCorner } from '../game/Board';
 import { MatchHeader } from '../game/MatchHeader';
 import type { SeatView } from '../game/MatchHeader';
@@ -39,7 +40,7 @@ const formatReconnectTime = (seconds: number | null | undefined) => {
 export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules, onViewMyProfile, onViewProfile, exitRef }) => {
   const t = useT();
   const isDesktop = useIsDesktop();
-  const { playWinSound, playTimerWarningSound, playClickSound, playBuzzSound } = useSheetAwareSound();
+  const { playWinSound, playTimerWarningSound, playClickSound, playBuzzSound, playPingSound } = useSheetAwareSound();
   // Under the Spreadsheet board the room speaks Sheets: the paused panel
   // always (it is drawn inside the sheet), and the room's own dialogs and
   // pop-ups while the disguise is actually up.
@@ -303,6 +304,12 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   };
 
   /* ------------------------------ effects ----------------------------- */
+
+  const pingSoundRef = useRef<ReturnType<typeof createPingSoundNotifier> | null>(null);
+  useEffect(() => {
+    pingSoundRef.current ??= createPingSoundNotifier();
+    pingSoundRef.current(game?.id ?? null, game?.pings, performance.now(), playPingSound);
+  }, [game?.id, game?.pings, playPingSound]);
 
   // The winner's moment, once per game.
   const celebratedRef = useRef<string | null>(null);

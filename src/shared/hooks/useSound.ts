@@ -82,11 +82,23 @@ export const useSound = () => {
       console.warn('Buzz sound error:', error);
     }
   }, []);
+  const playPingSound = useCallback(() => {
+    if (!getDisplayPrefs().soundEnabled || typeof Audio === 'undefined') return;
+    try {
+      const sound = new Audio('/ping-sound.mp3');
+      sound.volume = 0.8;
+      void sound.play().catch(() => {
+        // A browser can refuse remote audio until the first user interaction.
+      });
+    } catch {
+      // A sound failure must not interrupt the match.
+    }
+  }, []);
   // Softer and lower than Buzz: a chat note should inform, not nudge.
   const playChatSound = useCallback(() => {
     playTone(660, 'triangle', 0.08, 0.18);
     window.setTimeout(() => playTone(880, 'triangle', 0.13, 0.16), 70);
   }, [playTone]);
 
-  return { playMoveSound, playWinSound, playTimerWarningSound, playClickSound, playBuzzSound, playChatSound };
+  return { playMoveSound, playWinSound, playTimerWarningSound, playClickSound, playBuzzSound, playPingSound, playChatSound };
 };

@@ -10,7 +10,7 @@ import { isSheetReportShowing } from '../disguiseMode';
  * sound fired from a stale callback still respects the current view.
  */
 export const useSheetAwareSound = () => {
-  const { playMoveSound, playWinSound, playTimerWarningSound, playClickSound, playBuzzSound, playChatSound } =
+  const { playMoveSound, playWinSound, playTimerWarningSound, playClickSound, playBuzzSound, playPingSound, playChatSound } =
     useSound();
   return useMemo(() => {
     const gate = (play: () => void) => () => {
@@ -22,7 +22,8 @@ export const useSheetAwareSound = () => {
       playTimerWarningSound: gate(playTimerWarningSound),
       playClickSound: gate(playClickSound),
       playBuzzSound: gate(playBuzzSound),
+      playPingSound: gate(playPingSound),
       playChatSound: gate(playChatSound),
     };
-  }, [playMoveSound, playWinSound, playTimerWarningSound, playClickSound, playBuzzSound, playChatSound]);
+  }, [playMoveSound, playWinSound, playTimerWarningSound, playClickSound, playBuzzSound, playPingSound, playChatSound]);
 };
