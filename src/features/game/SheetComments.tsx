@@ -5,7 +5,7 @@ import type { ChatMessage, ChatQuote } from '../webrtc/types';
 import { renderWithEmotes } from './chatEmotes';
 import { EmoteInput } from './EmoteInput';
 import { GameReactionPicker } from './GameReactionPicker';
-import { processImageFile } from './GameControlsShared';
+import { PIN_TO_BOTTOM_MS, processImageFile, STICK_TO_BOTTOM_PX } from './GameControlsShared';
 
 /**
  * The match chat, dressed as Google Sheets' comments panel. While the
@@ -23,9 +23,6 @@ const SHEET_FONT = "'Google Sans', Roboto, Arial, sans-serif";
 
 /** Close to the palette Google uses for letter avatars. */
 const AVATAR_COLOURS = ['#1a73e8', '#e8710a', '#188038', '#d93025', '#9334e6', '#e52592', '#12b5cb', '#f29900', '#5f6368', '#a142f4'];
-
-/** How close to the bottom still counts as reading the newest comment. */
-const STICK_TO_BOTTOM_PX = 48;
 
 const avatarColour = (name: string) => {
   let hash = 0;
@@ -74,10 +71,24 @@ interface CommentCardProps {
   onJump: (id: string) => void;
 }
 
-const CommentCard: React.FC<CommentCardProps> = ({ message, mine, onOpenImage, onAnswerOffer, onReply, onJump }) => (
-  <div data-chat-id={message.id} className={`flex px-3 py-1 ${mine ? 'justify-end' : 'justify-start'}`}>
+const CommentCard: React.FC<CommentCardProps> = ({ message, mine, onOpenImage, onAnswerOffer, onReply, onJump }) => {
+  const replyButton = onReply && !message.doubleDownOffer && (
+    <button
+      type="button"
+      onClick={() => onReply(message)}
+      title="Trả lời"
+      aria-label={`Trả lời ${message.sender}`}
+      className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[#444746] opacity-0 transition hover:bg-[rgba(68,71,70,0.08)] focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-60"
+    >
+      <Reply size={14} strokeWidth={2.25} aria-hidden="true" />
+    </button>
+  );
+
+  return (
+  <div data-chat-id={message.id} className={`group flex items-end gap-1 px-3 py-1 ${mine ? 'justify-end' : 'justify-start'}`}>
+    {mine && replyButton}
     <article
-      className={`min-w-0 max-w-[88%] rounded-lg border p-3 ${
+      className={`min-w-0 max-w-[82%] rounded-md border p-3 ${
         mine ? 'rounded-br-sm border-[#d3e3fd] bg-[#e8f0fe]' : 'rounded-bl-sm border-[#dadce0] bg-white'
       }`}
     >
@@ -153,22 +164,11 @@ const CommentCard: React.FC<CommentCardProps> = ({ message, mine, onOpenImage, o
         </button>
       )}
 
-      {onReply && !message.doubleDownOffer && (
-        <div className={`mt-1.5 flex ${mine ? 'justify-start' : 'justify-end'}`}>
-          <button
-            type="button"
-            onClick={() => onReply(message)}
-            aria-label={`Trả lời ${message.sender}`}
-            className="-mb-1 flex h-7 items-center gap-1 rounded-full px-2 text-[12px] font-medium text-[#0b57d0] transition-colors hover:bg-[rgba(11,87,208,0.08)]"
-          >
-            <Reply size={13} strokeWidth={2.25} aria-hidden="true" />
-            Trả lời
-          </button>
-        </div>
-      )}
     </article>
+    {!mine && replyButton}
   </div>
-);
+  );
+};
 
 export const SheetComments: React.FC<SheetCommentsProps> = ({ onOpenImage }) => {
   const chat = useSheetChat();
@@ -194,15 +194,43 @@ export const SheetComments: React.FC<SheetCommentsProps> = ({ onOpenImage }) => 
   /** Follow new comments only while the reader is already at the newest one. */
   const stickRef = useRef(true);
 
+  // Keyed on the newest id, not the count: the room keeps a capped window of
+  // messages, so once it is full the count stops changing.
+  const newestId = messages[messages.length - 1]?.id;
+
   // Opening the panel lands on the newest comment, and a new one arriving is
   // followed only when the reader had not scrolled up to read older ones.
-  // Layout effect, so the panel never paints scrolled to the top first.
+  // Layout effect, so the panel never paints scrolled to the top first. The
+  // bottom is then held briefly, because the composer snapping back to one line
+  // moves it again after this first scroll.
   useLayoutEffect(() => {
     const el = listRef.current;
     if (!el || !stickRef.current) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
 
+    let raf = 0;
+    const deadline = performance.now() + PIN_TO_BOTTOM_MS;
+    const hold = () => {
+      if (!stickRef.current) return;
+      el.scrollTop = el.scrollHeight;
+      if (performance.now() < deadline) raf = requestAnimationFrame(hold);
+    };
+    raf = requestAnimationFrame(hold);
+    return () => cancelAnimationFrame(raf);
+  }, [newestId]);
+
+  // Attached images and emotes finish loading long after the comment appears.
+  // Without re-pinning, the gap they open reads as the reader having scrolled up.
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (stickRef.current) el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(el);
+    for (const child of Array.from(el.children)) observer.observe(child);
+    return () => observer.disconnect();
+  }, [newestId]);
 
   // Opening the panel puts the caret in the comment box, ready to type. Not on
   // a touch screen, where focusing would throw the keyboard over the panel.
