@@ -8,6 +8,9 @@ import { useT } from '../i18n/language';
 import { useDisplayPrefs } from './displayPrefs';
 import { BoardCell } from './BoardCells';
 import { BoardPingOverlay } from './BoardPingOverlay';
+import { useAuth } from '../auth/AuthContext';
+import { countStones, hasBotHint } from './botHint';
+import { BotHintRunner } from './BotHintRunner';
 import {
   SHEET_COL_HEADER_H,
   SHEET_FAVICON,
@@ -76,6 +79,16 @@ export const Board: React.FC<BoardProps> = ({
   const forcedMoves = useMemo(() => threePlayer && gameStatus === 'playing' && countdown === null && !paused && !preGame
     ? forcedFourMoves(board, currentTurn) : null, [threePlayer, gameStatus, countdown, paused, preGame, board, currentTurn]);
   const forcedMoveKeys = useMemo(() => forcedMoves ? new Set(forcedMoves.map(([row, col]) => `${row}:${col}`)) : null, [forcedMoves]);
+
+  const { user } = useAuth();
+  const showBotHint = hasBotHint(user?.username);
+  const [botHint, setBotHint] = useState<[number, number] | null>(null);
+  // A suggestion only holds for the position it was asked about.
+  const stoneCount = useMemo(() => countStones(board), [board]);
+  useEffect(() => setBotHint(null), [stoneCount, gameStatus]);
+  const botHintRunner = showBotHint && gameStatus === 'playing' && (
+    <BotHintRunner board={board} size={size} piece={myPiece} threePlayer={threePlayer} onHint={setBotHint} />
+  );
 
   const isWin = gameResult?.winner === 'Victory!';
   const isLoss = gameResult?.winner === 'Defeat!';
@@ -595,6 +608,7 @@ export const Board: React.FC<BoardProps> = ({
           isLast={prefs.markLastMove && Boolean(lastMove && lastMove[0] === rIdx && lastMove[1] === cIdx)}
           isWinning={isWinningCell(rIdx, cIdx)}
           isForced={forcedMoveKeys?.has(`${rIdx}:${cIdx}`) ?? false}
+          isBotHint={botHint?.[0] === rIdx && botHint[1] === cIdx}
           isHovered={Boolean(
             hoveredCell &&
               hoveredCell.row === rIdx &&
@@ -661,6 +675,7 @@ export const Board: React.FC<BoardProps> = ({
         ref={columnRef}
         className={`sheet-board flex w-full flex-col bg-white ${sheetDisguiseOn ? 'h-full min-h-0 flex-1' : ''}`}
       >
+        {botHintRunner}
         <SheetChrome
           board={board}
           activeCell={sheetActiveCell}
@@ -777,6 +792,7 @@ export const Board: React.FC<BoardProps> = ({
     // the board's own size cannot feed back into. The inner stack is capped to
     // the board, so the toolbar, the match header and the frame share one edge.
     <div ref={columnRef} className="flex w-full justify-center select-none">
+      {botHintRunner}
       {/* Keep the viewport wide when zooming out. Coupling its width to the
           shrunken grid made the whole board collapse into a small square. */}
       <div

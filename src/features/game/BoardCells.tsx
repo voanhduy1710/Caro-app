@@ -115,6 +115,8 @@ interface BoardCellProps {
   isLast: boolean;
   isWinning: boolean;
   isForced: boolean;
+  /** The bot's suggested move; drawn like a forced move but restricts nothing. */
+  isBotHint: boolean;
   isHovered: boolean;
   /** Sits on a promoted grid line, every fifth column or row. */
   isMajorRight: boolean;
@@ -151,6 +153,7 @@ export const BoardCell = memo<BoardCellProps>(({
   isLast,
   isWinning,
   isForced,
+  isBotHint,
   isHovered,
   isMajorRight,
   isMajorBottom,
@@ -244,7 +247,7 @@ export const BoardCell = memo<BoardCellProps>(({
         }}
         data-forced-move={isForced || undefined}
         title={isForced ? t('game.forcedMove') : undefined}
-        className={`board-cell ${isForced ? 'board-cell--forced' : ''} relative flex shrink-0 items-center justify-center ${
+        className={`board-cell ${isForced || isBotHint ? 'board-cell--forced' : ''} relative flex shrink-0 items-center justify-center ${
           cell ? 'board-cell--filled' : ''
         } ${isLast ? 'board-cell--sheet-last' : ''} ${isWinning ? 'board-cell--sheet-win' : ''}`}
       >
@@ -282,7 +285,7 @@ export const BoardCell = memo<BoardCellProps>(({
     style={{ width: `${cellSize}px`, height: `${cellSize}px` }}
     data-forced-move={isForced || undefined}
     title={isForced ? t('game.forcedMove') : undefined}
-    className={`board-cell ${isForced ? 'board-cell--forced' : ''} relative flex shrink-0 aspect-square items-center justify-center transition-all duration-100 ${
+    className={`board-cell ${isForced || isBotHint ? 'board-cell--forced' : ''} relative flex shrink-0 aspect-square items-center justify-center transition-all duration-100 ${
       cell ? 'board-cell--filled' : ''
     } ${isMajorRight ? 'board-cell--gx' : ''} ${isMajorBottom ? 'board-cell--gy' : ''} ${
       isLast ? 'z-10 bg-accent/20 ring-2 ring-accent' : ''

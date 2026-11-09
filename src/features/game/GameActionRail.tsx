@@ -1,10 +1,12 @@
 import React from 'react';
-import { Armchair, Crosshair, Dices, Eraser, Flag, Flame, Loader2, LogOut, RefreshCw, Settings, Undo2 } from 'lucide-react';
+import { Armchair, Crosshair, Dices, Eraser, Flag, Flame, Lightbulb, Loader2, LogOut, RefreshCw, Settings, Undo2 } from 'lucide-react';
 import { setDisplayPref } from './displayPrefs';
 import type { DisplayPrefs } from './displayPrefs';
 import { PREF_ROWS, RailButton } from './GameControlsShared';
 import type { GameControlsProps } from './GameControlsShared';
 import { useT } from '../i18n/language';
+import { useAuth } from '../auth/AuthContext';
+import { BOT_HINT_EVENT, hasBotHint } from './botHint';
 
 export interface GameActionRailProps extends Pick<GameControlsProps, 'exitLabel' | 'isAiMode' | 'onExitMatch' | 'role' | 'openSeat' | 'onTakeSeat' | 'onProposeUndo' | 'allowUndo' | 'gameStatus' | 'canUndo' | 'undoPending' | 'onProposeRematch' | 'rematchPending' | 'onResign' | 'canResign' | 'doubleDown' | 'onOfferDoubleDown'> {
   simulationCount: number; undoTitle: string; rematchDisabled: boolean; prefs: DisplayPrefs;
@@ -14,6 +16,7 @@ export interface GameActionRailProps extends Pick<GameControlsProps, 'exitLabel'
 
 export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
   const t = useT();
+  const { user } = useAuth();
   const { exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown } = props;
   return (
     <div className="flex flex-wrap items-center justify-center gap-0.5">
@@ -153,6 +156,16 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
 
       {doubleDown && role !== 'viewer' && !isAiMode && (
         <DoubleDownButton doubleDown={doubleDown} onOffer={onOfferDoubleDown} />
+      )}
+
+      {role !== 'viewer' && hasBotHint(user?.username) && (
+        <RailButton
+          icon={<Lightbulb size={17} strokeWidth={2.25} aria-hidden="true" />}
+          label={t('game.botHint')}
+          title={t('game.botHintTitle')}
+          onClick={() => window.dispatchEvent(new Event(BOT_HINT_EVENT))}
+          disabled={gameStatus !== 'playing'}
+        />
       )}
     </div>
   );
