@@ -576,6 +576,21 @@ export const Board: React.FC<BoardProps> = ({
     () => (isSheetTheme ? Array.from({ length: sheetTotalRows }, (_, i) => String(i + 1)) : []),
     [isSheetTheme, sheetTotalRows],
   );
+  // Gridlines past the board, one bordered element per line. Borders snap to
+  // whole device pixels; 1px gradient stops drop out at fractional zoom.
+  const sheetFillerLines = useMemo(() => {
+    if (!isSheetTheme) return null;
+    return (
+      <div aria-hidden="true" className="sheet-filler-lines">
+        {Array.from({ length: sheetTotalCols }, (_, i) => (
+          <span key={`c${i}`} className="sheet-vline" style={{ left: (i + 1) * cellSize - 1 }} />
+        ))}
+        {Array.from({ length: sheetTotalRows }, (_, i) => (
+          <span key={`r${i}`} className="sheet-hline" style={{ top: (i + 1) * cellSize - 1 }} />
+        ))}
+      </div>
+    );
+  }, [isSheetTheme, sheetTotalCols, sheetTotalRows, cellSize]);
   const sheetActiveCol = sheetActiveCell && sheetActiveCell.col < size ? sheetActiveCell.col : -1;
   const sheetActiveRow = sheetActiveCell && sheetActiveCell.row < size ? sheetActiveCell.row : -1;
 
@@ -730,8 +745,9 @@ export const Board: React.FC<BoardProps> = ({
                     empty nodes to look endless. */}
                 <div
                   className="sheet-body"
-                  style={{ gridRow: 2, gridColumn: 2, backgroundSize: `${cellSize}px ${cellSize}px` }}
+                  style={{ gridRow: 2, gridColumn: 2 }}
                 >
+                  {sheetFillerLines}
                   <div
                     className="relative grid shrink-0 board-grid-inner"
                     onMouseLeave={() => setHoveredCell(null)}

@@ -406,9 +406,45 @@
 .sheet-body {
   position: relative;
   background-color: #ffffff;
-  background-image:
-    linear-gradient(to right, transparent calc(100% - 1px), #e1e3e1 calc(100% - 1px)),
-    linear-gradient(to bottom, transparent calc(100% - 1px), #e1e3e1 calc(100% - 1px));
+}
+
+/* Filler gridlines (see Board): bordered 0-width/0-height strips, which the
+   browser always paints at least one device pixel thick. */
+.sheet-filler-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sheet-vline,
+.sheet-hline {
+  position: absolute;
+  box-sizing: content-box;
+}
+
+.sheet-vline {
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-right: 1px solid #e1e3e1;
+}
+
+.sheet-hline {
+  left: 0;
+  right: 0;
+  height: 0;
+  border-bottom: 1px solid #e1e3e1;
+}
+
+/* Black frame marking where the playable board ends. Overlay, drawn
+   inside the grid, so cell sizes and click targets stay unchanged. */
+.board-theme-spreadsheet .board-grid-inner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid #000000;
+  pointer-events: none;
+  z-index: 3;
 }
 
 .board-theme-spreadsheet .board-cell {
