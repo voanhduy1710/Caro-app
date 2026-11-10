@@ -594,8 +594,9 @@ export const handleChat = (d: EngineState, m: Member, p: IntentPayloads['CHAT'],
  */
 export const handleChatSeen = (d: EngineState, m: Member, p: IntentPayloads['CHAT_SEEN'], ctx: Ctx): void => {
   const { host } = d;
-  if (!seatOf(d, m.id)) return;
-  const at = host.recentQuotes.findIndex((q) => q.id === p.messageId);
+  // Seated players only in a game; everyone in a chat room, which has no seats.
+  if (!seatOf(d, m.id) && d.room.mode !== 'chat') return;
+  const at =host.recentQuotes.findIndex((q) => q.id === p.messageId);
   if (at < 0) return;
   const previous = host.chatSeen[m.id];
   if (previous !== undefined && host.recentQuotes.findIndex((q) => q.id === previous) >= at) return;
@@ -605,7 +606,8 @@ export const handleChatSeen = (d: EngineState, m: Member, p: IntentPayloads['CHA
 
 export const handleBuzz = (d: EngineState, m: Member, ctx: Ctx): void => {
   const seat = seatOf(d, m.id);
-  if (!seat) return reject(ctx, m.id, 'BUZZ', 'not_seated');
+  // A chat room has no seats, so there everyone in it may buzz.
+  if (!seat && d.room.mode !== 'chat') return reject(ctx, m.id, 'BUZZ', 'not_seated');
   const last = d.host.lastBuzzAt[m.id];
   if (last !== undefined && ctx.now - last < BUZZ_INTERVAL_MS) {
     return reject(ctx, m.id, 'BUZZ', 'rate_limited', BUZZ_INTERVAL_MS - (ctx.now - last));
@@ -613,7 +615,7 @@ export const handleBuzz = (d: EngineState, m: Member, ctx: Ctx): void => {
   d.host.lastBuzzAt[m.id] = ctx.now;
   ctx.events.push({
     kind: 'broadcast',
-    message: { type: 'BUZZ', payload: { fromSeat: seat, fromName: m.profile.name } },
+    message: { type: 'BUZZ', payload: { fromSeat: seat, fromMemberId: m.id, fromName: m.profile.name } },
     except: [],
   });
 };

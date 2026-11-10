@@ -48,4 +48,28 @@ describe('room modes', () => {
     const chatted = applyIntent(sat.state, { type: 'CHAT', payload: { id: 'msg1', text: 'hi' } }, friendId, 3);
     expect(chatted.events.some((e) => e.kind === 'broadcast' && e.message.type === 'CHAT')).toBe(true);
   });
+
+  it('lets anyone in a chat room buzz and report what they have read', () => {
+    const created = createRoom({ roomId: 'ABCDE', isPublic: false, mode: 'chat', settings: DEFAULT_ROOM_SETTINGS, hostProfile: host }, 0);
+    const joined = applyIntent(created, { type: 'HELLO', payload: { profile: friend, tabId: 'friend' } }, null, 1);
+    const friendId = joined.state.room.members[1].id;
+    const buzzed = applyIntent(joined.state, { type: 'BUZZ', payload: {} }, friendId, 2);
+    const buzz = buzzed.events.find((e) => e.kind === 'broadcast' && e.message.type === 'BUZZ');
+    expect(buzz && buzz.kind === 'broadcast' && buzz.message.payload).toMatchObject({ fromSeat: null, fromMemberId: friendId });
+
+    const hostId = joined.state.room.members[0].id;
+    const chatted = applyIntent(buzzed.state, { type: 'CHAT', payload: { id: 'msg1', text: 'hi' } }, friendId, 3);
+    const seen = applyIntent(chatted.state, { type: 'CHAT_SEEN', payload: { messageId: 'msg1' } }, hostId, 4);
+    expect(seen.events.some((e) => e.kind === 'broadcast' && e.message.type === 'CHAT_SEEN')).toBe(true);
+  });
+
+  it('still keeps viewers from buzzing in a game room', () => {
+    const created = createRoom({ roomId: 'ABCDE', isPublic: true, mode: 'casual', settings: DEFAULT_ROOM_SETTINGS, hostProfile: host }, 0);
+    const joined = applyIntent(created, { type: 'HELLO', payload: { profile: friend, tabId: 'friend' } }, null, 1);
+    const viewer = { uid: '33333333-3333-4333-8333-333333333333', name: 'Viewer', isGuest: false };
+    const watched = applyIntent(joined.state, { type: 'HELLO', payload: { profile: viewer, tabId: 'viewer' } }, null, 2);
+    const viewerId = watched.state.room.members[2].id;
+    const buzzed = applyIntent(watched.state, { type: 'BUZZ', payload: {} }, viewerId, 3);
+    expect(buzzed.events.some((e) => e.kind === 'broadcast' && e.message.type === 'BUZZ')).toBe(false);
+  });
 });

@@ -1,9 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Check, Copy, MessageCircle, Send } from 'lucide-react';
+import React, { useCallback, useMemo } from 'react';
+import { Check, Copy, MessageCircle } from 'lucide-react';
 import type { ChatMessage } from '../webrtc/types';
-import { GameChatFeed } from '../game/GameChatFeed';
-import { GameChatLightbox } from '../game/GameChatLightbox';
-import { STICK_TO_BOTTOM_PX } from '../game/GameControlsShared';
+import { useGameChat } from '../game/useGameChat';
+import { useSheetAwareSound } from '../game/sheet/useSheetAwareSound';
 import type { Member, RoomState } from './roomEngine';
 import type { RoomApi } from './useRoom';
 import { useT } from '../i18n/language';
@@ -16,47 +15,48 @@ export interface ChatRoomViewProps {
 
 /**
  * A room with no board: the invite, who is here, and the chat. It rides on the
- * same host-relayed room as a game, so nothing is stored anywhere.
+ * same host-relayed room as a game, so nothing is stored anywhere. The chat is
+ * the match's own (useGameChat): replies, reactions, images, buzz, the arrival
+ * sound and "Seen" all behave exactly as they do mid-game.
  */
 export const ChatRoomView: React.FC<ChatRoomViewProps> = ({ room, s, me, members, copyState, roomLink, copyRoomLink, requestExit, roster, hostLostStrip, confirmDialog }) => {
   const t = useT();
-  const [text, setText] = useState('');
-  const [lightbox, setLightbox] = useState<string | null>(null);
-  const [hasNewBelow, setHasNewBelow] = useState(false);
-  const listRef = useRef<HTMLDivElement>(null);
-  const stickRef = useRef(true);
+  const { playBuzzSound } = useSheetAwareSound();
   const messages = room.chatMessages;
 
-  const scrollToBottom = (smooth = false) => {
-    const el = listRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
-    stickRef.current = true;
-    setHasNewBelow(false);
-  };
+  const isOwn = useCallback((message: ChatMessage) => Boolean(me) && message.senderId === me, [me]);
 
-  // Follow new lines only while the reader is already at the bottom.
-  useEffect(() => {
-    if (stickRef.current) scrollToBottom();
-    else if (messages.length > 0) setHasNewBelow(true);
-  }, [messages]);
+  // Nobody sits in a chat room, so "Seen" counts any other member who has
+  // read up to this member's newest line or past it.
+  const receipt = useMemo(() => {
+    if (!me) return null;
+    let mine = -1;
+    for (let i = messages.length - 1; i >= 0 && mine < 0; i--) if (!messages[i].system && messages[i].senderId === me) mine = i;
+    if (mine < 0) return null;
+    const seen = members.some((member) => {
+      if (member.id === me) return false;
+      const upTo = room.chatSeen[member.id];
+      return upTo !== undefined && messages.findIndex((line) => line.id === upTo) >= mine;
+    });
+    return { messageId: messages[mine].id, seen };
+  }, [me, members, messages, room.chatSeen]);
 
-  const onScroll = () => {
-    const el = listRef.current;
-    if (!el) return;
-    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_TO_BOTTOM_PX;
-    if (stickRef.current) setHasNewBelow(false);
-  };
-
-  const send = (event?: React.FormEvent) => {
-    event?.preventDefault();
-    if (!text.trim()) return;
-    void room.sendChat(text);
-    setText('');
-    stickRef.current = true;
-  };
-
-  const isOwn = (message: ChatMessage) => Boolean(me) && message.senderId === me;
+  const chat = useGameChat({
+    messages,
+    isOwn,
+    onSendChat: (text, image, replyTo) => void room.sendChat(text, image, replyTo),
+    onSendBuzz: () => {
+      const sent = room.buzz();
+      if (sent) playBuzzSound();
+      return sent;
+    },
+    role: 'player',
+    visible: true,
+    onChatSeen: room.markChatSeen,
+    emptyText: t('room.chat.empty'),
+    avatarFor: (m) => members.find((member) => member.id === m.senderId)?.profile.avatar,
+    receipt,
+  });
 
   return (
     // Two columns on a wide screen: the invite and the people on the left, the
@@ -92,37 +92,13 @@ export const ChatRoomView: React.FC<ChatRoomViewProps> = ({ room, s, me, members
       </div>
 
       <div className="panel flex h-[70dvh] min-h-80 min-w-0 flex-col p-3 lg:h-[calc(100dvh-7rem)]">
-        <GameChatFeed
-          messages={messages}
-          emptyText={t('room.chat.empty')}
-          opponent={null}
-          avatarFor={(m) => members.find((member) => member.id === m.senderId)?.profile.avatar}
-          listRef={listRef}
-          onScroll={onScroll}
-          isOwn={isOwn}
-          onOpenImage={setLightbox}
-          hasNewBelow={hasNewBelow}
-          onShowNew={() => scrollToBottom(true)}
-        />
-        <form onSubmit={send} className="mt-2 flex items-center gap-2 border-t border-line pt-2">
-          <input
-            type="text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={t('room.chat.placeholder')}
-            aria-label={t('room.chat.message')}
-            autoComplete="off"
-            className="field-input flex-1"
-          />
-          <button type="submit" disabled={!text.trim()} className="btn btn-primary btn-icon shrink-0" aria-label={t('room.chat.send')}>
-            <Send size={16} strokeWidth={2.25} aria-hidden="true" />
-          </button>
-        </form>
+        <div className="flex min-h-0 flex-1 flex-col">{chat.feed}</div>
+        <div className="mt-2">{chat.composer}</div>
       </div>
 
       {hostLostStrip}
       {confirmDialog}
-      <GameChatLightbox image={lightbox} onClose={() => setLightbox(null)} />
+      {chat.lightbox}
     </div>
   );
 };

@@ -10,14 +10,10 @@ import { EMPTY_SHEET_ACTIONS, sheetActionsStore, sheetChatStore, sheetMatchStore
 import type { SheetMatch } from './sheetBridge';
 import { SheetComments } from './SheetComments';
 import { SheetSideStrip } from './SheetSideStrip';
-import { useSheetAwareSound } from './sheet/useSheetAwareSound';
-import { CHAT_BAR_HEIGHT_PX, CHAT_OPEN_STORAGE_KEY, formatElapsed, PIN_TO_BOTTOM_MS, processImageFile, readStoredChatOpen, STICK_TO_BOTTOM_PX } from './GameControlsShared';
+import { CHAT_BAR_HEIGHT_PX, CHAT_OPEN_STORAGE_KEY, formatElapsed, readStoredChatOpen } from './GameControlsShared';
 import { GameActionRail } from './GameActionRail';
-import { GameReactionPicker } from './GameReactionPicker';
-import { GameChatLightbox } from './GameChatLightbox';
-import { GameChatFeed } from './GameChatFeed';
-import { GameChatComposer } from './GameChatComposer';
 import { GameChatHeader } from './GameChatHeader';
+import { useGameChat } from './useGameChat';
 import type { GameControlsProps } from './GameControlsShared';
 
 export const GameControls: React.FC<GameControlsProps> = ({
@@ -72,11 +68,6 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const gearRef = useRef<HTMLButtonElement>(null);
   const prefsRef = useRef<HTMLDivElement>(null);
 
-  const [chatText, setChatText] = useState('');
-  const [attachedImage, setAttachedImage] = useState<string | null>(null);
-  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
-  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
-  const [isBuzzCooldown, setIsBuzzCooldown] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(() => isDesktop && readStoredChatOpen());
   // One open/closed state serves two layouts with opposite defaults: the
   // desktop column comes back as the player left it, the phone sheet always
@@ -89,17 +80,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
     setChatLayoutIsDesktop(isDesktop);
     setIsChatOpen(isDesktop && readStoredChatOpen());
   }
-  const [hasNewBelow, setHasNewBelow] = useState(false);
-  /** Reactions are a burst action, not a permanent band across the rail. */
-  const [isReactionsOpen, setIsReactionsOpen] = useState(false);
-  const emoteButtonRef = useRef<HTMLButtonElement>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [simulationCount, setSimulationCount] = useState(0);
-  const { playChatSound } = useSheetAwareSound();
 
-  const listRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLDivElement>(null);
-  const attachmentInputRef = useRef<HTMLInputElement>(null);
   /** The phone's chat bar, which opens the sheet and takes focus back from it. */
   const chatBarRef = useRef<HTMLButtonElement>(null);
 
@@ -110,12 +92,6 @@ export const GameControls: React.FC<GameControlsProps> = ({
   }, []);
   /** The phone's chat sheet, which takes focus when it opens and keeps Tab inside. */
   const sheetRef = useRef<HTMLDivElement>(null);
-  const buzzCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Whether the reader is pinned to the newest message. Auto-scroll only then. */
-  const stickToBottomRef = useRef(true);
-  const seenCountRef = useRef(chatMessages.length);
-  // Chat history is loaded silently. Only a later peer message gets a sound.
-  const notifiedChatIdsRef = useRef(new Set(chatMessages.map((message) => message.id)));
 
   const isOwnMessage = useCallback(
     (message: ChatMessage) => {
@@ -128,6 +104,33 @@ export const GameControls: React.FC<GameControlsProps> = ({
     [myUser, myChatId]
   );
 
+  // "Looking" at the chat is whichever chat is on screen: the comments panel
+  // in disguise, the chat column otherwise, so lines read before the boss key
+  // are not news after it.
+  const { commentsOpen } = useSheetUi();
+  const chatInView = sheetDisguise ? commentsOpen : isChatOpen;
+
+  // The chat itself (draft, replies, reactions, images, buzz, sound, receipts,
+  // scrolling) is shared with the "Just chatting" room.
+  const chat = useGameChat({
+    messages: chatMessages,
+    isOwn: isOwnMessage,
+    onSendChat,
+    onSendBuzz,
+    isAiMode,
+    role: role ?? 'player',
+    visible: isChatOpen,
+    inView: chatInView,
+    ignoreFeedPosition: sheetDisguise,
+    onChatSeen,
+    emptyText: chatEmptyText,
+    opponent,
+    avatarFor,
+    receipt: chatReceipt,
+    onAnswerDoubleDown,
+  });
+  const { unreadCount, playChatSound, isBuzzCooldown, handleBuzzClick, setLightboxImage } = chat;
+
   const lastMessage = chatMessages[chatMessages.length - 1];
   const lastMessagePreview = useMemo(() => {
     if (!lastMessage) return t('game.noMessagesYet');
@@ -136,96 +139,11 @@ export const GameControls: React.FC<GameControlsProps> = ({
     return lastMessage.system ? body : `${who}: ${body}`;
   }, [lastMessage, isOwnMessage, t]);
 
-  useEffect(() => {
-    let receivedMessage = false;
-    for (const message of chatMessages) {
-      if (notifiedChatIdsRef.current.has(message.id)) continue;
-      notifiedChatIdsRef.current.add(message.id);
-      if (!message.system && !isOwnMessage(message)) receivedMessage = true;
-    }
-    if (receivedMessage) playChatSound();
-  }, [chatMessages, isOwnMessage, playChatSound]);
-
   // A double-down offer waits on an answer, so it opens the chat where its buttons are.
   const answerableOfferId = chatMessages.find((message) => message.doubleDownOffer?.canAnswer)?.id;
   useEffect(() => {
     if (answerableOfferId) setIsChatOpen(true);
   }, [answerableOfferId]);
-
-  /**
-   * Scroll the feed itself, never `scrollIntoView`: that walks every scrollable
-   * ancestor and used to drag the whole page (and the board) out of view whenever
-   * a message arrived.
-   */
-  const scrollFeedToBottom = useCallback((smooth = false) => {
-    const el = listRef.current;
-    if (!el) return;
-    if (smooth) {
-      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    } else {
-      // Assign scrollTop rather than scrollTo: the animated path left the newest
-      // bubble clipped by its own margin at the bottom of the feed.
-      el.scrollTop = el.scrollHeight;
-    }
-    stickToBottomRef.current = true;
-    setHasNewBelow(false);
-  }, []);
-
-  const handleFeedScroll = useCallback(() => {
-    const el = listRef.current;
-    if (!el) return;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const atBottom = distanceFromBottom <= STICK_TO_BOTTOM_PX;
-    stickToBottomRef.current = atBottom;
-    if (atBottom) setHasNewBelow(false);
-  }, []);
-
-  // New messages: follow them only when the reader was already at the bottom.
-  useEffect(() => {
-    if (!isChatOpen) {
-      const unseen = Math.max(0, chatMessages.length - seenCountRef.current);
-      setUnreadCount(unseen);
-      return;
-    }
-
-    seenCountRef.current = chatMessages.length;
-    setUnreadCount(0);
-
-    if (stickToBottomRef.current) {
-      // Hold the bottom for a short window instead of scrolling once.
-      //
-      // The last few pixels of a new bubble arrive late and unpredictably: the
-      // gap comes from the bubble's own margin, which no ResizeObserver reports,
-      // and from the composer snapping back to one line. A single scroll (even on
-      // the next frame) raced them and left the newest message clipped.
-      scrollFeedToBottom();
-
-      let raf = 0;
-      const deadline = performance.now() + PIN_TO_BOTTOM_MS;
-      const hold = () => {
-        const el = listRef.current;
-        if (!el || !stickToBottomRef.current) return;
-        el.scrollTop = el.scrollHeight;
-        if (performance.now() < deadline) raf = requestAnimationFrame(hold);
-      };
-      raf = requestAnimationFrame(hold);
-      return () => cancelAnimationFrame(raf);
-    }
-    if (chatMessages.length > 0) {
-      setHasNewBelow(true);
-    }
-  }, [chatMessages, isChatOpen, scrollFeedToBottom]);
-
-  // Opening the panel lands the reader on the newest message.
-  useEffect(() => {
-    if (!isChatOpen) return;
-    seenCountRef.current = chatMessages.length;
-    setUnreadCount(0);
-    stickToBottomRef.current = true;
-    const frame = requestAnimationFrame(() => scrollFeedToBottom());
-    return () => cancelAnimationFrame(frame);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isChatOpen]);
 
   // Only the desktop column's state is saved. The phone sheet always starts
   // closed, and saving it would overwrite what the column was left as.
@@ -237,29 +155,6 @@ export const GameControls: React.FC<GameControlsProps> = ({
       // Persisting the panel state is a convenience only.
     }
   }, [isChatOpen, isDesktop]);
-
-  useEffect(() => () => {
-    if (buzzCooldownRef.current) clearTimeout(buzzCooldownRef.current);
-  }, []);
-
-  // Anything that changes the feed's height after we pinned it to the bottom
-  // leaves a gap: the composer growing to a second line, an image finishing its
-  // load, the window resizing. Re-pin whenever the box or its content resizes.
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-
-    const repin = () => {
-      if (!stickToBottomRef.current) return;
-      el.scrollTop = el.scrollHeight;
-    };
-
-    const observer = new ResizeObserver(repin);
-    observer.observe(el);
-    for (const child of Array.from(el.children)) observer.observe(child);
-
-    return () => observer.disconnect();
-  }, [isChatOpen, chatMessages.length]);
 
   // The preferences popover closes on Escape or on a click anywhere else,
   // like every other transient menu. Escape is taken on the capture phase and
@@ -333,112 +228,22 @@ export const GameControls: React.FC<GameControlsProps> = ({
     }
   }, []);
 
-  // Escape closes the mobile sheet and the lightbox. Either one marks the key
-  // as used, on the capture phase, so nothing else reacts to the same press.
-  // The phone sheet is unmounted while disguised, so a sheet left open from
-  // before the boss key must not swallow Escape either.
+  // Escape closes the mobile sheet, on the capture phase and marked handled,
+  // so nothing else reacts to the same press. An open lightbox takes Escape
+  // first (useGameChat stops it there). The phone sheet is unmounted while
+  // disguised, so a sheet left open from before the boss key must not
+  // swallow Escape either.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      if (lightboxImage) {
-        event.preventDefault();
-        setLightboxImage(null);
-      } else if (!sheetDisguise && !isDesktop && isChatOpen) {
+      if (event.key !== 'Escape' || chat.lightboxOpen) return;
+      if (!sheetDisguise && !isDesktop && isChatOpen) {
         event.preventDefault();
         closeChatSheet();
       }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [lightboxImage, isDesktop, isChatOpen, closeChatSheet, sheetDisguise]);
-
-  const handleChatSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!chatText.trim() && !attachedImage) return;
-    onSendChat(chatText.trim(), attachedImage || undefined, replyingTo ?? undefined);
-    playChatSound();
-    setChatText('');
-    setAttachedImage(null);
-    setReplyingTo(null);
-    stickToBottomRef.current = true;
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleChatSubmit();
-    } else if (e.key === 'Escape' && replyingTo) {
-      // Cancels the reply only; the window-level Escape must not close the sheet too.
-      e.preventDefault();
-      e.nativeEvent.stopImmediatePropagation();
-      setReplyingTo(null);
-    }
-  };
-
-  const handlePaste = async (e: React.ClipboardEvent<HTMLDivElement>) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.type.indexOf('image') !== -1) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (file) {
-          try {
-            setAttachedImage(await processImageFile(file));
-          } catch (err) {
-            console.error('Failed to process pasted image:', err);
-          }
-        }
-        break;
-      }
-    }
-  };
-
-  const attachFile = async (file: File | null) => {
-    if (!file || !file.type.startsWith('image/')) return;
-    try {
-      setAttachedImage(await processImageFile(file));
-    } catch (err) {
-      console.error('Failed to process chat attachment:', err);
-    }
-  };
-
-  const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    void attachFile(e.target.files?.[0] ?? null);
-    e.target.value = '';
-  };
-
-  const handleBuzzClick = () => {
-    if (isBuzzCooldown || !onSendBuzz) return;
-    if (onSendBuzz() === false) return;
-    setIsBuzzCooldown(true);
-    if (buzzCooldownRef.current) clearTimeout(buzzCooldownRef.current);
-    buzzCooldownRef.current = setTimeout(() => setIsBuzzCooldown(false), 2000);
-  };
-
-  const startReply = (message: ChatMessage) => {
-    setReplyingTo(message);
-    textareaRef.current?.focus();
-  };
-
-  // Drops an emoticon's shortcut into the draft at the caret; EmoteInput then
-  // draws it as its picture, and the person can keep typing around it.
-  const handlePickEmote = (code: string) => {
-    const el = textareaRef.current;
-    if (!el) return;
-    if (document.activeElement !== el) {
-      el.focus();
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(false);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-    }
-    document.execCommand('insertText', false, `${code} `);
-  };
+  }, [isDesktop, isChatOpen, closeChatSheet, sheetDisguise, chat.lightboxOpen]);
 
   /* ------------------------------- sub-views ------------------------------- */
 
@@ -513,11 +318,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
   // survives the match's actions being taken down.
   useEffect(() => () => sheetActionsStore.set((prev) => ({ ...EMPTY_SHEET_ACTIONS, share: prev.share })), []);
 
-  // The comments panel counts what arrived while nobody was looking. "Looking"
-  // is whichever chat is on screen: the comments panel in disguise, the chat
-  // column otherwise, so lines read before the boss key are not news after it.
-  const { commentsOpen } = useSheetUi();
-  const chatInView = sheetDisguise ? commentsOpen : isChatOpen;
+  // The comments panel counts what arrived while nobody was looking.
   const [sheetSeenCount, setSheetSeenCount] = useState(chatMessages.length);
   if (chatInView && sheetSeenCount !== chatMessages.length) setSheetSeenCount(chatMessages.length);
   const sheetUnread = chatInView
@@ -525,27 +326,6 @@ export const GameControls: React.FC<GameControlsProps> = ({
     : chatMessages
         .slice(Math.min(sheetSeenCount, chatMessages.length))
         .filter((message) => !message.system && !isOwnMessage(message)).length;
-
-  // Read receipts: the newest line from someone else counts as read once the
-  // chat is on screen, the tab is visible and the feed is not holding unread
-  // lines below the fold.
-  const lastReadableId = useMemo(() => {
-    for (let i = chatMessages.length - 1; i >= 0; i--) {
-      const message = chatMessages[i];
-      if (!message.system && !message.doubleDownOffer && !isOwnMessage(message)) return message.id;
-    }
-    return null;
-  }, [chatMessages, isOwnMessage]);
-  const feedCaughtUp = sheetDisguise || !hasNewBelow;
-  useEffect(() => {
-    if (!onChatSeen || !lastReadableId || !chatInView || !feedCaughtUp) return;
-    const report = () => {
-      if (document.visibilityState === 'visible') onChatSeen(lastReadableId);
-    };
-    report();
-    document.addEventListener('visibilitychange', report);
-    return () => document.removeEventListener('visibilitychange', report);
-  }, [onChatSeen, lastReadableId, chatInView, feedCaughtUp]);
 
   // The comments panel sends text, emote shortcuts, images, replies and buzzes.
   const sendChatRef = useRef(onSendChat);
@@ -592,13 +372,11 @@ export const GameControls: React.FC<GameControlsProps> = ({
   // One row of icons rather than a wrap of labelled buttons: every action here
   // is either rare or destructive, and none of them should out-shout the board.
   const actionButtons = <GameActionRail {...{ exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown }} />;
-  const reactionRow = <GameReactionPicker open={isReactionsOpen} isAiMode={isAiMode} anchorRef={emoteButtonRef} onPick={handlePickEmote} onClose={() => setIsReactionsOpen(false)} />;
-
-  const chatFeed = <GameChatFeed messages={chatMessages} emptyText={chatEmptyText} opponent={opponent} avatarFor={avatarFor} listRef={listRef} onScroll={handleFeedScroll} isOwn={isOwnMessage} receipt={chatReceipt} onOpenImage={setLightboxImage} onReply={isAiMode ? undefined : startReply} onAnswerDoubleDown={onAnswerDoubleDown} hasNewBelow={hasNewBelow} onShowNew={() => scrollFeedToBottom(true)} />;
-  const composer = <GameChatComposer {...{ attachedImage, setAttachedImage, reactionRow, handleChatSubmit, isAiMode, isReactionsOpen, setIsReactionsOpen, attachmentInputRef, handleAttachmentChange, emoteButtonRef, textareaRef, chatText, setChatText, handleKeyDown, handlePaste, role: role ?? 'player', handleBuzzClick, isBuzzCooldown, replyingTo, onCancelReply: () => setReplyingTo(null) }} />;
+  const chatFeed = chat.feed;
+  const composer = chat.composer;
   const chatHeader = <GameChatHeader open={isChatOpen} unreadCount={unreadCount} messageCount={chatMessages.length} preview={lastMessagePreview} onToggle={() => setIsChatOpen((open) => !open)} />;
 
-  const lightbox = <GameChatLightbox image={lightboxImage} onClose={() => setLightboxImage(null)} />;
+  const lightbox = chat.lightbox;
 
   /* ------------------------------- layout -------------------------------- */
 

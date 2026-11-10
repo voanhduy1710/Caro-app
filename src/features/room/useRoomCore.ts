@@ -479,6 +479,11 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
         case 'BUZZ': {
           const p = message.payload;
           systemLine(t('room.n.buzzed', { name: p.fromName }), { buzzFrom: p.fromName });
+          if (r.mirror?.mode === 'chat') {
+            // No seats in a chat room: everyone but the sender is buzzed.
+            if (p.fromMemberId !== r.memberId) handlersRef.current.onBuzzed?.();
+            return;
+          }
           const mine = r.mirror ? seatOf(r.mirror, r.memberId) : null;
           if (mine && mine !== p.fromSeat) handlersRef.current.onBuzzed?.();
           return;

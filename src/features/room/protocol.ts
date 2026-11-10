@@ -351,7 +351,8 @@ export interface HostMessagePayloads {
   EVENT: { kind: EventKind; seat?: Seat; by?: string; why?: string };
   CHAT: { message: RoomChatMessage };
   CHAT_SEEN: { memberId: string; messageId: string };
-  BUZZ: { fromSeat: Seat; fromName: string };
+  /** fromSeat is null in a chat room, where nobody sits. fromMemberId may be missing from an older host. */
+  BUZZ: { fromSeat: Seat | null; fromMemberId?: string; fromName: string };
   TEASE: { fromMemberId: string; fromName: string; toMemberId: string; toName: string; at: number };
   PING: { t: number };
   ROOM_FULL: { capacity: number };

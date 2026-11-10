@@ -68,9 +68,13 @@ export const createRoomActions = ({ state, sendIntent, appendChat, notice, setPe
     callCoin: (call: 'X' | 'O') => { const id = gameId(); return id ? sendIntent({ type: 'COIN_CALL', payload: { gameId: id, call } }) : false; },
     buzz: () => sendIntent({ type: 'BUZZ', payload: {} }),
     tease: (targetMemberId: string) => sendIntent({ type: 'TEASE', payload: { targetMemberId } }),
-    /** Tells the room a seated player has read up to this message. Viewers' reading is not reported. */
+    /**
+     * Tells the room a seated player has read up to this message. Viewers'
+     * reading is not reported. A chat room has no seats, so there everyone's is.
+     */
     markChatSeen: (messageId: string) => {
-      if (messageId === state.lastSeenSent || !state.mirror || !seatOf(state.mirror, state.memberId)) return false;
+      if (messageId === state.lastSeenSent || !state.mirror) return false;
+      if (state.mirror.mode !== 'chat' && !seatOf(state.mirror, state.memberId)) return false;
       const sent = sendIntent({ type: 'CHAT_SEEN', payload: { messageId } });
       if (sent) state.lastSeenSent = messageId;
       return sent;
