@@ -8,9 +8,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { UserProfile } from '../auth/AuthContext';
 import { useT } from '../i18n/language';
 import { cryptoEnv } from '../room/roomEngineCore';
+import { shrinkImage } from '../room/useRoomUtilities';
 import { openPairChannel, type PairChannel } from './pairChannel';
-import { acceptHello, createHostState, dropPhone, rotateIfDue, type PairHostState } from './pairHostSession';
+import { acceptHello, createHostState, dropPhone, issueFreshSecret, rotateIfDue, type PairHostState } from './pairHostSession';
 import {
+  fitImageForPhone,
   isPhoneSilent,
   needsTickPush,
   secondsUntilRotation,
@@ -61,9 +63,12 @@ export const usePairHost = ({ user, source, onNotice }: PairHostInput): PairHost
   const sentImagesRef = useRef(new Set<string>());
   const lastHeardRef = useRef(0);
   const noticeRef = useRef<(text: string) => void>(() => {});
+  // A language switch must not re-join the channel or restart the timers.
+  const tRef = useRef(t);
   useEffect(() => {
     sourceRef.current = source;
     noticeRef.current = onNotice ?? (() => {});
+    tRef.current = t;
   });
 
   const commitHost = useCallback((next: PairHostState | null) => {
@@ -81,11 +86,18 @@ export const usePairHost = ({ user, source, onNotice }: PairHostInput): PairHost
     const src = sourceRef.current;
     const channel = channelRef.current;
     if (!phoneId || !src || !channel) return;
-    // Images go first so a snapshot never points at one the phone lacks for long.
+    // Each chat image travels once, separately from the snapshot; the phone
+    // draws a placeholder until it lands. One too big for a broadcast is shrunk
+    // first, and one that cannot be shrunk enough is skipped, never retried.
     if (src.kind === 'room') {
-      for (const { id, image } of unsentImages(chatImagesOf(src.room), sentImagesRef.current)) {
-        channel.send({ t: 'chatImage', phoneId, id, image });
-        sentImagesRef.current.add(id);
+      const sent = sentImagesRef.current;
+      for (const { id, image } of unsentImages(chatImagesOf(src.room), sent)) {
+        sent.add(id);
+        void fitImageForPhone(image, shrinkImage).then((picture) => {
+          // Only for the same phone and pairing the image was meant for.
+          if (!picture || sentImagesRef.current !== sent || hostRef.current?.phoneId !== phoneId) return;
+          channelRef.current?.send({ t: 'chatImage', phoneId, id, image: picture });
+        });
       }
     }
     seqRef.current += 1;
@@ -107,12 +119,13 @@ export const usePairHost = ({ user, source, onNotice }: PairHostInput): PairHost
         return;
       }
       if (result.replacedPhoneId) channelRef.current?.send({ t: 'end', phoneId: result.replacedPhoneId, reason: 'replaced' });
-      commitHost(result.state);
+      // The QR on screen is spent; show a fresh one at once so a re-pair works.
+      commitHost(issueFreshSecret(result.state, at, randomSecret));
       lastHeardRef.current = at;
       sentImagesRef.current = new Set();
       channelRef.current?.send({ t: 'welcome', phoneId: m.phoneId });
       pushSnapshot();
-      noticeRef.current(t('pair.phoneConnected'));
+      noticeRef.current(tRef.current('pair.phoneConnected'));
       return;
     }
 
@@ -129,9 +142,9 @@ export const usePairHost = ({ user, source, onNotice }: PairHostInput): PairHost
       else applyPracticeCall(src.props, m.method, m.args);
     } else if (m.t === 'bye') {
       commitHost(dropPhone(state, m.phoneId));
-      noticeRef.current(t('pair.phoneDisconnected'));
+      noticeRef.current(tRef.current('pair.phoneDisconnected'));
     }
-  }, [commitHost, pushSnapshot, t]);
+  }, [commitHost, pushSnapshot]);
 
   /** Ends every trace of this pairing: tells the phone why, forgets the session, closes the QR. */
   const endPairing = useCallback((reason: PairEndReason) => {
@@ -206,20 +219,21 @@ export const usePairHost = ({ user, source, onNotice }: PairHostInput): PairHost
       if (!state?.phoneId) return;
       if (isPhoneSilent(lastHeardRef.current, Date.now())) {
         commitHost(dropPhone(state, state.phoneId));
-        noticeRef.current(t('pair.phoneDisconnected'));
+        noticeRef.current(tRef.current('pair.phoneDisconnected'));
         return;
       }
       const src = sourceRef.current;
       if (src && needsTickPush(src)) pushSnapshot();
     }, 1000);
     return () => window.clearInterval(id);
-  }, [phoneConnected, commitHost, pushSnapshot, t]);
+  }, [phoneConnected, commitHost, pushSnapshot]);
 
   const open = useCallback(() => {
     if (!uid || !sourceRef.current) return;
     const at = Date.now();
+    // Opening the modal always shows a new code; an old one gets no grace.
     if (!hostRef.current) commitHost(createHostState(at, randomSecret));
-    else commitHost(rotateIfDue(hostRef.current, at, randomSecret));
+    else commitHost(issueFreshSecret(hostRef.current, at, randomSecret));
     setNow(at);
     setModalOpen(true);
   }, [uid, commitHost]);

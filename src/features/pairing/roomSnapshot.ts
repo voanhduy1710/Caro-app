@@ -7,6 +7,7 @@ import { liveClocks } from '../room/roomEngineHelpers';
 import type { Clocks, Game, RoomState } from '../room/roomEngineTypes';
 import type { RoomApi } from '../room/useRoomCore';
 import type { ChatMessage } from '../webrtc/types';
+import { MAX_CALL_ARGS_JSON_LENGTH } from './pairProtocol';
 
 export type FunctionKeys<T> = { [K in keyof T]-?: T[K] extends (...args: never[]) => unknown ? K : never }[keyof T];
 
@@ -58,26 +59,77 @@ export const buildRoomSnapshot = (room: RoomApi): RoomSnapshot => {
 export const chatImagesOf = (room: RoomApi): Array<{ id: string; image: string }> =>
   room.chatMessages.flatMap((message) => (message.image ? [{ id: message.id, image: message.image }] : []));
 
+/**
+ * Drawn on the phone for a chat image the desktop could not send it (too big
+ * for a broadcast) or has not sent yet.
+ */
+export const CHAT_IMAGE_PLACEHOLDER = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120" viewBox="0 0 160 120">'
+  + '<rect width="160" height="120" rx="8" fill="#8884"/>'
+  + '<path d="M56 44h48v32H56z" fill="none" stroke="#8888" stroke-width="4"/>'
+  + '<path d="M60 72l14-14 10 10 8-6 10 10" fill="none" stroke="#8888" stroke-width="4"/>'
+  + '</svg>',
+)}`;
+
+export type ShrinkImage = (dataUrl: string, maxChars: number) => Promise<string | null>;
+
+/**
+ * The args a phone's sendChat goes over the wire with, or null when its image
+ * cannot be made small enough for a call. The quoted message travels without
+ * its picture (it keeps `hasImage`); the desktop looks the quote up by id.
+ */
+export const remoteChatArgs = async (
+  text: string,
+  image: string | undefined,
+  replyTo: ChatMessage | undefined,
+  shrink: ShrinkImage,
+): Promise<unknown[] | null> => {
+  const quote = replyTo ? stripImage(replyTo) : undefined;
+  if (!image) return [text, undefined, quote];
+  // The picture replaces the empty string, so this is what is left for it.
+  const budget = MAX_CALL_ARGS_JSON_LENGTH - JSON.stringify([text, '', quote]).length;
+  if (budget <= 0) return null;
+  const picture = image.length <= budget ? image : await shrink(image, budget);
+  return picture && picture.length <= budget ? [text, picture, quote] : null;
+};
+
+export interface RemoteRoomLocal {
+  leaveRoom: () => void;
+  /** Makes a data-URL image at most `maxChars` long, or null when it cannot. */
+  shrinkImage?: ShrinkImage;
+  /** The phone's chat image could not be made small enough to send. */
+  onImageTooLarge?: () => void;
+}
+
+const noShrink: ShrinkImage = async () => null;
+
 export const createRemoteRoomApi = (
   snap: RoomSnapshot,
   receivedAt: number,
   images: Record<string, string>,
   call: (method: string, args: unknown[]) => void,
-  local: { leaveRoom: () => void },
+  local: RemoteRoomLocal,
 ): RoomApi => {
   const elapsed = () => performance.now() - receivedAt;
   const state = snap.fields.state as RoomState | null | undefined;
   const messages = (snap.fields.chatMessages ?? []) as SnapshotChatMessage[];
   const chatMessages = messages.map((message): ChatMessage => {
-    const image = message.hasImage && Object.hasOwn(images, message.id) ? images[message.id] : undefined;
-    return image ? { ...message, image } : message;
+    if (!message.hasImage) return message;
+    const image = Object.hasOwn(images, message.id) ? images[message.id] : CHAT_IMAGE_PLACEHOLDER;
+    return { ...message, image };
   });
+
+  const sendChat = async (text: string, image?: string, replyTo?: ChatMessage): Promise<void> => {
+    const args = await remoteChatArgs(text, image, replyTo, local.shrinkImage ?? noShrink);
+    if (args) call('sendChat', args);
+    else local.onImageTooLarge?.();
+  };
 
   const methods: Record<string, (...args: unknown[]) => unknown> = {};
   for (const method of ROOM_METHODS) {
     if (method === 'leaveRoom') methods[method] = () => local.leaveRoom();
     else if (LOCAL_ONLY.has(method)) methods[method] = () => undefined;
-    else if (method === 'sendChat') methods[method] = (...args) => { call(method, args); return Promise.resolve(); };
+    else if (method === 'sendChat') methods[method] = sendChat as (...args: unknown[]) => unknown;
     else methods[method] = (...args) => { call(method, args); return true; };
   }
 
@@ -98,12 +150,24 @@ export const createRemoteRoomApi = (
 };
 
 /** Runs a phone's call on the real room. False when the method is not one a phone may call, or it threw. */
+/**
+ * A phone quotes a message without its picture, so the desktop swaps in its own
+ * copy of the quoted message (picture included) and the quote keeps its image mark.
+ */
+const withDesktopQuote = (room: RoomApi, args: unknown[]): unknown[] => {
+  const reply: unknown = args[2];
+  if (typeof reply !== 'object' || reply === null) return args;
+  const { id } = reply as { id?: unknown };
+  const own = typeof id === 'string' ? room.chatMessages.find((message) => message.id === id) : undefined;
+  return own ? [args[0], args[1], own, ...args.slice(3)] : args;
+};
+
 export const applyRoomCall = (room: RoomApi, method: string, args: unknown[]): boolean => {
   if (!CALLABLE.has(method) || !Array.isArray(args)) return false;
   const fn = (room as unknown as Record<string, unknown>)[method];
   if (typeof fn !== 'function') return false;
   try {
-    const result: unknown = fn.apply(room, args);
+    const result: unknown = fn.apply(room, method === 'sendChat' ? withDesktopQuote(room, args) : args);
     if (result instanceof Promise) result.catch((error: unknown) => console.warn(`pairing: room call ${method} failed`, error));
     return true;
   } catch (error) {

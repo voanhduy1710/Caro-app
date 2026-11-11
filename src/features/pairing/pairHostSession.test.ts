@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SECRET_ROTATE_MS, SECRET_GRACE_MS, createHostState, rotateIfDue, acceptHello, dropPhone } from './pairHostSession'
+import { SECRET_ROTATE_MS, SECRET_GRACE_MS, createHostState, rotateIfDue, acceptHello, dropPhone, issueFreshSecret } from './pairHostSession'
 
 const setup = () => {
   let counter = 0
@@ -56,6 +56,39 @@ describe('host pairing session', () => {
     const result = acceptHello(rotated, 'r2', 'p1', 61_000 + offset)
     expect(result.ok).toBe(valid)
     if (!valid) expect(result).toEqual({ ok: false, reason: 'expired' })
+  })
+
+  it('retires the old secret at its scheduled time when rotation runs late', () => {
+    const { state, rand } = setup()
+    const rotated = rotateIfDue(state, 1000 + 65_000, rand)
+    expect(rotated.current).toEqual({ secret: 'r3', issuedAt: 66_000 })
+    expect(rotated.previous).toEqual({ secret: 'r2', retiredAt: 61_000 })
+    expect(acceptHello(rotated, 'r2', 'p1', 71_000).ok).toBe(true)
+    expect(acceptHello(rotated, 'r2', 'p1', 71_001)).toEqual({ ok: false, reason: 'expired' })
+  })
+
+  it('leaves no grace when the rotation runs after the grace has already passed', () => {
+    const { state, rand } = setup()
+    const rotated = rotateIfDue(state, 1000 + 300_000, rand)
+    expect(rotated.previous).toBeNull()
+    expect(acceptHello(rotated, 'r2', 'p1', 1000 + 300_000)).toEqual({ ok: false, reason: 'expired' })
+    expect(acceptHello(rotated, 'r3', 'p1', 1000 + 300_000).ok).toBe(true)
+  })
+
+  it.each([[10_000, true], [10_001, false]] as const)('keeps the grace at scheduled offset %i when rotating late', (offset, kept) => {
+    const { state, rand } = setup()
+    const rotated = rotateIfDue(state, 61_000 + offset, rand)
+    expect(rotated.previous).toEqual(kept ? { secret: 'r2', retiredAt: 61_000 } : null)
+  })
+
+  it('issues a fresh secret with no grace for the one it replaces', () => {
+    const { state, rand } = setup()
+    const paired = acceptHello(state, 'r2', 'p1', 1000)
+    if (!paired.ok) throw new Error('Expected successful pairing')
+    const fresh = issueFreshSecret(paired.state, 2000, rand)
+    expect(fresh).toEqual({ ...paired.state, current: { secret: 'r3', issuedAt: 2000 }, previous: null })
+    expect(acceptHello(fresh, 'r2', 'p2', 2000)).toEqual({ ok: false, reason: 'used' })
+    expect(acceptHello(fresh, 'r3', 'p2', 2000)).toMatchObject({ ok: true, replacedPhoneId: 'p1' })
   })
 
   it('rejects an unknown secret', () => {

@@ -23,12 +23,22 @@ export const createHostState = (now: number, rand: () => string): PairHostState 
 
 export const rotateIfDue = (s: PairHostState, now: number, rand: () => string): PairHostState => {
   if (now - s.current.issuedAt < SECRET_ROTATE_MS) return s
+  // The old secret retires when its minute is up, not when the rotation happens
+  // to run, so a late rotation never extends the life of an old QR.
+  const retiredAt = s.current.issuedAt + SECRET_ROTATE_MS
   return {
     ...s,
     current: { secret: rand(), issuedAt: now },
-    previous: { secret: s.current.secret, retiredAt: now },
+    previous: now - retiredAt <= SECRET_GRACE_MS ? { secret: s.current.secret, retiredAt } : null,
   }
 }
+
+/** Replaces the QR's secret right away and leaves no grace for the one it replaces. */
+export const issueFreshSecret = (s: PairHostState, now: number, rand: () => string): PairHostState => ({
+  ...s,
+  current: { secret: rand(), issuedAt: now },
+  previous: null,
+})
 
 export const acceptHello = (s: PairHostState, secret: string, phoneId: string, now: number): HelloResult => {
   if (s.used.includes(secret)) return { ok: false, reason: 'used' }

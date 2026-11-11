@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PracticeMatchViewProps } from '../../app/PracticeMatchView';
-import { applyPracticeCall, buildPracticeSnapshot, createRemotePracticeProps, PRACTICE_CALLS } from './practiceSnapshot';
+import { applyPracticeCall, buildPracticeSnapshot, createRemotePracticeProps, isConfirmedRematch, PRACTICE_CALLS, rematchNeedsConfirm } from './practiceSnapshot';
 
 const makeProps = (): PracticeMatchViewProps => ({
   user: { uid: 'u1', displayName: 'Me' } as unknown as PracticeMatchViewProps['user'],
@@ -30,13 +30,56 @@ describe('practiceSnapshot', () => {
     const remote = createRemotePracticeProps(buildPracticeSnapshot(makeProps()), call, local);
     remote.onCellClick(2, 3, 'center');
     expect(call).toHaveBeenCalledWith('onCellClick', [2, 3, 'center']);
-    remote.onUndo(); remote.onRematch(); remote.onBotFirst();
-    expect(call.mock.calls.map((c) => c[0])).toEqual(['onCellClick', 'onUndo', 'onRematch', 'onBotFirst']);
+    const click = { type: 'click', target: {} };
+    (remote.onUndo as (e: unknown) => void)(click); (remote.onRematch as (e: unknown) => void)(click); (remote.onBotFirst as (e: unknown) => void)(click);
+    expect(call.mock.calls).toEqual([['onCellClick', [2, 3, 'center']], ['onUndo', []], ['onRematch', []], ['onBotFirst', []]]);
     expect(remote.onExit).toBe(local.onExit);
     expect(remote.user).toBeNull();
     expect(remote.openProfileModal).toBe(local.openProfileModal);
     expect(remote.setOpponent).toBe(local.setOpponent);
     expect(remote.board).toEqual(makeProps().board);
+  });
+
+  it('asks on the phone before starting over a game in progress, then sends it confirmed', () => {
+    const call = vi.fn();
+    const local = { user: null, openProfileModal: vi.fn(), setOpponent: vi.fn(), onExit: vi.fn() };
+    let pending: (() => void) | null = null;
+    const confirm = vi.fn((run: () => void) => { pending = run; });
+    const remote = createRemotePracticeProps(buildPracticeSnapshot(makeProps()), call, local, confirm);
+    remote.onRematch();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(call).not.toHaveBeenCalled();
+    (pending as unknown as () => void)();
+    expect(call).toHaveBeenCalledWith('onRematch', [{ confirmed: true }]);
+  });
+
+  it('starts over at once on the phone when nothing would be lost', () => {
+    const call = vi.fn();
+    const local = { user: null, openProfileModal: vi.fn(), setOpponent: vi.fn(), onExit: vi.fn() };
+    const confirm = vi.fn();
+    const ended = { ...makeProps(), gameStatus: 'ended' as const };
+    createRemotePracticeProps(buildPracticeSnapshot(ended), call, local, confirm).onRematch();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(call).toHaveBeenCalledWith('onRematch', [{ confirmed: true }]);
+  });
+
+  it('decides when starting over needs confirming', () => {
+    expect(rematchNeedsConfirm(makeProps())).toBe(true);
+    expect(rematchNeedsConfirm({ ...makeProps(), moveHistory: [] })).toBe(false);
+    expect(rematchNeedsConfirm({ ...makeProps(), gameStatus: 'ended' })).toBe(false);
+  });
+
+  it('treats only an explicit confirmed flag as confirmed', () => {
+    expect(isConfirmedRematch({ confirmed: true })).toBe(true);
+    for (const v of [undefined, null, true, 'confirmed', [], {}, { confirmed: 'true' }, { confirmed: 1 }, Object.create({ confirmed: true }), { type: 'click' }]) {
+      expect(isConfirmedRematch(v), JSON.stringify(v)).toBe(false);
+    }
+  });
+
+  it('passes the confirmed flag through to the desktop callback', () => {
+    const p = makeProps();
+    expect(applyPracticeCall(p, 'onRematch', [{ confirmed: true }])).toBe(true);
+    expect(p.onRematch).toHaveBeenCalledWith({ confirmed: true });
   });
 
   it('applies only allowlisted calls', () => {

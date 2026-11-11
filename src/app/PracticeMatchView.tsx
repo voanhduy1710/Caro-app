@@ -19,13 +19,16 @@ import { useT } from '../features/i18n/language';
  */
 const NO_CHAT: ChatMessage[] = [];
 
+/** `confirmed`: the player already confirmed starting over (a paired phone asks on its own screen). */
+export interface PracticeRematchOptions { confirmed?: boolean }
+
 export interface PracticeMatchViewProps {
   user: UserProfile | null; openProfileModal: () => void; setOpponent: (user: UserProfile) => void;
   settings: RoomSettings; board: BoardMatrix; placementCorners: Record<string, BoardCorner>; onCellClick: (row: number, col: number, corner: BoardCorner) => void;
   lastMove: [number, number] | null; winningLine: Array<[number, number]> | null; currentTurn: PracticePiece; myPiece: PracticePiece;
   gameStatus: 'lobby' | 'playing' | 'ended'; gameResult: { winner: string; reason: string } | null; ratingNote: string | null;
   p1TotalTime: number; p2TotalTime: number; p1ElapsedTime: number; p2ElapsedTime: number; turnTimeLeft: number; isAiThinking: boolean; elapsedGameTime: number; moveHistory: MoveHistoryItem[];
-  sessionScore: { mine: number; theirs: number; triangle: number }; onUndo: () => void; onRematch: () => void; onExit: () => void; onBotFirst: () => void;
+  sessionScore: { mine: number; theirs: number; triangle: number }; onUndo: () => void; onRematch: (options?: PracticeRematchOptions) => void; onExit: () => void; onBotFirst: () => void;
 }
 
 export const PracticeMatchView: React.FC<PracticeMatchViewProps> = (p) => {

@@ -49,6 +49,26 @@ export const unsentImages = (
   sent: ReadonlySet<string>,
 ): Array<{ id: string; image: string }> => images.filter((entry) => !sent.has(entry.id));
 
+/**
+ * Largest chat image sent to a phone, in data-URL characters. Realtime caps a
+ * broadcast payload (about 256 KB on the Free plan), so a `chatImage` message
+ * is kept at about 200 KB, envelope included.
+ */
+export const PHONE_IMAGE_MAX_CHARS = 199_000;
+
+/**
+ * The picture a phone is sent for a chat image: the image itself when it
+ * fits, else a smaller copy, else null (the phone then shows a placeholder).
+ */
+export const fitImageForPhone = async (
+  image: string,
+  shrink: (dataUrl: string, maxChars: number) => Promise<string | null>,
+): Promise<string | null> => {
+  if (image.length <= PHONE_IMAGE_MAX_CHARS) return image;
+  const smaller = await shrink(image, PHONE_IMAGE_MAX_CHARS);
+  return smaller !== null && smaller.length <= PHONE_IMAGE_MAX_CHARS ? smaller : null;
+};
+
 export const isPhoneSilent = (lastHeardAt: number, now: number): boolean => now - lastHeardAt > PHONE_SILENCE_MS;
 
 /** Whole seconds until the QR's secret is replaced, never negative. */

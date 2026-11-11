@@ -3,7 +3,7 @@
  * JSON snapshot of the data PracticeMatchView renders; the phone renders the same
  * component with action callbacks that are sent back as calls.
  */
-import type { PracticeMatchViewProps } from '../../app/PracticeMatchView';
+import type { PracticeMatchViewProps, PracticeRematchOptions } from '../../app/PracticeMatchView';
 
 /** Callbacks a phone may trigger on the desktop's match. */
 export const PRACTICE_CALLS = ['onCellClick', 'onUndo', 'onRematch', 'onBotFirst'] as const;
@@ -24,10 +24,26 @@ export const buildPracticeSnapshot = (p: PracticeMatchViewProps): PracticeSnapsh
   return snapshot as unknown as PracticeSnapshot;
 };
 
+/** Starting over throws away a game in progress, so that asks first. */
+export const rematchNeedsConfirm = (p: Pick<PracticeMatchViewProps, 'gameStatus' | 'moveHistory'>): boolean =>
+  p.gameStatus === 'playing' && p.moveHistory.length > 0;
+
+/** True only for the exact `{ confirmed: true }` a phone sends after asking (a click event is not). */
+export const isConfirmedRematch = (options: unknown): boolean =>
+  typeof options === 'object' && options !== null && !Array.isArray(options)
+  && Object.hasOwn(options, 'confirmed') && (options as PracticeRematchOptions).confirmed === true;
+
+const CONFIRMED: PracticeRematchOptions = { confirmed: true };
+
+/**
+ * `confirmRematch` shows the phone's own "Start a new game?" dialog and runs
+ * the callback on confirm; the desktop then starts over without asking again.
+ */
 export const createRemotePracticeProps = (
   s: PracticeSnapshot,
   call: (method: string, args: unknown[]) => void,
   local: Pick<PracticeMatchViewProps, LocalKey>,
+  confirmRematch?: (run: () => void) => void,
 ): PracticeMatchViewProps => ({
   ...s,
   user: local.user,
@@ -35,9 +51,18 @@ export const createRemotePracticeProps = (
   setOpponent: local.setOpponent,
   onExit: local.onExit,
   onCellClick: (...args) => call('onCellClick', args),
-  onUndo: (...args) => call('onUndo', args),
-  onRematch: (...args) => call('onRematch', args),
-  onBotFirst: (...args) => call('onBotFirst', args),
+  // Buttons pass their click event; only the action itself travels.
+  onUndo: () => call('onUndo', []),
+  onRematch: () => {
+    if (!confirmRematch) {
+      call('onRematch', []);
+      return;
+    }
+    const send = () => call('onRematch', [CONFIRMED]);
+    if (rematchNeedsConfirm(s)) confirmRematch(send);
+    else send();
+  },
+  onBotFirst: () => call('onBotFirst', []),
 });
 
 /** Runs a phone's call on the real match. False when the method is not one a phone may call, or it threw. */

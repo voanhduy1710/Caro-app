@@ -2,13 +2,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { liveClocks } from '../room/roomEngineHelpers';
 import type { Clocks } from '../room/roomEngineTypes';
 import type { RoomApi } from '../room/useRoomCore';
+import { MAX_CALL_ARGS_JSON_LENGTH, parsePairMessage } from './pairProtocol';
 import {
+  CHAT_IMAGE_PLACEHOLDER,
   LOCAL_ONLY_ROOM_METHODS,
   ROOM_METHODS,
   applyRoomCall,
   buildRoomSnapshot,
   chatImagesOf,
   createRemoteRoomApi,
+  remoteChatArgs,
   type FunctionKeys,
 } from './roomSnapshot';
 
@@ -140,7 +143,42 @@ describe('createRemoteRoomApi', () => {
 
   it('restores chat images from the map', () => {
     expect(setup().remote.chatMessages[1].image).toBe('data:image/png;base64,AAA');
-    expect(setup('playing', 'connected', {}).remote.chatMessages[1].image).toBeUndefined();
+    expect(setup('playing', 'connected', {}).remote.chatMessages[1].image).toBe(CHAT_IMAGE_PLACEHOLDER);
+    expect(setup().remote.chatMessages[0].image).toBeUndefined();
+  });
+
+  it('sends a chat with a quoted image message under the call limit, keeping the image mark', async () => {
+    const { remote, call } = setup();
+    const quoted = { ...remote.chatMessages[1], image: `data:image/jpeg;base64,${'a'.repeat(400_000)}` };
+    await remote.sendChat('re', undefined, quoted);
+    expect(call).toHaveBeenCalledTimes(1);
+    const [method, args] = call.mock.calls[0] as [string, unknown[]];
+    expect(method).toBe('sendChat');
+    expect(args[2]).toMatchObject({ id: 'c2', hasImage: true });
+    expect(args[2]).not.toHaveProperty('image');
+    expect(parsePairMessage({ t: 'call', phoneId: 'p', method, args: JSON.parse(JSON.stringify(args)) })).not.toBeNull();
+  });
+
+  it('shrinks a phone chat image to fit the call limit', async () => {
+    const snap = buildRoomSnapshot(makeRoom().room);
+    const call = vi.fn();
+    const small = 'data:image/jpeg;base64,BBB';
+    const shrinkImage = vi.fn(async () => small);
+    const remote = createRemoteRoomApi(snap, 1_000, {}, call, { leaveRoom: vi.fn(), shrinkImage, onImageTooLarge: vi.fn() });
+    await remote.sendChat('look', `data:image/jpeg;base64,${'a'.repeat(300_000)}`);
+    expect(shrinkImage).toHaveBeenCalledTimes(1);
+    expect((shrinkImage.mock.calls[0] as unknown[])[1]).toBeLessThan(MAX_CALL_ARGS_JSON_LENGTH);
+    expect(call).toHaveBeenCalledWith('sendChat', ['look', small, undefined]);
+  });
+
+  it('tells the phone when its chat image cannot be made small enough, and sends nothing', async () => {
+    const snap = buildRoomSnapshot(makeRoom().room);
+    const call = vi.fn();
+    const onImageTooLarge = vi.fn();
+    const remote = createRemoteRoomApi(snap, 1_000, {}, call, { leaveRoom: vi.fn(), shrinkImage: async () => null, onImageTooLarge });
+    await remote.sendChat('look', `data:image/jpeg;base64,${'a'.repeat(300_000)}`);
+    expect(call).not.toHaveBeenCalled();
+    expect(onImageTooLarge).toHaveBeenCalledTimes(1);
   });
 
   it('runs the clocks while playing', () => {
@@ -167,7 +205,48 @@ describe('createRemoteRoomApi', () => {
   });
 });
 
+describe('remoteChatArgs', () => {
+  const never = async () => { throw new Error('should not shrink'); };
+
+  it('sends a small image as it is', async () => {
+    const image = 'data:image/png;base64,AAA';
+    expect(await remoteChatArgs('hi', image, undefined, never)).toEqual(['hi', image, undefined]);
+  });
+
+  it('keeps the whole call within the limit, quote included', async () => {
+    const quote = { id: 'q', sender: 'B', text: 'x'.repeat(2_000), timestamp: 1, image: 'data:image/png;base64,AAA' };
+    let budget = 0;
+    const args = await remoteChatArgs('hi', `data:image/jpeg;base64,${'a'.repeat(70_000)}`, quote, async (_url, max) => {
+      budget = max;
+      return `data:image/jpeg;base64,${'b'.repeat(max - 23)}`;
+    });
+    expect(args).not.toBeNull();
+    expect(JSON.stringify(args).length).toBeLessThanOrEqual(MAX_CALL_ARGS_JSON_LENGTH);
+    expect(JSON.stringify(args).length).toBe(MAX_CALL_ARGS_JSON_LENGTH);
+    expect(budget).toBeGreaterThan(0);
+    expect(args?.[2]).toEqual({ id: 'q', sender: 'B', text: 'x'.repeat(2_000), timestamp: 1, hasImage: true });
+  });
+
+  it('refuses a shrink result that still does not fit', async () => {
+    expect(await remoteChatArgs('hi', `data:image/jpeg;base64,${'a'.repeat(70_000)}`, undefined, async (url) => url)).toBeNull();
+  });
+});
+
 describe('applyRoomCall', () => {
+  it('quotes the desktop copy of a message the phone quoted without its picture', () => {
+    const { room, methods } = makeRoom();
+    expect(applyRoomCall(room, 'sendChat', ['re', null, { id: 'c2', sender: 'B', text: '', timestamp: 2, hasImage: true }])).toBe(true);
+    expect(methods.sendChat).toHaveBeenCalledWith('re', null, room.chatMessages[1]);
+    expect(room.chatMessages[1].image).toBeTruthy();
+  });
+
+  it('passes an unknown quote through unchanged', () => {
+    const { room, methods } = makeRoom();
+    const quote = { id: 'gone', sender: 'B', text: 'old', timestamp: 0 };
+    applyRoomCall(room, 'sendChat', ['re', null, quote]);
+    expect(methods.sendChat).toHaveBeenCalledWith('re', null, quote);
+  });
+
   it('invokes allowed methods', () => {
     const { room, methods } = makeRoom();
     expect(applyRoomCall(room, 'move', [1, 2])).toBe(true);

@@ -7,8 +7,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PracticeMatchViewProps } from '../../app/PracticeMatchView';
 import type { UserProfile } from '../auth/AuthContext';
+import type { StringKey } from '../i18n/strings';
 import type { RoomApi } from '../room/useRoomCore';
 import { cryptoEnv } from '../room/roomEngineCore';
+import { shrinkImage } from '../room/useRoomUtilities';
 import { openPairChannel, type PairChannel } from './pairChannel';
 import type { PairError } from './pairErrors';
 import type { PairOffer } from './pairLink';
@@ -34,17 +36,35 @@ export interface PairRemote {
   kind: 'room' | 'practice' | null;
   room: RoomApi | null;
   practice: PracticeMatchViewProps | null;
+  /** A short notice for this phone only, such as an image too large to send. */
+  notice: StringKey | null;
+  /** Set while the phone asks "Start a new game?" before a bot rematch; run it on confirm. */
+  pendingRematch: (() => void) | null;
+  dismissRematch(): void;
   unpair(): void;
 }
 
 const noop = () => {};
+/** How long a phone-only notice stays up. */
+const NOTICE_MS = 4_000;
 
 export const usePairRemote = (offer: PairOffer, user: UserProfile): PairRemote => {
   const [phoneId] = useState(() => cryptoEnv.randomToken());
   const [state, setState] = useState(INITIAL_REMOTE_STATE);
   const [dismissed, setDismissed] = useState<DismissedNotices>(NOTHING_DISMISSED);
+  const [notice, setNotice] = useState<StringKey | null>(null);
+  const [pendingRematch, setPendingRematch] = useState<(() => void) | null>(null);
   const channelRef = useRef<PairChannel | null>(null);
   const lastHeardRef = useRef(0);
+
+  useEffect(() => {
+    if (!notice) return;
+    const id = window.setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => window.clearTimeout(id);
+  }, [notice]);
+  const imageTooLarge = useCallback(() => setNotice('pair.imageTooLarge'), []);
+  const confirmRematch = useCallback((run: () => void) => setPendingRematch(() => run), []);
+  const dismissRematch = useCallback(() => setPendingRematch(null), []);
 
   const { uid, sessionId, secret } = offer;
   useEffect(() => {
@@ -114,8 +134,8 @@ export const usePairRemote = (offer: PairOffer, user: UserProfile): PairRemote =
 
   const { kind, data, receivedAt, images } = state;
   const remoteRoom = useMemo(
-    () => (paired && kind === 'room' ? createRemoteRoomApi(data as RoomSnapshot, receivedAt, images, call, { leaveRoom: unpair }) : null),
-    [paired, kind, data, receivedAt, images, call, unpair],
+    () => (paired && kind === 'room' ? createRemoteRoomApi(data as RoomSnapshot, receivedAt, images, call, { leaveRoom: unpair, shrinkImage, onImageTooLarge: imageTooLarge }) : null),
+    [paired, kind, data, receivedAt, images, call, unpair, imageTooLarge],
   );
   const room = useMemo<RoomApi | null>(() => {
     if (!remoteRoom) return null;
@@ -129,10 +149,21 @@ export const usePairRemote = (offer: PairOffer, user: UserProfile): PairRemote =
 
   const practice = useMemo(
     () => (paired && kind === 'practice'
-      ? createRemotePracticeProps(data as PracticeSnapshot, call, { user, openProfileModal: noop, setOpponent: noop, onExit: unpair })
+      ? createRemotePracticeProps(data as PracticeSnapshot, call, { user, openProfileModal: noop, setOpponent: noop, onExit: unpair }, confirmRematch)
       : null),
-    [paired, kind, data, call, user, unpair],
+    [paired, kind, data, call, user, unpair, confirmRematch],
   );
 
-  return { status: state.status, error: state.error, endReason: state.endReason, kind, room, practice, unpair };
+  return {
+    status: state.status,
+    error: state.error,
+    endReason: state.endReason,
+    kind,
+    room,
+    practice,
+    notice,
+    pendingRematch: practice ? pendingRematch : null,
+    dismissRematch,
+    unpair,
+  };
 };

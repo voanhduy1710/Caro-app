@@ -3,7 +3,9 @@ import type { PracticeMatchViewProps } from '../../app/PracticeMatchView';
 import type { RoomApi } from '../room/useRoomCore';
 import { createHostState, SECRET_ROTATE_MS } from './pairHostSession';
 import {
+  fitImageForPhone,
   isPhoneSilent,
+  PHONE_IMAGE_MAX_CHARS,
   needsTickPush,
   PHONE_SILENCE_MS,
   secondsUntilRotation,
@@ -100,5 +102,36 @@ describe('secondsUntilRotation', () => {
     expect(secondsUntilRotation(state, 10_500)).toBe(SECRET_ROTATE_MS / 1000);
     expect(secondsUntilRotation(state, 10_000 + SECRET_ROTATE_MS - 1)).toBe(1);
     expect(secondsUntilRotation(state, 10_000 + SECRET_ROTATE_MS + 5000)).toBe(0);
+  });
+});
+
+describe('fitImageForPhone', () => {
+  const img = (length: number) => `data:image/jpeg;base64,${'a'.repeat(length - 23)}`;
+  const chatImageJsonLength = (image: string) =>
+    JSON.stringify({ t: 'chatImage', phoneId: 'p'.repeat(32), id: 'i'.repeat(32), image }).length;
+
+  it('keeps a chat image message within about 200 KB', () => {
+    expect(chatImageJsonLength(img(PHONE_IMAGE_MAX_CHARS))).toBeLessThanOrEqual(200_000);
+  });
+
+  it('sends a small image as it is without shrinking', async () => {
+    const image = img(1000);
+    let shrinkCalls = 0;
+    const result = await fitImageForPhone(image, async () => { shrinkCalls += 1; return null; });
+    expect(result).toBe(image);
+    expect(shrinkCalls).toBe(0);
+  });
+
+  it('shrinks a large image to the phone limit', async () => {
+    const small = img(5000);
+    const seen: number[] = [];
+    const result = await fitImageForPhone(img(600_000), async (_url, max) => { seen.push(max); return small; });
+    expect(result).toBe(small);
+    expect(seen).toEqual([PHONE_IMAGE_MAX_CHARS]);
+  });
+
+  it('gives up when the image cannot be made small enough', async () => {
+    expect(await fitImageForPhone(img(600_000), async () => null)).toBeNull();
+    expect(await fitImageForPhone(img(600_000), async () => img(PHONE_IMAGE_MAX_CHARS + 1))).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import { useT } from '../i18n/language';
 import { OpponentProfileModal } from '../profile/OpponentProfileModal';
 import { ProfileModal } from '../profile/ProfileModal';
 import { OnlineRoom } from '../room/OnlineRoom';
+import { RoomConfirmDialog } from '../room/OnlineRoomOverlays';
 import type { RoomApi } from '../room/useRoomCore';
 import { SettingsAndThemeModal } from '../settings/SettingsAndThemeModal';
 import { pairErrorFor, pairErrorKey } from './pairErrors';
@@ -74,6 +75,9 @@ const RemoteSession: React.FC<{ offer: PairOffer; user: UserProfile; onHome: () 
   const practice = remote.practice
     ? { ...remote.practice, onExit: unpairAndGoHome, openProfileModal, setOpponent }
     : null;
+  const { pendingRematch, dismissRematch } = remote;
+  const rematchCopy = { title: t('home.newGameTitle'), body: t('home.newGameBody'), confirmLabel: t('home.newGameConfirm'), cancelLabel: t('home.keepPlaying') };
+  const rematchConfirm = pendingRematch ? { ...rematchCopy, sheet: rematchCopy, onConfirm: pendingRematch } : null;
 
   if (status === 'error') {
     return <PairNotice text={t(pairErrorKey(remote.error ?? 'no_desktop'))}><BackHome onHome={onHome} /></PairNotice>;
@@ -113,6 +117,12 @@ const RemoteSession: React.FC<{ offer: PairOffer; user: UserProfile; onHome: () 
         />
       )}
       <OpponentProfileModal opponent={opponent} isOpen={Boolean(opponent)} onClose={() => setOpponent(null)} />
+      <RoomConfirmDialog spec={rematchConfirm} onDismiss={dismissRematch} />
+      {remote.notice && (
+        <div role="status" aria-live="polite" className="fixed bottom-24 left-1/2 z-[60] -translate-x-1/2 rounded-full bg-inverse px-4 py-2 text-xs font-medium text-inverse-fg shadow-lg">
+          {t(remote.notice)}
+        </div>
+      )}
     </>
   );
 };

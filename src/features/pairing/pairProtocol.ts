@@ -25,7 +25,7 @@ export type PairMessage =
   | { t: 'end'; phoneId: string; reason: PairEndReason };
 
 /** Largest accepted JSON size of a `call` message's args. */
-const MAX_CALL_ARGS_JSON_LENGTH = 65536;
+export const MAX_CALL_ARGS_JSON_LENGTH = 65536;
 
 const REJECT_REASONS: readonly string[] = ['expired', 'used'];
 const END_REASONS: readonly string[] = ['replaced', 'game_ended', 'unpaired', 'desktop_closed'];

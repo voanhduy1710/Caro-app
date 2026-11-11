@@ -37,7 +37,8 @@ import type { PairingContextValue } from '../features/pairing/PairingContext';
 import { PairMobileModal } from '../features/pairing/PairMobileModal';
 import { usePairHost } from '../features/pairing/usePairHost';
 import type { PairSource } from '../features/pairing/usePairHost';
-import type { PracticeMatchViewProps } from './PracticeMatchView';
+import { isConfirmedRematch, rematchNeedsConfirm } from '../features/pairing/practiceSnapshot';
+import type { PracticeMatchViewProps, PracticeRematchOptions } from './PracticeMatchView';
 export const App: React.FC = () => {
   const t = useT();
   const { user, loading: authLoading, openProfileModal, refreshUserProfile, signInWithCredentials, createAccount } = useAuth();
@@ -157,7 +158,7 @@ export const App: React.FC = () => {
   const practiceGameGenerationRef = useRef(0);
   /** Set by "Let bot play first": an emptied board (after take back) then gives the opening to the bot again. */
   const botOpensRef = useRef(false);
-  /** Counts bot games started here. A paired phone belongs to one game, so a new one ends the pairing. */
+  /** Counts bot sessions started here (a rematch is not a new one). A paired phone belongs to one, so a new one ends the pairing. */
   const [practiceGameNumber, setPracticeGameNumber] = useState(0);
 
   /** The room this player last left, offered back on the home screen for a while. */
@@ -512,12 +513,17 @@ export const App: React.FC = () => {
     matchOverRef.current = false;
   }, [cancelAiMove, roomSettings.boardSize, roomSettings.turnTimeSeconds, roomSettings.totalTimeMinutes]);
 
-  const handleStartAiMode = () => {
+  /**
+   * `rematch`: started over from inside the same bot session, so a paired phone
+   * stays paired (a room keeps its pairing across rematches too). Any other
+   * start is a new game, and a new game ends the pairing.
+   */
+  const startBotGame = (rematch: boolean) => {
     if (roomActive) room.leaveRoom();
     setBotUrl(true);
     botOpensRef.current = false;
     practiceGameGenerationRef.current += 1;
-    setPracticeGameNumber((n) => n + 1);
+    if (!rematch) setPracticeGameNumber((n) => n + 1);
     matchOverRef.current = false;
     cancelAiMove();
     setIsAiThinking(false);
@@ -538,6 +544,7 @@ export const App: React.FC = () => {
     setP1ElapsedTime(0);
     setP2ElapsedTime(0);
   };
+  const handleStartAiMode = () => startBotGame(false);
 
   // Hands the opening move to the bot. Only on a fresh board; the bot then answers like on any of its turns.
   const handleBotFirst = () => {
@@ -640,9 +647,10 @@ export const App: React.FC = () => {
   };
 
   // Rematch Button Handler for practice
-  const handleRematchButtonClick = () => {
-    // Practice has no one to ask, so only a live board needs confirming.
-    if (gameStatus === 'playing' && moveHistory.length > 0) {
+  const handleRematchButtonClick = (options?: PracticeRematchOptions) => {
+    // Practice has no one to ask, so only a live board needs confirming. A
+    // paired phone has already asked on its own screen.
+    if (!isConfirmedRematch(options) && rematchNeedsConfirm({ gameStatus, moveHistory })) {
       setConfirmSpec({
         title: t('home.newGameTitle'),
         body: t('home.newGameBody'),
@@ -652,11 +660,11 @@ export const App: React.FC = () => {
           body: 'Nội dung hiện tại của trang tính sẽ bị thay thế.',
           confirmLabel: 'Tạo mới',
         },
-        onConfirm: handleStartAiMode,
+        onConfirm: () => startBotGame(true),
       });
       return;
     }
-    handleStartAiMode();
+    startBotGame(true);
   };
 
   const availableRooms = useAvailableRooms();
@@ -677,7 +685,7 @@ export const App: React.FC = () => {
   // One object feeds both the board on screen and a paired phone.
   const practiceProps: PracticeMatchViewProps | null = practiceInMatch ? { user, openProfileModal, settings: practiceSettings, board, placementCorners: practicePlacementCorners, onCellClick: handleCellClick, lastMove, winningLine, currentTurn, myPiece, gameStatus, gameResult, ratingNote, p1TotalTime, p2TotalTime, p1ElapsedTime, p2ElapsedTime, turnTimeLeft, isAiThinking, elapsedGameTime, moveHistory, sessionScore, onUndo: handleUndoButtonClick, onRematch: handleRematchButtonClick, onExit: requestExitMatch, onBotFirst: handleBotFirst, setOpponent: setSelectedOpponentProfile } : null;
 
-  // A room keeps its pairing across rematches; each bot game is its own.
+  // A room and a bot session both keep their pairing across rematches.
   const pairSource: PairSource | null = roomActive
     ? (room.roomId ? { kind: 'room', room, gameKey: room.roomId } : null)
     : practiceProps
