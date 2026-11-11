@@ -1,9 +1,11 @@
-import React from 'react';
-import { Bot, Globe, Lock, MessageCircle } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+import { Bot, Globe, Lock, MessageCircle, ScanLine } from 'lucide-react';
 import type { RoomMode } from '../features/room/roomEngineTypes';
 import { stagger } from './AppViewShared';
 import { RankedRoomSwords } from './RankedRoomSwords';
 import { useT } from '../features/i18n/language';
+import { QrScanner } from '../features/pairing/QrScanner';
+import { useIsDesktop } from '../shared/hooks/useMediaQuery';
 
 export interface HomePlayActionsProps {
   isRoomPublic: boolean; setIsRoomPublic: React.Dispatch<React.SetStateAction<boolean>>; onStartBot: () => void; onCreate: (isPublic: boolean, mode?: RoomMode) => void;
@@ -12,8 +14,19 @@ export interface HomePlayActionsProps {
 
 export const HomePlayActions: React.FC<HomePlayActionsProps> = ({ isRoomPublic, setIsRoomPublic, onStartBot, onCreate, inputRoomCode, setInputRoomCode, onJoin }) => {
   const t = useT();
+  const isDesktop = useIsDesktop();
+  const [scanning, setScanning] = useState(false);
+  const closeScanner = useCallback(() => setScanning(false), []);
   return (
   <div className="home-lobby__play grid gap-4 text-left md:grid-cols-5">
+              {/* A phone can take over a game running on a computer by scanning its pairing code. */}
+              {!isDesktop && (
+                <button type="button" onClick={() => setScanning(true)} className="btn btn-secondary btn-lg w-full animate-pop-in md:col-span-5" style={stagger(3)}>
+                  <ScanLine size={20} strokeWidth={2.25} aria-hidden="true" />
+                  <span>{t('pair.scan')}</span>
+                </button>
+              )}
+              <QrScanner isOpen={scanning} onClose={closeScanner} />
               {/* Play alone. Listed first because it is the only option that
                   works with nobody else around. */}
               <div className="card animate-pop-in flex flex-col gap-4 p-5 md:col-span-2" style={stagger(3)}>

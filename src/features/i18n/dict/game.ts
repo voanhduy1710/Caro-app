@@ -166,6 +166,7 @@ export const game = defineStrings(
     'pair.error.invalid_qr': 'This is not a Caro pairing code.',
     'pair.error.camera_denied': 'Camera access was denied. Allow it in your browser settings to scan.',
     'pair.signInSameAccount': 'Sign in with the same account as on your computer.',
+    'pair.useCameraApp': "You can also scan the code with your phone's camera app.",
   },
   {
     'game.exitHomeTitle': 'về màn hình chính',
@@ -323,5 +324,6 @@ export const game = defineStrings(
     'pair.error.invalid_qr': 'Đây không phải mã ghép của Caro.',
     'pair.error.camera_denied': 'Quyền dùng camera bị từ chối. Hãy cho phép trong cài đặt trình duyệt để quét.',
     'pair.signInSameAccount': 'Đăng nhập cùng tài khoản đang dùng trên máy tính.',
+    'pair.useCameraApp': 'Bạn cũng có thể quét mã bằng ứng dụng camera của điện thoại.',
   },
 );

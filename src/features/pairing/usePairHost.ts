@@ -120,6 +120,9 @@ export const usePairHost = ({ user, source, onNotice }: PairHostInput): PairHost
     if (m.phoneId !== state.phoneId) return;
     if (m.t === 'ping') {
       lastHeardRef.current = at;
+      // The answer doubles as the desktop's heartbeat: an idle game pushes
+      // nothing else, and the phone gives up on a silent desktop.
+      pushSnapshot();
     } else if (m.t === 'call') {
       lastHeardRef.current = at;
       if (src.kind === 'room') applyRoomCall(src.room, m.method, m.args);
