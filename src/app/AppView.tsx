@@ -32,6 +32,12 @@ import { setBotUrl, shouldAutoStartBot } from './botRoute';
 import type { MoveHistoryItem, PracticePiece } from './AppViewShared';
 import type { ConfirmSpec } from './AppViewShared';
 import { useT } from '../features/i18n/language';
+import { PairingContext } from '../features/pairing/PairingContext';
+import type { PairingContextValue } from '../features/pairing/PairingContext';
+import { PairMobileModal } from '../features/pairing/PairMobileModal';
+import { usePairHost } from '../features/pairing/usePairHost';
+import type { PairSource } from '../features/pairing/usePairHost';
+import type { PracticeMatchViewProps } from './PracticeMatchView';
 export const App: React.FC = () => {
   const t = useT();
   const { user, loading: authLoading, openProfileModal, refreshUserProfile, signInWithCredentials, createAccount } = useAuth();
@@ -151,6 +157,8 @@ export const App: React.FC = () => {
   const practiceGameGenerationRef = useRef(0);
   /** Set by "Let bot play first": an emptied board (after take back) then gives the opening to the bot again. */
   const botOpensRef = useRef(false);
+  /** Counts bot games started here. A paired phone belongs to one game, so a new one ends the pairing. */
+  const [practiceGameNumber, setPracticeGameNumber] = useState(0);
 
   /** The room this player last left, offered back on the home screen for a while. */
   const [lastRoom, setLastRoom] = useState<LastRoom | null>(() => readLastRoom());
@@ -509,6 +517,7 @@ export const App: React.FC = () => {
     setBotUrl(true);
     botOpensRef.current = false;
     practiceGameGenerationRef.current += 1;
+    setPracticeGameNumber((n) => n + 1);
     matchOverRef.current = false;
     cancelAiMove();
     setIsAiThinking(false);
@@ -665,6 +674,25 @@ export const App: React.FC = () => {
 
   const roomPhase = room.state?.phase ?? 'waiting';
 
+  // One object feeds both the board on screen and a paired phone.
+  const practiceProps: PracticeMatchViewProps | null = practiceInMatch ? { user, openProfileModal, settings: practiceSettings, board, placementCorners: practicePlacementCorners, onCellClick: handleCellClick, lastMove, winningLine, currentTurn, myPiece, gameStatus, gameResult, ratingNote, p1TotalTime, p2TotalTime, p1ElapsedTime, p2ElapsedTime, turnTimeLeft, isAiThinking, elapsedGameTime, moveHistory, sessionScore, onUndo: handleUndoButtonClick, onRematch: handleRematchButtonClick, onExit: requestExitMatch, onBotFirst: handleBotFirst, setOpponent: setSelectedOpponentProfile } : null;
+
+  // A room keeps its pairing across rematches; each bot game is its own.
+  const pairSource: PairSource | null = roomActive
+    ? (room.roomId ? { kind: 'room', room, gameKey: room.roomId } : null)
+    : practiceProps
+    ? { kind: 'practice', props: practiceProps, gameKey: `practice-${practiceGameNumber}` }
+    : null;
+  const pair = usePairHost({ user, source: pairSource, onNotice: showNotice });
+  const hasPairSource = pairSource !== null;
+  const signedIn = Boolean(user && !user.isGuest);
+  const pairingValue = useMemo<PairingContextValue | null>(
+    () => (hasPairSource
+      ? { canPair: signedIn, needsSignIn: !signedIn, phoneConnected: pair.phoneConnected, openPairModal: pair.open }
+      : null),
+    [hasPairSource, signedIn, pair.phoneConnected, pair.open],
+  );
+
   return (
     <div className="min-h-[100dvh] flex flex-col justify-between bg-surface-2 text-ink selection:bg-accent selection:text-accent-fg">
       <AppNavbar inMatch={inMatch} onLeaderboard={() => setLeaderboardOpen(true)} onHistory={() => setHistoryOpen(true)} onSettings={() => setSettingsAndThemeOpen(true)} onHome={requestExitMatch} />
@@ -683,11 +711,14 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        <ActiveMatchStage roomActive={roomActive} room={room} user={user} onRules={() => setSettingsAndThemeOpen(true)} onMyProfile={openProfileModal} onOpponent={setSelectedOpponentProfile} exitRef={roomExitRef} practice={practiceInMatch ? { user, openProfileModal, settings: practiceSettings, board, placementCorners: practicePlacementCorners, onCellClick: handleCellClick, lastMove, winningLine, currentTurn, myPiece, gameStatus, gameResult, ratingNote, p1TotalTime, p2TotalTime, p1ElapsedTime, p2ElapsedTime, turnTimeLeft, isAiThinking, elapsedGameTime, moveHistory, sessionScore, onUndo: handleUndoButtonClick, onRematch: handleRematchButtonClick, onExit: requestExitMatch, onBotFirst: handleBotFirst, setOpponent: setSelectedOpponentProfile } : null} />
+        <PairingContext.Provider value={pairingValue}>
+          <ActiveMatchStage roomActive={roomActive} room={room} user={user} onRules={() => setSettingsAndThemeOpen(true)} onMyProfile={openProfileModal} onOpponent={setSelectedOpponentProfile} exitRef={roomExitRef} practice={practiceProps} />
+        </PairingContext.Provider>
 
       </main>
 
       <AppFeedback sheetDisguise={sheetDisguise} notice={notice}roomClosed={roomClosedDialog} roomError={room.error} onResetRoom={room.reset} confirm={confirmSpec} onDismissConfirm={() => setConfirmSpec(null)} />
+      <PairMobileModal isOpen={pair.modalOpen} link={pair.link} secondsLeft={pair.secondsLeft} phoneConnected={pair.phoneConnected} onClose={pair.close} onUnpair={pair.unpair} />
       <AppModalStack settingsOpen={settingsAndThemeOpen} onCloseSettings={() => setSettingsAndThemeOpen(false)} settings={roomActive && room.state ? room.state.settings : isAiMode ? practiceSettings : roomSettings} onUpdateSettings={(next) => { if (roomActive) room.updateSettings(next); else setRoomSettings(settingsUpdateFor(roomSettings, next, isAiMode)); }} isHost={!roomActive || room.isHost} gameStatus={roomActive ? (roomPhase === 'waiting' || roomPhase === 'ended' ? 'lobby' : 'playing') : gameStatus} myPiece={roomActive ? (room.mySeat ?? undefined) : myPiece} leaderboardOpen={leaderboardOpen} onCloseLeaderboard={() => setLeaderboardOpen(false)} historyOpen={historyOpen} onCloseHistory={() => setHistoryOpen(false)} onSelectOpponent={setSelectedOpponentProfile} opponent={selectedOpponentProfile} onPlayNow={() => { setHistoryOpen(false); if (roomActive) { setConfirmSpec({ title: t('home.leaveRoomBotTitle'), body: room.isHost ? t('home.leaveRoomBotBodyHost') : t('home.leaveRoomBotBodyGuest'), confirmLabel: t('home.leaveRoomBotConfirm'), tone: 'danger', onConfirm: handleStartAiMode }); } else handleStartAiMode(); }} confirmRoomExit={setConfirmSpec} />
 
     </div>
