@@ -192,7 +192,7 @@ export interface RailButtonProps {
   disabled?: boolean;
   /** Asked for, and waiting on the opponent's answer. */
   pending?: boolean;
-  tone?: 'default' | 'primary' | 'danger' | 'warning';
+  tone?: 'default' | 'primary' | 'danger' | 'warning' | 'success';
 }
 
 /**
@@ -219,7 +219,7 @@ export const RailButton: React.FC<RailButtonProps> = ({
     aria-label={label}
     className={`btn btn-icon h-10 w-10 rounded-full ${
       tone === 'primary' ? 'btn-primary' : tone === 'warning' ? 'bg-warning-solid text-warning-fg hover:brightness-95' : 'btn-ghost'
-    } ${tone === 'danger' ? 'text-danger hover:text-danger disabled:text-muted' : ''}`}
+    } ${tone === 'danger' ? 'text-danger hover:text-danger disabled:text-muted' : tone === 'success' ? 'text-emerald-600 hover:text-emerald-700' : ''}`}
   >
     {pending ? (
       <Loader2 size={17} strokeWidth={2.25} className="animate-spin" aria-hidden="true" />
