@@ -1,9 +1,9 @@
 # Task list
 
 ## 2026-11-18 — delete review, commit, push, deploy
-- ⏳ 1. Delete the code review (`CODE_REVIEW.md` removed)
-- ⏳ 2. Commit and push everything
-- ⏳ 3. Deploy to Vercel with `deploy_vercel.ps1`
+- ✅ 1. Delete the code review: `CODE_REVIEW.md` removed, references fixed
+- ✅ 2. Commit and push everything: branch `chore/review-fixes-orca-style` (d38a0b2, f9ef772, 13362d3) pushed to origin; tsc clean, vitest 407 passed; not merged to main
+- ✅ 3. Deploy to Vercel with `deploy_vercel.ps1`: deployed, READY at https://caro-app-tau.vercel.app (dpl_F2i1QGbzXASxGgk6VbghRyG5cvv1). ⚠️ Supabase migrations + edge functions still NOT applied
 
 ## 2026-11-18 — Orca as an app style, not a board
 - ✅ 1. Remove the Orca board option: gone from the board list; PR 5's code grid now shows only inside the Orca style (in place of graph paper). tsc clean, vitest 402 passed; not committed
