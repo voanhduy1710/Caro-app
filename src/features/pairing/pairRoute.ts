@@ -7,7 +7,7 @@
  */
 import { decodePairLink, readPairFromLocation, type PairOffer } from './pairLink';
 
-export const PAIR_STORAGE_KEY = 'caro:pair';
+const PAIR_STORAGE_KEY = 'caro:pair';
 
 export interface PairRoute {
   /** null when the link was a pairing link that did not decode. */

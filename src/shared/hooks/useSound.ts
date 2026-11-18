@@ -24,6 +24,23 @@ const unlockAudio = () => {
   }
 };
 
+/**
+ * A recorded sound instead of a synthesised tone. A fresh element lets two
+ * separate room events finish naturally if they arrive close together.
+ */
+const playFile = (src: string) => {
+  if (!getDisplayPrefs().soundEnabled || typeof Audio === 'undefined') return;
+  try {
+    const sound = new Audio(src);
+    sound.volume = 0.8;
+    void sound.play().catch(() => {
+      // A browser can refuse remote audio until the first user interaction.
+    });
+  } catch {
+    // A sound failure must not interrupt the match.
+  }
+};
+
 /** Web Audio effects with one browser-unlocked context for the whole app. */
 export const useSound = () => {
   useEffect(() => {
@@ -67,33 +84,8 @@ export const useSound = () => {
   }, [playTone]);
   const playTimerWarningSound = useCallback(() => playTone(880, 'square', 0.1, 0.05), [playTone]);
   const playClickSound = useCallback(() => playTone(400, 'sine', 0.05, 0.05), [playTone]);
-  const playBuzzSound = useCallback(() => {
-    if (!getDisplayPrefs().soundEnabled || typeof Audio === 'undefined') return;
-    // Use the supplied recording for Buzz instead of synthesising a tone. A
-    // fresh element lets two separate room events finish naturally if they
-    // arrive close together.
-    try {
-      const sound = new Audio('/quick-ting.mp3');
-      sound.volume = 0.8;
-      void sound.play().catch(() => {
-        // Browsers may block a remote notification before the first gesture.
-      });
-    } catch (error) {
-      console.warn('Buzz sound error:', error);
-    }
-  }, []);
-  const playPingSound = useCallback(() => {
-    if (!getDisplayPrefs().soundEnabled || typeof Audio === 'undefined') return;
-    try {
-      const sound = new Audio('/ping-sound.mp3');
-      sound.volume = 0.8;
-      void sound.play().catch(() => {
-        // A browser can refuse remote audio until the first user interaction.
-      });
-    } catch {
-      // A sound failure must not interrupt the match.
-    }
-  }, []);
+  const playBuzzSound = useCallback(() => playFile('/quick-ting.mp3'), []);
+  const playPingSound = useCallback(() => playFile('/ping-sound.mp3'), []);
   // Softer and lower than Buzz: a chat note should inform, not nudge.
   const playChatSound = useCallback(() => {
     playTone(660, 'triangle', 0.08, 0.18);

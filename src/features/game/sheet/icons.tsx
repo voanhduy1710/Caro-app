@@ -1,4 +1,5 @@
 import React from 'react';
+import { SHEETS_GREEN } from './sheetStyle';
 
 /**
  * A generic green spreadsheet page: folded corner, white table. Close enough
@@ -6,10 +7,10 @@ import React from 'react';
  */
 export const SheetLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
   <svg width={(size * 3) / 4} height={size} viewBox="0 0 24 32" aria-hidden="true" focusable="false">
-    <path d="M2.5 0H16l8 8v21.5a2.5 2.5 0 0 1-2.5 2.5h-19A2.5 2.5 0 0 1 0 29.5v-27A2.5 2.5 0 0 1 2.5 0z" fill="#0F9D58" />
+    <path d="M2.5 0H16l8 8v21.5a2.5 2.5 0 0 1-2.5 2.5h-19A2.5 2.5 0 0 1 0 29.5v-27A2.5 2.5 0 0 1 2.5 0z" fill={SHEETS_GREEN} />
     <path d="M16 0l8 8h-5.5A2.5 2.5 0 0 1 16 5.5z" fill="#87ceac" />
     <rect x="5" y="13" width="14" height="11.5" rx="0.6" fill="#fff" />
-    <path d="M5 16.8h14M5 20.7h14M10.2 13v11.5" stroke="#0F9D58" strokeWidth="1.3" />
+    <path d="M5 16.8h14M5 20.7h14M10.2 13v11.5" stroke={SHEETS_GREEN} strokeWidth="1.3" />
   </svg>
 );
 

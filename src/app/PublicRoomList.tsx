@@ -3,14 +3,16 @@ import type { ActiveRoomInfo } from '../features/webrtc/roomDiscoveryService';
 import { getAvatarPublicUrl } from '../features/avatar/avatarService';
 import { ROOM_STATUS_TEXT, stagger } from './AppViewShared';
 import { useT } from '../features/i18n/language';
+import { useIsOrca } from '../features/theme/uiStyle';
+import { PublicRoomListOrca } from './PublicRoomList.orca';
 
-interface Props {
+export interface PublicRoomListProps {
   rooms: ActiveRoomInfo[];
   scanDone: boolean;
   onJoin: (roomId: string) => void;
 }
 
-export const PublicRoomList: React.FC<Props> = ({ rooms, scanDone, onJoin }) => {
+const PublicRoomListDefault: React.FC<PublicRoomListProps> = ({ rooms, scanDone, onJoin }) => {
   const t = useT();
   return (
   <div className="home-lobby__rooms card animate-pop-in text-left" style={stagger(6)}>
@@ -36,7 +38,7 @@ export const PublicRoomList: React.FC<Props> = ({ rooms, scanDone, onJoin }) => 
                     <div className="mt-0.5 font-mono text-[11px] text-muted">{t('home.code')} <span className="font-medium text-accent-text">{room.roomId}</span> · {room.boardSize}x{room.boardSize}</div>
                     <div className="mt-1 flex flex-wrap gap-1">
                       <span className="chip px-1.5 py-0 text-[11px]">{room.mode === 'casual' ? t('home.casual') : t('home.ranked')}</span>
-                      <span className="chip px-1.5 py-0 text-[11px]">{t('home.players', { n: room.seatsFilled })}</span>
+                      <span className="chip px-1.5 py-0 text-[11px]">{t('home.players', { n: room.seatsFilled, total: room.seats })}</span>
                       {room.viewers > 0 && <span className="chip px-1.5 py-0 text-[11px]">{t('home.watching', { n: room.viewers })}</span>}
                       <span className={`chip px-1.5 py-0 text-[11px] ${room.openSeat ? 'chip-accent' : ''}`}>{ROOM_STATUS_TEXT(room)}</span>
                     </div>
@@ -52,3 +54,7 @@ export const PublicRoomList: React.FC<Props> = ({ rooms, scanDone, onJoin }) => 
   </div>
   );
 };
+
+/** The public room list in the app style in use (Orca: PublicRoomList.orca.tsx). */
+export const PublicRoomList: React.FC<PublicRoomListProps> = (props) =>
+  useIsOrca() ? <PublicRoomListOrca {...props} /> : <PublicRoomListDefault {...props} />;

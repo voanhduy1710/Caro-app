@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ListSkeleton } from '../../shared/components/ListSkeleton';
 import { X } from 'lucide-react';
-import { fetchUserMatchHistory, finalizeDueClaims } from './historyService';
-import type { MatchRecord } from './types';
 import { useAuth } from '../auth/AuthContext';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
+import { useIsOrca } from '../theme/uiStyle';
+import { useMatchHistory } from './useMatchHistory';
+import { HistoryModalOrca } from './HistoryModal.orca';
 
 interface HistoryModalProps {
   isOpen: boolean;
@@ -13,27 +14,15 @@ interface HistoryModalProps {
   onPlayNow: () => void;
 }
 
-export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, onPlayNow }) => {
+export const HistoryModal: React.FC<HistoryModalProps> = (props) =>
+  useIsOrca() ? <HistoryModalOrca {...props} /> : <HistoryModalDefault {...props} />;
+
+const HistoryModalDefault: React.FC<HistoryModalProps> = ({ isOpen, onClose, onPlayNow }) => {
   const { user } = useAuth();
   const dialogProps = useModalChrome(isOpen, onClose, 'history-modal-title');
-  const [history, setHistory] = useState<MatchRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Account-tagged and stale-safe (see useMatchHistory).
+  const { loading, history } = useMatchHistory(isOpen, user?.uid);
   const [search, setSearch] = useState('');
-
-  const loadHistory = async () => {
-    if (!user) return;
-    setLoading(true);
-    await finalizeDueClaims();
-    const data = await fetchUserMatchHistory(user.uid);
-    setHistory(data);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (isOpen && user) {
-      loadHistory();
-    }
-  }, [isOpen, user]);
 
   if (!isOpen) return null;
 

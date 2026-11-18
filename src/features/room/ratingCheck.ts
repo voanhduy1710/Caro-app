@@ -17,7 +17,7 @@ import { boardFromMoves, otherSeat, pieceAt } from './roomEngine';
 import type { Clocks, Game, GameResult, Seat } from './roomEngine';
 
 /** How close to zero the losing clock must have looked here for a timeout to be believed. */
-export const TIMEOUT_SLACK_MS = 3_000;
+const TIMEOUT_SLACK_MS = 3_000;
 
 export type Verdict = 'confirmed' | 'contradicted' | 'unverifiable';
 
@@ -73,7 +73,7 @@ export const noteResigned = (gameId: string) => {
  * null when the seat log says they do not hold it. Moves before that index
  * belong to whoever sat there earlier and are not this player's to vouch for.
  */
-export const mySeatSince = (game: Game, memberId: string, seat: Seat): number | null => {
+const mySeatSince = (game: Game, memberId: string, seat: Seat): number | null => {
   let since: number | null = game.startedWith[seat].memberId === memberId ? 0 : null;
   for (const change of game.seatLog) {
     if (change.seat !== seat) continue;
@@ -144,7 +144,7 @@ export const verifyResult = (
 };
 
 /** The submit-match body for a result: the final occupants, the game id, and who sat where. */
-export const buildRatedBody = (result: GameResult, game: Game | null): RatedResultBody => {
+export const buildRatedBody = (result: GameResult, game: Game | null, clocks: Clocks | null = null): RatedResultBody => {
   const { X, O } = result.players;
   const body: RatedResultBody = {
     mode: 'pvp',
@@ -155,7 +155,14 @@ export const buildRatedBody = (result: GameResult, game: Game | null): RatedResu
     player2Uid: O.uid,
     player2Name: O.name,
     gameId: result.gameId,
+    moveCount: result.movesLength,
   };
+  // Both players' devices hold the same host clocks, so both send the same
+  // duration; submit-match refuses a pair of reports that disagree.
+  if (clocks) {
+    const { X, O, T } = clocks.elapsedBySeat;
+    body.durationMs = Math.round(X + O + T);
+  }
   if (game && game.id === result.gameId) {
     body.seatLog = {
       startedWith: { X: game.startedWith.X.uid, O: game.startedWith.O.uid },

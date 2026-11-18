@@ -1,8 +1,12 @@
 import React from 'react';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { useTheme } from '../theme/ThemeContext';
+import { pieceColor } from '../theme/types';
 import { formatReconnectDuration } from '../../shared/utils/formatDuration';
 import { useT } from '../i18n/language';
+import type { UserProfile } from '../auth/AuthContext';
+import { useIsOrca } from '../theme/uiStyle';
+import { MatchHeaderOrca } from './MatchHeader.orca';
 
 /**
  * One seat as the header draws it. The header does not know whether it is a
@@ -29,9 +33,13 @@ export interface SeatView {
   reconnectingSeconds?: number | null;
   /** The one thing to do with this seat: take it, or give it up. */
   action?: { label: string; onClick: () => void; tone?: 'primary' | 'secondary' };
+  /** Orca style only: rating shown on the seat card (RankBadge + ELO). */
+  elo?: number | null;
+  /** Orca style only: an unrated guest, so no rating is shown. */
+  isGuest?: boolean;
 }
 
-interface MatchHeaderProps {
+export interface MatchHeaderProps {
   /** Drawn left to right on a phone and top to bottom in the rail. */
   seats: SeatView[];
   /** Rounds won in this sitting, in the same order as the seats. */
@@ -40,6 +48,18 @@ interface MatchHeaderProps {
   announcement: string;
   /** The score in words, for screen readers. */
   scoreLabel: string;
+  /*
+   * Orca style only (PR 5's match sidebar). GameControls fills these in by
+   * cloning the header element; the Default header ignores them.
+   */
+  playerTimers?: Array<{ piece: 'X' | 'O' | 'T'; seconds: number; isTurn: boolean; moves: number }>;
+  myUser?: UserProfile | null;
+  opponent?: UserProfile | null;
+  isAiMode?: boolean;
+  role?: 'player' | 'viewer';
+  /** Buzzes the other player; given only to a seated player in a room. */
+  onNudgeOpponent?: () => void;
+  nudgeDisabled?: boolean;
 }
 
 /**
@@ -314,9 +334,9 @@ const Seat: React.FC<SeatProps> = ({
   );
 };
 
-export const MatchHeader: React.FC<MatchHeaderProps> = ({ seats, score, announcement, scoreLabel }) => {
+const MatchHeaderDefault: React.FC<MatchHeaderProps> = ({ seats, score, announcement, scoreLabel }) => {
   const { theme } = useTheme();
-  const colorOf = (piece: 'X' | 'O' | 'T') => (piece === 'X' ? theme.xColor : piece === 'T' ? '#7c3aed' : theme.oColor);
+  const colorOf = (piece: 'X' | 'O' | 'T') => pieceColor(theme, piece);
   const [first, second] = seats;
 
   if (seats.length === 3) {
@@ -363,9 +383,9 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({ seats, score, announce
           VS
         </div>
         <div className="flex shrink-0 items-center gap-1 font-mono text-sm font-bold tabular-nums text-subtle lg:gap-2.5 lg:text-2xl">
-          <span className="text-ink">{score[0]}</span>
+          <span className="text-ink">{score[0] ?? 0}</span>
           <span aria-hidden="true">-</span>
-          <span className="text-ink">{score[1]}</span>
+          <span className="text-ink">{score[1] ?? 0}</span>
           <span className="sr-only">{scoreLabel}</span>
         </div>
       </div>
@@ -380,3 +400,6 @@ export const MatchHeader: React.FC<MatchHeaderProps> = ({ seats, score, announce
     </div>
   );
 };
+
+export const MatchHeader: React.FC<MatchHeaderProps> = (props) =>
+  useIsOrca() ? <MatchHeaderOrca {...props} /> : <MatchHeaderDefault {...props} />;

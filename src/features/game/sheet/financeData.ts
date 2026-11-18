@@ -9,9 +9,9 @@ import { formatNumber } from './sheetStyle';
  * printed in full.
  */
 
-export type ReportTone = 'pos' | 'neg' | null;
+type ReportTone = 'pos' | 'neg' | null;
 
-export interface ReportCell {
+interface ReportCell {
   display: string;
   /** What the formula bar shows for this cell. */
   raw: string;
@@ -21,7 +21,7 @@ export interface ReportCell {
   value: number | null;
 }
 
-export interface ReportRow {
+interface ReportRow {
   bold: boolean;
   cells: ReportCell[];
 }

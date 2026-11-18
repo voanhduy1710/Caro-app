@@ -33,7 +33,7 @@ const applyToDocument = () => {
 applyToDocument();
 
 /** Read without subscribing, for code that runs outside a render. */
-export const getLanguage = () => language;
+const getLanguage = () => language;
 
 export const setLanguage = (next: Language) => {
   if (next === language) return;
@@ -59,7 +59,7 @@ export const useLanguage = () => useSyncExternalStore(subscribe, getLanguage, ge
 export type TranslateVars = Record<string, string | number>;
 
 /** Looks a string up in one language and fills its `{name}` placeholders. */
-export const translate = (lang: Language, key: StringKey, vars?: TranslateVars): string => {
+const translate = (lang: Language, key: StringKey, vars?: TranslateVars): string => {
   const text = STRINGS[lang][key] ?? STRINGS.en[key] ?? key;
   return vars ? text.replace(/\{(\w+)\}/g, (match, name: string) => (name in vars ? String(vars[name]) : match)) : text;
 };

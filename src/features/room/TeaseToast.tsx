@@ -3,6 +3,7 @@ import { TEASE_PHRASE } from './protocol';
 import type { Seat } from './protocol';
 import type { TeaseNotice } from './useRoom';
 import { useT } from '../i18n/language';
+import { useIsOrca } from '../theme/uiStyle';
 
 const VISIBLE_MS = 4_000;
 /** Long enough to reach the Take seat button without it vanishing under the thumb. */
@@ -18,6 +19,7 @@ interface TeaseToastProps {
 
 export const TeaseToast: React.FC<TeaseToastProps> = ({ notice, onDismiss, openSeat = null, onTakeSeat }) => {
   const t = useT();
+  const isOrca = useIsOrca();
   const hasAction = Boolean(openSeat && onTakeSeat);
 
   useEffect(() => {
@@ -33,10 +35,14 @@ export const TeaseToast: React.FC<TeaseToastProps> = ({ notice, onDismiss, openS
       // The key restarts the pop for a second tease that lands while the first is showing.
       key={notice.at}
       role="alert"
-      className="tease-toast animate-tease fixed top-20 z-[65] flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-lg border-2 border-danger bg-surface px-4 py-3 shadow-2xl"
+      className={
+        isOrca
+          ? 'tease-toast animate-tease fixed top-12 z-50 flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-lg border border-line-strong bg-surface px-3.5 py-2.5 shadow-e2'
+          : 'tease-toast animate-tease fixed top-20 z-[65] flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-lg border-2 border-danger bg-surface px-4 py-3 shadow-2xl'
+      }
     >
-      <span aria-hidden="true" className="text-3xl leading-none">😡</span>
-      <p className="min-w-0 text-sm font-semibold text-ink">
+      <span aria-hidden="true" className={isOrca ? 'select-none text-xl leading-none' : 'text-3xl leading-none'}>😡</span>
+      <p className={`min-w-0 font-semibold text-ink ${isOrca ? 'text-xs' : 'text-sm'}`}>
         <span className="text-danger">{notice.fromName}:</span> {TEASE_PHRASE}!
       </p>
       {openSeat && onTakeSeat && (
@@ -51,7 +57,12 @@ export const TeaseToast: React.FC<TeaseToastProps> = ({ notice, onDismiss, openS
           {t('room.takeSeatN', { seat: openSeat })}
         </button>
       )}
-      <button type="button" onClick={onDismiss} className="btn btn-ghost btn-sm shrink-0" aria-label={t('room.dismiss')}>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className={`btn btn-ghost btn-sm shrink-0${isOrca ? ' text-muted hover:text-ink' : ''}`}
+        aria-label={t('room.dismiss')}
+      >
         OK
       </button>
     </div>

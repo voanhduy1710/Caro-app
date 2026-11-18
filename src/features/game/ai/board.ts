@@ -2,9 +2,9 @@ import type { BoardMatrix } from '../../../shared/utils/gomokuLogic';
 import { BLOCK, FREE, OWN, SHAPE_TABLE, SPAN, Shape, cellValue } from './patterns';
 
 export type Stone = 1 | 2;
-export const EMPTY = 0;
+const EMPTY = 0;
 /** A cell nobody can use, such as the third player's stone in 3-player practice. */
-export const WALL = 3;
+const WALL = 3;
 export const opponentOf = (p: Stone): Stone => (p === 1 ? 2 : 1);
 
 const DIRS: ReadonlyArray<readonly [number, number]> = [[0, 1], [1, 0], [1, 1], [1, -1]];

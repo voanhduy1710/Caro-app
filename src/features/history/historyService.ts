@@ -1,24 +1,14 @@
 import { supabase, isSupabaseConfigured } from '../../config/supabase';
 import type { MatchRecord } from './types';
+import { SAFE_UID, isGuestUid } from '../../shared/constants';
 import { LOCAL_HISTORY_KEY, fetchPracticeHistory, syncPracticeHistory } from './practiceSync';
 
-export interface SaveMatchOutcome {
-  eloDeltaPlayer1: number;
-  eloDeltaPlayer2: number;
-}
-
 /**
- * Records a finished match.
- *
- * The write goes through the submit-match edge function, which recomputes the
- * ratings from the values already in the database. The client used to insert the
- * row and its own ELO numbers directly, so any player could award themselves any
- * rating they liked.
+ * Keeps a finished match in this device's history. It never touches ratings:
+ * a rated result goes through submitRatedResult, where the submit-match edge
+ * function recomputes the Elo from what is already in the database.
  */
-export const saveMatchRecord = async (
-  record: Omit<MatchRecord, 'id' | 'timestamp'>,
-  options: { localOnly?: boolean } = {}
-): Promise<SaveMatchOutcome | null> => {
+export const saveLocalMatchRecord = (record: Omit<MatchRecord, 'id' | 'timestamp'>): void => {
   const timestamp = Date.now();
   const fullRecord: MatchRecord = {
     ...record,
@@ -36,52 +26,10 @@ export const saveMatchRecord = async (
     console.warn('Failed to save match history to localStorage:', e);
   }
 
-  // Practice games have no second player and no rating at stake, so there is
-  // nothing for submit-match to verify. They are copied to the player's own
-  // practice table instead, which never touches ratings.
-  if (options.localOnly) {
-    if (record.mode === 'ai') void syncPracticeHistory(record.player1Uid);
-    return { eloDeltaPlayer1: 0, eloDeltaPlayer2: 0 };
-  }
-
-  if (!isSupabaseConfigured || !supabase) return null;
-
-  try {
-    const { data, error } = await supabase.functions.invoke('submit-match', {
-      body: {
-        mode: record.mode ?? 'pvp',
-        boardSize: record.boardSize,
-        winnerUid: record.winnerUid,
-        player1Uid: record.player1Uid,
-        player1Name: record.player1Name,
-        player2Uid: record.player2Uid,
-        player2Name: record.player2Name,
-        ...(record.gameId ? { gameId: record.gameId } : {}),
-        ...(record.seatLog !== undefined ? { seatLog: record.seatLog } : {}),
-      },
-    });
-
-    if (error) {
-      console.error('submit-match failed:', error.message);
-      return null;
-    }
-    if (data?.error) {
-      console.error('submit-match rejected the result:', data.error);
-      return null;
-    }
-
-    return {
-      eloDeltaPlayer1: data?.player1?.delta ?? 0,
-      eloDeltaPlayer2: data?.player2?.delta ?? 0,
-    };
-  } catch (err) {
-    console.error('submit-match request threw:', err);
-    return null;
-  }
+  // Practice games are also copied to the player's own practice table, which
+  // never touches ratings.
+  if (record.mode === 'ai') void syncPracticeHistory(record.player1Uid);
 };
-
-/** PostgREST filters are comma and dot delimited, so only these may be inlined. */
-const SAFE_UID = /^[A-Za-z0-9_-]{1,128}$/;
 
 /** Records stored on this device that belong to the player who is asking. */
 const readLocalHistory = (userUid: string): MatchRecord[] => {
@@ -101,7 +49,7 @@ export const fetchUserMatchHistory = async (userUid: string): Promise<MatchRecor
   const local = readLocalHistory(userUid);
 
   // Check Supabase if configured
-  if (isSupabaseConfigured && supabase && userUid && SAFE_UID.test(userUid) && !userUid.startsWith('guest_')) {
+  if (isSupabaseConfigured && supabase && userUid && SAFE_UID.test(userUid) && !isGuestUid(userUid)) {
     const sb = supabase;
     try {
       const [{ data, error }, remotePractice] = await Promise.all([
@@ -121,7 +69,8 @@ export const fetchUserMatchHistory = async (userUid: string): Promise<MatchRecor
           id: row.id,
           boardSize: row.board_size ?? 15,
           mode: row.mode ?? 'pvp',
-          timerConfig: 'Blitz (15s)',
+          // gomoku_matches does not store the timer; showing a guess would be wrong.
+          timerConfig: '',
           winnerUid: row.winner_uid,
           winnerName: row.winner_uid === row.player1_uid ? row.player1_name : (row.winner_uid === row.player2_uid ? row.player2_name : 'DRAW'),
           player1Uid: row.player1_uid,
@@ -177,10 +126,16 @@ export interface RatedResultBody {
   gameId: string;
   seatLog?: unknown;
   dispute?: boolean;
+  /** Moves played. submit-match refuses a rated game under its minimum. */
+  moveCount?: number;
+  /** Thinking time both sides spent, from the host's clocks; the same number on both devices. */
+  durationMs?: number;
 }
 
 export type RatedSubmitOutcome =
   | { status: 'saved'; deltas: { player1: number; player2: number } }
+  /** On record for history, but no rating: a per-pair daily limit was reached. */
+  | { status: 'unrated'; code: string }
   | { status: 'duplicate' }
   | { status: 'pending_claim'; confirmAfter: string | null }
   | { status: 'disputed' }
@@ -192,9 +147,11 @@ const PENDING_RATINGS_KEY = 'caro_pending_ratings';
 /** Long enough to outlive a closed laptop, short enough that nothing stale is replayed. */
 const PENDING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-interface PendingRatedResult {
+export interface PendingRatedResult {
   body: RatedResultBody;
   createdAt: number;
+  /** The signed-in player who queued it. Missing on entries written by older builds. */
+  uid?: string;
 }
 
 const pendingKey = (body: RatedResultBody) => `${body.gameId}:${body.dispute ? 'dispute' : 'result'}`;
@@ -217,9 +174,10 @@ const writePending = (entries: PendingRatedResult[]) => {
   }
 };
 
-const rememberPending = (body: RatedResultBody) => {
+const rememberPending = (body: RatedResultBody, uid: string | null) => {
   const key = pendingKey(body);
-  writePending([...readPending().filter((e) => pendingKey(e.body) !== key), { body, createdAt: Date.now() }]);
+  const entry: PendingRatedResult = uid ? { body, createdAt: Date.now(), uid } : { body, createdAt: Date.now() };
+  writePending([...readPending().filter((e) => pendingKey(e.body) !== key), entry]);
 };
 
 const forgetPending = (body: RatedResultBody) => {
@@ -227,10 +185,30 @@ const forgetPending = (body: RatedResultBody) => {
   writePending(readPending().filter((e) => pendingKey(e.body) !== key));
 };
 
-/** Signed out mid-flight: worth sending again once the player is back. */
-const worthKeeping = (outcome: RatedSubmitOutcome) =>
+/**
+ * Offline, or signed out mid-flight: worth sending again once the player is
+ * back. A `caller_would_gain` refusal (missing seat tickets) is not kept: the
+ * tickets for a finished game do not appear later, so a retry only repeats it.
+ */
+export const worthKeeping = (outcome: RatedSubmitOutcome) =>
   outcome.status === 'network' ||
-  (outcome.status === 'refused' && (outcome.code === 'http_401' || outcome.code === 'caller_would_gain'));
+  (outcome.status === 'refused' && (outcome.code === 'http_401' || outcome.code === 'seat_tickets_missing'));
+
+/**
+ * Whether a queued result may be sent with `uid`'s session. Entries from older
+ * builds carry no uid; they count as the player's only when the body names them.
+ */
+export const pendingBelongsTo = (entry: PendingRatedResult, uid: string) =>
+  entry.uid !== undefined ? entry.uid === uid : entry.body.player1Uid === uid || entry.body.player2Uid === uid;
+
+const sessionUid = async (): Promise<string | null> => {
+  if (!supabase) return null;
+  try {
+    return (await supabase.auth.getSession()).data.session?.user.id ?? null;
+  } catch {
+    return null;
+  }
+};
 
 const postRatedResult = async (body: RatedResultBody): Promise<RatedSubmitOutcome> => {
   if (!isSupabaseConfigured || !supabase) return { status: 'failed', why: 'not_configured' };
@@ -252,6 +230,7 @@ const postRatedResult = async (body: RatedResultBody): Promise<RatedSubmitOutcom
     if (data?.disputed) return { status: 'disputed' };
     if (data?.pending) return { status: 'pending_claim', confirmAfter: data.confirmAfter ?? null };
     if (data?.duplicate) return { status: 'duplicate' };
+    if (data?.ok && data.unrated) return { status: 'unrated', code: data.code || 'unrated' };
     if (data?.ok) {
       return { status: 'saved', deltas: { player1: data.player1?.delta ?? 0, player2: data.player2?.delta ?? 0 } };
     }
@@ -267,7 +246,9 @@ const postRatedResult = async (body: RatedResultBody): Promise<RatedSubmitOutcom
  * an accidental close costs nobody a rating, in either direction.
  */
 export const submitRatedResult = async (body: RatedResultBody): Promise<RatedSubmitOutcome> => {
-  rememberPending(body);
+  // The queue is shared by every account on this browser, so each entry is
+  // tagged with the session that will send it.
+  rememberPending(body, await sessionUid());
   const outcome = await postRatedResult(body);
   if (!worthKeeping(outcome)) forgetPending(body);
   return outcome;
@@ -275,14 +256,21 @@ export const submitRatedResult = async (body: RatedResultBody): Promise<RatedSub
 
 let resending: Promise<void> | null = null;
 
-/** Sends whatever an earlier session could not. Safe to call repeatedly. */
-export const resendPendingRatedResults = (): Promise<void> => {
+/**
+ * Sends whatever an earlier session of the signed-in player could not. Other
+ * accounts' entries stay queued for when they sign in again. Safe to call
+ * repeatedly; `uid` defaults to the current session's player.
+ */
+export const resendPendingRatedResults = (uid?: string): Promise<void> => {
   if (resending) return resending;
   resending = (async () => {
     const now = Date.now();
     const fresh = readPending().filter((e) => now - e.createdAt < PENDING_MAX_AGE_MS);
     writePending(fresh);
-    for (const entry of fresh) {
+    const current = await sessionUid();
+    // Posting with a different account's session would be refused and dropped.
+    if (!current || (uid && uid !== current)) return;
+    for (const entry of fresh.filter((e) => pendingBelongsTo(e, current))) {
       const outcome = await postRatedResult(entry.body);
       if (!worthKeeping(outcome)) forgetPending(entry.body);
     }

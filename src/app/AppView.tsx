@@ -11,11 +11,12 @@ import type { BoardCorner } from '../features/game/Board';
 import type { UserProfile } from '../features/auth/AuthContext';
 import { DEFAULT_ROOM_SETTINGS } from '../features/settings/types';
 import type { RoomSettings } from '../features/settings/types';
-import { createEmptyBoard, checkWin, isBoardFull } from '../shared/utils/gomokuLogic';
+import { createEmptyBoard, checkWin, isBoardFull, nextPiece } from '../shared/utils/gomokuLogic';
 import { forcedFourMoves } from '../shared/utils/forcedFour';
 import type { BoardMatrix } from '../shared/utils/gomokuLogic';
+import { AI_BOT_NAME, AI_BOT_UID } from '../shared/constants';
 import { useAiEngine } from '../features/game/useAiEngine';
-import { saveMatchRecord, resendPendingRatedResults } from '../features/history/historyService';
+import { saveLocalMatchRecord, resendPendingRatedResults } from '../features/history/historyService';
 import { syncPracticeHistory } from '../features/history/practiceSync';
 import { useRoom, readLastRoom, clearLastRoom } from '../features/room/useRoom';
 import type { LastRoom } from '../features/room/useRoom';
@@ -27,7 +28,7 @@ import { AppFeedback } from './AppFeedback';
 import { AppModalStack } from './AppModalStack';
 import { AppNavbar } from './AppNavbar';
 import { ActiveMatchStage } from './ActiveMatchStage';
-import { AI_BOARD_SIZE, aiThinkMs, canLetBotOpen, firstTurnFor, lmaoCornerFor, nextPracticePiece, settingsUpdateFor, sheetNoticeText } from './AppViewShared';
+import { AI_BOARD_SIZE, aiThinkMs, canLetBotOpen, firstTurnFor, lmaoCornerFor, settingsUpdateFor, sheetNoticeText } from './AppViewShared';
 import { setBotUrl, shouldAutoStartBot } from './botRoute';
 import type { MoveHistoryItem, PracticePiece } from './AppViewShared';
 import type { ConfirmSpec } from './AppViewShared';
@@ -39,6 +40,30 @@ import { usePairHost } from '../features/pairing/usePairHost';
 import type { PairSource } from '../features/pairing/usePairHost';
 import { isConfirmedRematch, rematchNeedsConfirm } from '../features/pairing/practiceSnapshot';
 import type { PracticeMatchViewProps, PracticeRematchOptions } from './PracticeMatchView';
+import { parseRoomCode } from '../features/room/protocol';
+import { useIsOrca } from '../features/theme/uiStyle';
+import { cn } from '../shared/ui/cn';
+import { OrcaTitlebar } from './shell/OrcaTitlebar';
+import { OrcaSidebar } from './shell/OrcaSidebar';
+import { MobileBottomTabs, MobileTopbar } from './shell/MobileChrome';
+import { OrcaWorkspace } from './shell/OrcaWorkspace';
+import { OrcaShellContext } from './shell/orcaShellContext';
+import type { OrcaShellValue } from './shell/orcaShellContext';
+import { isEditableTarget, useShellUiTheme } from './shell/useShellUiTheme';
+import { isWorkspacePage } from './shell/types';
+import type { SessionTabItem, WorkspaceSurface } from './shell/types';
+
+/*
+ * One component, two layouts. All game, room, pairing and Back-button logic
+ * below is shared; only the returned tree differs by app style (useIsOrca):
+ *  - Default: today's navbar + page (unchanged).
+ *  - Orca (PR 5): titlebar with workspace tabs, left sidebar, centre workbench,
+ *    right-pane slot, mobile top/bottom bars (src/app/shell/*).
+ * Both layouts render the same element types at the same tree positions down
+ * to <ActiveMatchStage>, so switching style, sidebar or tab never remounts
+ * the match or its <Board />. In Orca the match stays mounted (hidden) while
+ * another tab is in front.
+ */
 export const App: React.FC = () => {
   const t = useT();
   const { user, loading: authLoading, openProfileModal, refreshUserProfile, signInWithCredentials, createAccount } = useAuth();
@@ -49,7 +74,7 @@ export const App: React.FC = () => {
   const signedInUid = user && !user.isGuest ? user.uid : null;
   useEffect(() => {
     if (authLoading || !signedInUid) return;
-    void resendPendingRatedResults();
+    void resendPendingRatedResults(signedInUid);
     // Practice games played on this device, including ones from before they
     // were stored online, are copied to the player's account.
     void syncPracticeHistory(signedInUid);
@@ -166,6 +191,30 @@ export const App: React.FC = () => {
   /** Set while a Rejoin is in flight, so a room that has gone is described as closed. */
   const [rejoinCode, setRejoinCode] = useState<string | null>(null);
 
+  /* ------------------------ Orca shell (style only) ------------------------ */
+
+  const isOrca = useIsOrca();
+  const { isDark, toggleLightDark } = useShellUiTheme();
+  /** The Orca workspace tab in front. The Default layout ignores it. */
+  const [surface, setSurface] = useState<WorkspaceSurface>('lobby');
+  /** Where a Leaderboard / History / Settings tab returns to when closed. */
+  const [returnSurface, setReturnSurface] = useState<WorkspaceSurface>('lobby');
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1280 : true,
+  );
+  const [rightPaneTarget, setRightPaneTarget] = useState<HTMLElement | null>(null);
+  /** A room or a bot game is open: the one session the `match` tab shows. */
+  const sessionLive = roomActive || gameStatus === 'playing' || gameStatus === 'ended';
+  // A session that starts (from the lobby, the sidebar, a URL or a Rejoin) comes to the front.
+  const [sessionWasLive, setSessionWasLive] = useState(sessionLive);
+  if (sessionWasLive !== sessionLive) {
+    setSessionWasLive(sessionLive);
+    if (sessionLive) setSurface('match');
+  }
+  const effectiveSurface: WorkspaceSurface = surface === 'match' && !sessionLive ? 'lobby' : surface;
+  /** Orca only: the bot game's clocks stop while another tab is in front, as in PR 5. */
+  const practiceOffscreen = isOrca && effectiveSurface !== 'match';
+
   useEffect(() => {
     if (!roomActive) setLastRoom(readLastRoom());
   }, [roomActive]);
@@ -222,18 +271,18 @@ export const App: React.FC = () => {
   // Turn Countdown Timer Loop. The updater only subtracts; anything with a side
   // effect reacts to the resulting value, because a state updater must be pure.
   useEffect(() => {
-    if (gameStatus !== 'playing' || roomSettings.turnTimeSeconds === 0) return;
+    if (gameStatus !== 'playing' || practiceOffscreen || roomSettings.turnTimeSeconds === 0) return;
 
     const timer = setInterval(() => {
       setTurnTimeLeft((prev) => (prev <= 0 ? 0 : prev - 1));
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [gameStatus, currentTurn, roomSettings.turnTimeSeconds]);
+  }, [gameStatus, practiceOffscreen, currentTurn, roomSettings.turnTimeSeconds]);
 
   // Chess Clock Total Match Time Loop
   useEffect(() => {
-    if (gameStatus !== 'playing' || roomSettings.totalTimeMinutes === 0) return;
+    if (gameStatus !== 'playing' || practiceOffscreen || roomSettings.totalTimeMinutes === 0) return;
 
     const timer = setInterval(() => {
       const tick = (prev: number) => (prev <= 0 ? 0 : prev - 1);
@@ -242,29 +291,29 @@ export const App: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [gameStatus, currentTurn, roomSettings.totalTimeMinutes]);
+  }, [gameStatus, practiceOffscreen, currentTurn, roomSettings.totalTimeMinutes]);
 
   // Even unlimited games show each side's own thinking time in the board
   // toolbar. Unlike the optional total bank, these counters always run.
   useEffect(() => {
-    if (gameStatus !== 'playing') return;
+    if (gameStatus !== 'playing' || practiceOffscreen) return;
     const timer = setInterval(() => {
       if (currentTurn === 'X') setP1ElapsedTime((prev) => prev + 1);
       else if (currentTurn === 'O') setP2ElapsedTime((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(timer);
-  }, [gameStatus, currentTurn]);
+  }, [gameStatus, practiceOffscreen, currentTurn]);
 
   // Overall Match Elapsed Game Timer
   useEffect(() => {
-    if (gameStatus !== 'playing') return;
+    if (gameStatus !== 'playing' || practiceOffscreen) return;
 
     const timer = setInterval(() => {
       setElapsedGameTime((prev) => prev + 1);
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [gameStatus]);
+  }, [gameStatus, practiceOffscreen]);
 
   // Public room discovery answers over a broadcast channel, so an empty list
   // in the first moment means "not yet", not "none".
@@ -281,6 +330,11 @@ export const App: React.FC = () => {
   ) => {
     if (matchOverRef.current) return;
     matchOverRef.current = true;
+    // The clock can end the game while the bot is still thinking; its answer
+    // must not land on the finished board.
+    practiceGameGenerationRef.current += 1;
+    cancelAiMove();
+    setIsAiThinking(false);
 
     setGameStatus('ended');
     setWinningLine(line);
@@ -310,25 +364,24 @@ export const App: React.FC = () => {
       // Practice is still a game the player finished, so it belongs in their
       // history. It is stored for their account but never moves the rating.
       const iWon = winner === myPiece;
-      void saveMatchRecord(
+      saveLocalMatchRecord(
         {
           mode: 'ai',
           player1Uid: user.uid,
-          player2Uid: 'ai_bot',
+          player2Uid: AI_BOT_UID,
           player1Name: user.displayName,
-          player2Name: 'AI Bot',
-          winnerUid: winner === 'DRAW' ? 'DRAW' : iWon ? user.uid : 'ai_bot',
-          winnerName: winner === 'DRAW' ? 'DRAW' : iWon ? user.displayName : 'AI Bot',
+          player2Name: AI_BOT_NAME,
+          winnerUid: winner === 'DRAW' ? 'DRAW' : iWon ? user.uid : AI_BOT_UID,
+          winnerName: winner === 'DRAW' ? 'DRAW' : iWon ? user.displayName : AI_BOT_NAME,
           boardSize: AI_BOARD_SIZE,
           timerConfig: `${roomSettings.totalTimeMinutes}m / ${roomSettings.turnTimeSeconds}s`,
           eloDeltaPlayer1: 0,
           eloDeltaPlayer2: 0,
         },
-        { localOnly: true }
       );
-      setRatingNote('Practice game. Saved to your history; rating unchanged.');
+      setRatingNote(t('game.practiceSavedNote'));
     }
-  }, [myPiece, playWinSound, roomSettings, user]);
+  }, [cancelAiMove, myPiece, playWinSound, roomSettings, t, user]);
 
   // Clock expiry reacts to the value the timers produced, never from inside a
   const prevTurnTimeRef = useRef(turnTimeLeft);
@@ -339,7 +392,7 @@ export const App: React.FC = () => {
     if (gameStatus !== 'playing' || roomSettings.turnTimeSeconds === 0) return;
     if (turnTimeLeft === 5 && previous > 5) playTimerWarningSound();
     if (turnTimeLeft <= 0 && previous > 0) {
-      handleGameOver(nextPracticePiece(currentTurn, roomSettings.playerMode === 'oneVsOneVsOne'), null, 'turn_timeout');
+      handleGameOver(nextPiece(currentTurn, roomSettings.playerMode === 'oneVsOneVsOne'), null, 'turn_timeout');
     }
   }, [turnTimeLeft, gameStatus, roomSettings.turnTimeSeconds, currentTurn, playTimerWarningSound, handleGameOver]);
 
@@ -371,7 +424,7 @@ export const App: React.FC = () => {
     if (targetHistory.length > 0) {
       const last = targetHistory[targetHistory.length - 1];
       setLastMove([last.row, last.col]);
-      setCurrentTurn(nextPracticePiece(last.piece, roomSettings.playerMode === 'oneVsOneVsOne'));
+      setCurrentTurn(nextPiece(last.piece, roomSettings.playerMode === 'oneVsOneVsOne'));
     } else {
       setLastMove(null);
       setCurrentTurn(firstTurnFor(botOpensRef.current));
@@ -429,7 +482,7 @@ export const App: React.FC = () => {
     } else if (isBoardFull(nextBoard)) {
       handleGameOver('DRAW', null, 'board_full');
     } else {
-      setCurrentTurn(nextPracticePiece(aiPiece, roomSettings.playerMode === 'oneVsOneVsOne'));
+      setCurrentTurn(nextPiece(aiPiece, roomSettings.playerMode === 'oneVsOneVsOne'));
       setTurnTimeLeft(roomSettings.turnTimeSeconds);
     }
   }, [roomSettings.turnTimeSeconds, roomSettings.playerMode, playMoveSound, handleGameOver, requestAiMove]);
@@ -465,7 +518,7 @@ export const App: React.FC = () => {
     lastMoveTimestampRef.current = Date.now();
     playMoveSound();
 
-    const nextTurn = nextPracticePiece(myPiece, roomSettings.playerMode === 'oneVsOneVsOne');
+    const nextTurn = nextPiece(myPiece, roomSettings.playerMode === 'oneVsOneVsOne');
     setCurrentTurn(nextTurn);
     setTurnTimeLeft(roomSettings.turnTimeSeconds);
 
@@ -593,24 +646,81 @@ export const App: React.FC = () => {
     });
   }, [roomActive, room, gameStatus, goHome, t]);
 
+  /* --------------------------- Orca workspace tabs ------------------------- */
+
+  const handleSelectSurface = useCallback((next: WorkspaceSurface) => {
+    setSurface((prev) => {
+      // A page opened from another page still returns to where the first one was opened.
+      if (isWorkspacePage(next) && !isWorkspacePage(prev)) setReturnSurface(prev);
+      return next;
+    });
+  }, []);
+
+  /** Closes a Leaderboard / History / Settings tab, back to the tab it was opened from. */
+  const closeWorkspacePage = useCallback(() => {
+    setSurface(returnSurface === 'match' && !sessionLive ? 'lobby' : returnSurface);
+  }, [returnSurface, sessionLive]);
+
+  const toggleSidebar = useCallback(() => setSidebarOpen((open) => !open), []);
+
+  /**
+   * Back. In Orca a page tab closes first (PR 5); otherwise, and always in
+   * the Default style, it is the match's own exit flow.
+   */
+  const requestBack = () => {
+    if (isOrca && isWorkspacePage(effectiveSurface)) {
+      closeWorkspacePage();
+      return;
+    }
+    requestExitMatch();
+  };
+
   // Keep the ref so the history listener below never has to re-subscribe.
-  const requestExitMatchRef = useRef(requestExitMatch);
+  const requestExitMatchRef = useRef(requestBack);
   useEffect(() => {
-    requestExitMatchRef.current = requestExitMatch;
+    requestExitMatchRef.current = requestBack;
   });
 
   const practiceInMatch = !roomActive && (gameStatus === 'playing' || gameStatus === 'ended');
   const guardBack = (!roomActive && gameStatus === 'playing') || roomActive;
 
+  // The guard is one extra history entry on top. It is taken off again when the
+  // guard ends, or every match would leave one more Back press behind. Removal
+  // waits a tick so a StrictMode remount (or a guard that turns straight back
+  // on) reuses the entry instead of popping and pushing it.
+  const guardRemovalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const removingGuardRef = useRef(false);
   useEffect(() => {
     if (!guardBack) return;
-    window.history.pushState({ caroMatch: true }, '');
+    if (guardRemovalRef.current) {
+      clearTimeout(guardRemovalRef.current);
+      guardRemovalRef.current = null;
+    }
+    if (!window.history.state?.caroMatch) window.history.pushState({ caroMatch: true }, '');
     const onPop = () => {
+      if (removingGuardRef.current) return;
       window.history.pushState({ caroMatch: true }, '');
       requestExitMatchRef.current();
     };
     window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      guardRemovalRef.current = setTimeout(() => {
+        guardRemovalRef.current = null;
+        if (!window.history.state?.caroMatch) return;
+        // The address may have changed on the guard entry (/bot → /, a room
+        // code cleared); the entry underneath still has the old one.
+        const url = window.location.href;
+        removingGuardRef.current = true;
+        const onBack = () => {
+          window.removeEventListener('popstate', onBack);
+          removingGuardRef.current = false;
+          if (window.location.href !== url) window.history.replaceState(window.history.state, '', url);
+        };
+        window.addEventListener('popstate', onBack);
+        window.history.back();
+      }, 0);
+    };
   }, [guardBack]);
 
   /* -------------------------------- rooms -------------------------------- */
@@ -671,7 +781,8 @@ export const App: React.FC = () => {
 
   const roomInMatch = roomActive && room.state !== null && room.state.phase !== 'waiting';
   const inMatch = practiceInMatch || roomInMatch;
-  const sheetDisguise = inMatch && theme.boardTheme === 'spreadsheet' && disguiseOn;
+  // In Orca the disguise is up only while the match tab is in front (PR 5).
+  const sheetDisguise = inMatch && theme.boardTheme === 'spreadsheet' && disguiseOn && (!isOrca || effectiveSurface === 'match');
 
   const roomClosedDialog = room.closedReason === 'host_left' || room.closedReason === 'host_lost';
   const homeError = roomActive || roomClosedDialog
@@ -701,34 +812,324 @@ export const App: React.FC = () => {
     [hasPairSource, signedIn, pair.phoneConnected, pair.open],
   );
 
+  /* ------------------------ Orca shell: actions & tabs ---------------------- */
+
+  /**
+   * One room or match at a time. The Orca lobby and sidebar stay reachable
+   * during a game, so starting something else asks first and then leaves the
+   * current room (or drops the practice board). The Default layout never
+   * shows them mid-game and does not go through here.
+   */
+  const leaveSessionThen = (proceed: () => void) => {
+    if (roomActive) {
+      setConfirmSpec({
+        title: t('home.switchSessionTitle'),
+        body: room.isHost ? t('home.switchSessionBodyHost') : t('home.switchSessionBodyRoom'),
+        confirmLabel: t('home.switchSessionConfirm'),
+        tone: 'danger',
+        onConfirm: () => {
+          room.leaveRoom();
+          proceed();
+        },
+      });
+      return;
+    }
+    if (gameStatus === 'playing' && moveHistory.length > 0) {
+      setConfirmSpec({
+        title: t('home.switchSessionTitle'),
+        body: t('home.switchSessionBodyBot'),
+        confirmLabel: t('home.switchSessionConfirm'),
+        onConfirm: proceed,
+      });
+      return;
+    }
+    proceed();
+  };
+
+  /** Lobby "Play vs Bot": a bot game already open is brought back rather than replaced (PR 5). */
+  const orcaStartBot = () => {
+    if (practiceInMatch) {
+      setSurface('match');
+      return;
+    }
+    leaveSessionThen(handleStartAiMode);
+  };
+
+  /** Sidebar "Play vs Bot": on the bot tab it is a new game, elsewhere it shows the open one (PR 5). */
+  const orcaSidebarBot = () => {
+    if (practiceInMatch) {
+      if (effectiveSurface === 'match') handleRematchButtonClick();
+      else setSurface('match');
+      return;
+    }
+    leaveSessionThen(handleStartAiMode);
+  };
+
+  const orcaCreateRoom = (isPublic: boolean, mode: RoomMode = 'ranked') =>
+    leaveSessionThen(() => handleCreateRoom(isPublic, mode));
+
+  const orcaJoinRoom = (code: string) => {
+    // Already in that room: just show it.
+    const parsed = parseRoomCode(code);
+    if (roomActive && parsed && parsed === (room.state?.roomId ?? room.roomId)) {
+      setSurface('match');
+      return;
+    }
+    leaveSessionThen(() => handleJoinRoom(code));
+  };
+
+  const orcaRejoin = () => leaveSessionThen(handleRejoin);
+
+  const roomIsChat = room.state?.mode === 'chat';
+  /** The match tab holds a game in progress (not a waiting room or a chat room). */
+  const orcaInMatch = practiceInMatch || (roomInMatch && !roomIsChat);
+
+  // Unread chat for the match tab, counted while another tab is in front.
+  const [seenChat, setSeenChat] = useState(0);
+  if (isOrca && effectiveSurface === 'match' && seenChat !== room.chatMessages.length) {
+    setSeenChat(room.chatMessages.length);
+  }
+  const unreadChat =
+    isOrca && effectiveSurface !== 'match'
+      ? room.chatMessages
+          .slice(Math.min(seenChat, room.chatMessages.length))
+          .filter((message) => !message.system && message.senderId !== room.memberId).length
+      : 0;
+
+  const roomTab = (): SessionTabItem => {
+    const code = room.state?.roomId ?? room.roomId;
+    const isMyTurn = Boolean(room.state?.phase === 'playing' && room.mySeat && room.state.game?.turn === room.mySeat);
+    const members = room.state?.members.length ?? 1;
+    let subLabel: string;
+    if (room.status === 'opening' || room.status === 'joining') subLabel = t('home.tabConnecting');
+    else if (roomIsChat) subLabel = t('home.tabChatMembers', { n: members });
+    else if (roomPhase === 'playing') subLabel = isMyTurn ? t('game.yourTurn') : t('game.opponentTurn');
+    else if (roomPhase === 'ended') subLabel = t('home.statusFinished');
+    else subLabel = members === 1 ? t('home.tabOneMember') : t('home.tabMembers', { n: members });
+    return {
+      kind: roomIsChat ? 'chat' : 'room',
+      label: code ? t(roomIsChat ? 'home.tabChat' : 'home.tabRoom', { code }) : t('home.tabMatch'),
+      subLabel,
+      roomCode: code,
+      isMyTurn,
+      unreadCount: unreadChat,
+    };
+  };
+
+  const botTab = (): SessionTabItem => ({
+    kind: 'bot',
+    label: t('home.tabBotBoard', { size: AI_BOARD_SIZE }),
+    subLabel:
+      gameStatus === 'playing'
+        ? currentTurn === myPiece
+          ? t('game.yourTurn')
+          : t('game.thinking')
+        : t('home.statusFinished'),
+    roomCode: null,
+    isMyTurn: gameStatus === 'playing' && currentTurn === myPiece,
+    unreadCount: 0,
+  });
+
+  const sessionTab: SessionTabItem | null = !isOrca ? null : roomActive ? roomTab() : practiceInMatch ? botTab() : null;
+
+  // Ctrl+B toggles the Orca sidebar, never while typing or under the disguise.
+  useEffect(() => {
+    if (!isOrca || sheetDisguise) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      if (event.key.toLowerCase() !== 'b' || isEditableTarget(event.target)) return;
+      event.preventDefault();
+      setSidebarOpen((open) => !open);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOrca, sheetDisguise]);
+
+  // Switching style keeps the screen the player was on: a Default modal
+  // becomes the Orca tab of the same name, and back.
+  const [styleWas, setStyleWas] = useState(isOrca);
+  if (styleWas !== isOrca) {
+    setStyleWas(isOrca);
+    if (isOrca) {
+      const page: WorkspaceSurface | null = settingsAndThemeOpen
+        ? 'settings'
+        : leaderboardOpen
+        ? 'leaderboard'
+        : historyOpen
+        ? 'history'
+        : null;
+      setSettingsAndThemeOpen(false);
+      setLeaderboardOpen(false);
+      setHistoryOpen(false);
+      setReturnSurface(sessionLive ? 'match' : 'lobby');
+      setSurface(page ?? (sessionLive ? 'match' : 'lobby'));
+    } else {
+      if (effectiveSurface === 'settings') setSettingsAndThemeOpen(true);
+      if (effectiveSurface === 'leaderboard') setLeaderboardOpen(true);
+      if (effectiveSurface === 'history') setHistoryOpen(true);
+      setSurface(sessionLive ? 'match' : 'lobby');
+    }
+  }
+
+  const shellValue = useMemo<OrcaShellValue>(
+    () => ({
+      surface: effectiveSurface,
+      matchVisible: effectiveSurface === 'match',
+      sidebarOpen,
+      toggleSidebar,
+      rightPaneTarget,
+    }),
+    [effectiveSurface, sidebarOpen, toggleSidebar, rightPaneTarget],
+  );
+
+  // Settings act on the room when one is open, on the bot game during practice, else on new games.
+  const settingsTarget = {
+    settings: roomActive && room.state ? room.state.settings : isAiMode ? practiceSettings : roomSettings,
+    onUpdateSettings: (next: RoomSettings) => {
+      if (roomActive) room.updateSettings(next);
+      else setRoomSettings(settingsUpdateFor(roomSettings, next, isAiMode));
+    },
+    isHost: !roomActive || room.isHost,
+    gameStatus: roomActive
+      ? roomPhase === 'waiting' || roomPhase === 'ended'
+        ? ('lobby' as const)
+        : ('playing' as const)
+      : gameStatus,
+    myPiece: roomActive ? (room.mySeat ?? undefined) : myPiece,
+  };
+
+  const playNowFromHistory = () => {
+    setHistoryOpen(false);
+    if (roomActive) {
+      setConfirmSpec({ title: t('home.leaveRoomBotTitle'), body: room.isHost ? t('home.leaveRoomBotBodyHost') : t('home.leaveRoomBotBodyGuest'), confirmLabel: t('home.leaveRoomBotConfirm'), tone: 'danger', onConfirm: handleStartAiMode });
+    } else handleStartAiMode();
+  };
+
+  // Orca chrome hides under the Spreadsheet disguise, and on a phone while a game is in front.
+  const orcaChrome = isOrca && !sheetDisguise;
+  const showMobileTopbar = orcaChrome && !(effectiveSurface === 'match' && orcaInMatch);
+  const showMobileBottomTabs = orcaChrome && effectiveSurface !== 'match';
+  const matchStageClass = !isOrca
+    ? 'contents'
+    : effectiveSurface === 'match' && sessionLive
+    ? cn(
+        'flex flex-1 min-h-0 w-full flex-col',
+        sheetDisguise && 'h-[100dvh]',
+        roomActive && !roomInMatch && !roomIsChat ? 'scrollbar-orca overflow-y-auto' : 'overflow-hidden',
+      )
+    : 'hidden';
+
+  // Same element types at the same positions in both styles, down to
+  // <ActiveMatchStage>: a style switch must never remount the match.
   return (
-    <div className="min-h-[100dvh] flex flex-col justify-between bg-surface-2 text-ink selection:bg-accent selection:text-accent-fg">
-      <AppNavbar inMatch={inMatch} onLeaderboard={() => setLeaderboardOpen(true)} onHistory={() => setHistoryOpen(true)} onSettings={() => setSettingsAndThemeOpen(true)} onHome={requestExitMatch} />
-      <main
-        className={`flex-1 w-full mx-auto flex flex-col ${
-          inMatch
-            ? 'max-w-[1760px] p-0 lg:px-6 lg:py-4'
-            : 'max-w-7xl p-4 pt-8 sm:p-6 sm:pt-8 items-center justify-start'
-        }`}
-      >
-        {gameStatus === 'lobby' && !roomActive && (
-          <div className="home-lobby w-full max-w-6xl">
-            <HomeLobbyMeta user={user} error={homeError} onDismissError={room.reset} lastRoom={lastRoom} onRejoin={handleRejoin} onDismissLast={() => { clearLastRoom(); setLastRoom(null); }} settings={roomSettings} onOpenRules={() => setSettingsAndThemeOpen(true)} />
-            <HomePlayActions {...{ isRoomPublic, setIsRoomPublic, onStartBot: handleStartAiMode, onCreate: handleCreateRoom, inputRoomCode, setInputRoomCode, onJoin: handleJoinRoom }} />
-            <PublicRoomList rooms={availableRooms} scanDone={roomScanDone} onJoin={handleJoinRoom} />
-          </div>
+    <OrcaShellContext.Provider value={isOrca ? shellValue : null}>
+    <div
+      className={
+        isOrca
+          ? 'flex h-[100dvh] min-h-[100dvh] w-full flex-col overflow-hidden bg-bg text-ink selection:bg-accent selection:text-accent-fg'
+          : 'min-h-[100dvh] flex flex-col justify-between bg-surface-2 text-ink selection:bg-accent selection:text-accent-fg'
+      }
+    >
+      {isOrca ? (
+        orcaChrome && (
+          <OrcaTitlebar
+            activeSurface={effectiveSurface}
+            onSelectSurface={handleSelectSurface}
+            sessionTab={sessionTab}
+            onCloseSession={requestExitMatch}
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={toggleSidebar}
+            inMatch={orcaInMatch}
+            pairingValue={pairingValue}
+            isDark={isDark}
+            onToggleTheme={toggleLightDark}
+          />
+        )
+      ) : (
+        <AppNavbar inMatch={inMatch} onLeaderboard={() => setLeaderboardOpen(true)} onHistory={() => setHistoryOpen(true)} onSettings={() => setSettingsAndThemeOpen(true)} onHome={requestExitMatch} />
+      )}
+      {showMobileTopbar && (
+        <MobileTopbar
+          activeSurface={effectiveSurface}
+          onSelectSurface={handleSelectSurface}
+          sessionTab={sessionTab}
+          onCloseSession={requestExitMatch}
+          isDark={isDark}
+          onToggleTheme={toggleLightDark}
+        />
+      )}
+      {/* Orca: sidebar | workbench | right-pane slot. Default: no box at all. */}
+      <div className={isOrca ? 'flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden' : 'contents'}>
+        {orcaChrome && (
+          <OrcaSidebar
+            open={sidebarOpen}
+            activeSurface={effectiveSurface}
+            onSelectSurface={handleSelectSurface}
+            sessionTab={sessionTab}
+            onCloseSession={requestExitMatch}
+            onOpenBotTab={orcaSidebarBot}
+            onOpenRoomTab={orcaCreateRoom}
+            onJoinRoomTab={orcaJoinRoom}
+            availableRooms={availableRooms}
+          />
         )}
+        <main
+          className={
+            isOrca
+              ? cn('relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', sheetDisguise ? 'bg-bg' : 'bg-editor')
+              : `flex-1 w-full mx-auto flex flex-col ${
+                  inMatch
+                    ? 'max-w-[1760px] p-0 lg:px-6 lg:py-4'
+                    : 'max-w-7xl p-4 pt-8 sm:p-6 sm:pt-8 items-center justify-start'
+                }`
+          }
+        >
+          {isOrca ? (
+            !sheetDisguise &&
+            effectiveSurface !== 'match' && (
+              <OrcaWorkspace
+                surface={effectiveSurface}
+                lobby={
+                  <>
+                    <HomeLobbyMeta user={user} error={homeError} onDismissError={room.reset} lastRoom={lastRoom} onRejoin={orcaRejoin} onDismissLast={() => { clearLastRoom(); setLastRoom(null); }} settings={roomSettings} onOpenRules={() => handleSelectSurface('settings')} />
+                    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(340px,400px)]">
+                      <HomePlayActions {...{ isRoomPublic, setIsRoomPublic, onStartBot: orcaStartBot, onCreate: orcaCreateRoom, inputRoomCode, setInputRoomCode, onJoin: orcaJoinRoom }} />
+                      <PublicRoomList rooms={availableRooms} scanDone={roomScanDone} onJoin={orcaJoinRoom} />
+                    </div>
+                  </>
+                }
+                onClosePage={closeWorkspacePage}
+                onSelectPlayer={setSelectedOpponentProfile}
+                onPlayNow={orcaStartBot}
+                settingsProps={settingsTarget}
+              />
+            )
+          ) : (
+            gameStatus === 'lobby' && !roomActive && (
+              <div className="home-lobby w-full max-w-6xl">
+                <HomeLobbyMeta user={user} error={homeError} onDismissError={room.reset} lastRoom={lastRoom} onRejoin={handleRejoin} onDismissLast={() => { clearLastRoom(); setLastRoom(null); }} settings={roomSettings} onOpenRules={() => setSettingsAndThemeOpen(true)} />
+                <HomePlayActions {...{ isRoomPublic, setIsRoomPublic, onStartBot: handleStartAiMode, onCreate: handleCreateRoom, inputRoomCode, setInputRoomCode, onJoin: handleJoinRoom }} />
+                <PublicRoomList rooms={availableRooms} scanDone={roomScanDone} onJoin={handleJoinRoom} />
+              </div>
+            )
+          )}
 
-        <PairingContext.Provider value={pairingValue}>
-          <ActiveMatchStage roomActive={roomActive} room={room} user={user} onRules={() => setSettingsAndThemeOpen(true)} onMyProfile={openProfileModal} onOpponent={setSelectedOpponentProfile} exitRef={roomExitRef} practice={practiceProps} />
-        </PairingContext.Provider>
+          <PairingContext.Provider value={pairingValue}>
+            {/* Orca: the match tab's stage, kept mounted (hidden) behind other tabs. Default: no box. */}
+            <div className={matchStageClass}>
+              <ActiveMatchStage roomActive={roomActive} room={room} user={user} onRules={() => setSettingsAndThemeOpen(true)} onMyProfile={openProfileModal} onOpponent={setSelectedOpponentProfile} exitRef={roomExitRef} practice={practiceProps} />
+            </div>
+          </PairingContext.Provider>
+        </main>
+        {/* Orca right-pane slot (see OrcaShellContext): empty and box-less until a screen portals into it. */}
+        {isOrca && <div ref={setRightPaneTarget} className="contents" data-orca-right-pane="" />}
+      </div>
+      {showMobileBottomTabs && <MobileBottomTabs activeSurface={effectiveSurface} onSelectSurface={handleSelectSurface} />}
 
-      </main>
-
-      <AppFeedback sheetDisguise={sheetDisguise} notice={notice}roomClosed={roomClosedDialog} roomError={room.error} onResetRoom={room.reset} confirm={confirmSpec} onDismissConfirm={() => setConfirmSpec(null)} />
+      <AppFeedback sheetDisguise={sheetDisguise} notice={notice} roomClosed={roomClosedDialog} roomError={room.error} onResetRoom={room.reset} confirm={confirmSpec} onDismissConfirm={() => setConfirmSpec(null)} />
       <PairMobileModal isOpen={pair.modalOpen} link={pair.link} secondsLeft={pair.secondsLeft} phoneConnected={pair.phoneConnected} onClose={pair.close} onUnpair={pair.unpair} />
-      <AppModalStack settingsOpen={settingsAndThemeOpen} onCloseSettings={() => setSettingsAndThemeOpen(false)} settings={roomActive && room.state ? room.state.settings : isAiMode ? practiceSettings : roomSettings} onUpdateSettings={(next) => { if (roomActive) room.updateSettings(next); else setRoomSettings(settingsUpdateFor(roomSettings, next, isAiMode)); }} isHost={!roomActive || room.isHost} gameStatus={roomActive ? (roomPhase === 'waiting' || roomPhase === 'ended' ? 'lobby' : 'playing') : gameStatus} myPiece={roomActive ? (room.mySeat ?? undefined) : myPiece} leaderboardOpen={leaderboardOpen} onCloseLeaderboard={() => setLeaderboardOpen(false)} historyOpen={historyOpen} onCloseHistory={() => setHistoryOpen(false)} onSelectOpponent={setSelectedOpponentProfile} opponent={selectedOpponentProfile} onPlayNow={() => { setHistoryOpen(false); if (roomActive) { setConfirmSpec({ title: t('home.leaveRoomBotTitle'), body: room.isHost ? t('home.leaveRoomBotBodyHost') : t('home.leaveRoomBotBodyGuest'), confirmLabel: t('home.leaveRoomBotConfirm'), tone: 'danger', onConfirm: handleStartAiMode }); } else handleStartAiMode(); }} confirmRoomExit={setConfirmSpec} />
-
+      <AppModalStack settingsOpen={settingsAndThemeOpen} onCloseSettings={() => setSettingsAndThemeOpen(false)} {...settingsTarget} leaderboardOpen={leaderboardOpen} onCloseLeaderboard={() => setLeaderboardOpen(false)} historyOpen={historyOpen} onCloseHistory={() => setHistoryOpen(false)} onSelectOpponent={setSelectedOpponentProfile} opponent={selectedOpponentProfile} onPlayNow={playNowFromHistory} confirmRoomExit={setConfirmSpec} />
     </div>
+    </OrcaShellContext.Provider>
   );
 };

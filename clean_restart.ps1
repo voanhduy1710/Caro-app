@@ -34,7 +34,7 @@ do {
 } while ((Get-Date) -lt $deadline)
 
 if ($listener) {
-    Write-Host "  Warning: Port 5175 is still in use." -ForegroundColor Amber
+    Write-Host "  Warning: Port 5175 is still in use." -ForegroundColor Yellow
 } else {
     Write-Host "  Port 5175 is confirmed free." -ForegroundColor Green
 }

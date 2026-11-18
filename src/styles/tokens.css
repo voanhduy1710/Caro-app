@@ -1,12 +1,7 @@
 /* =============================================================================
    Design tokens - Arcade system
 
-   Two brand colours whose roles never swap:
-     BLUE   is interactive. Buttons, links, focus rings, selected states.
-     ORANGE is emphasis. Wordmark, display headings, the winner moment.
-
-   Orange is never a button background and never carries body-size text:
-   #f7931e is 2.30:1 on white. Small orange text uses --ui-brand-text (5.85:1).
+   BLUE is interactive. Buttons, links, focus rings, selected states.
    ========================================================================== */
 
 /* --- Self-hosted variable fonts -------------------------------------------
@@ -150,15 +145,6 @@
   --ui-accent-ring: rgb(15 124 191 / 0.4);
   --ui-accent-shadow: #08527f;
 
-  /* Wordmark orange. Display type and celebration only. */
-  --ui-brand: #f7931e;
-  --ui-brand-fg: #3a1a00;     /*  6.89:1 on --ui-brand */
-  /* Deliberately unused so far, and kept anyway: it is the only sanctioned way
-     to set orange type, and without it the next caller reaches for --ui-brand
-     at 2.30:1. Tailwind emits a utility only where one is used, so an unspent
-     vocabulary entry costs nothing in the build. */
-  --ui-brand-text: #a84800;   /*  5.85:1 on white, safe at body size */
-
   /* Inverse surface, for toasts and high-emphasis pills that need to sit
      against the page rather than in it. */
   --ui-inverse: #0d2b45;
@@ -191,6 +177,18 @@
   --ui-shadow: 0 4px 0 var(--ui-lift), 0 6px 16px -8px rgb(13 43 69 / 0.25);
   --ui-shadow-lg: 0 8px 0 var(--ui-lift), 0 24px 48px -16px rgb(13 43 69 / 0.35);
   --ui-scrim: rgb(13 43 69 / 0.55);
+
+  /* Orca board: a neutral code-editor canvas. Deliberately off the app's blue
+     palette so it reads as an IDE pane, but it still swaps with light/dark. */
+  --board-code-bg: #fcfcfc;
+  --board-code-gutter: #f5f5f5;
+  --board-code-frame: #d4d4d4;
+  --board-code-line: rgb(10 10 10 / 0.08);
+  --board-code-line-major: rgb(10 10 10 / 0.18);
+  --board-code-hover: rgb(9 105 218 / 0.08);
+  --board-code-crosshair: rgb(10 10 10 / 0.03);
+  --board-code-text: #6b6b6b;         /*  4.90:1 on the gutter */
+  --board-code-text-active: #0a0a0a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -220,10 +218,6 @@
     --ui-accent-ring: rgb(79 184 236 / 0.5);
     --ui-accent-shadow: #0c5c8a;
 
-    --ui-brand: #ffa53d;        /*  8.30:1 */
-    --ui-brand-fg: #3a1a00;     /*  8.06:1 on --ui-brand */
-    --ui-brand-text: #ffa53d;
-
     --ui-inverse: #eaf4fc;
     --ui-inverse-fg: #0d2b45;
     --ui-inverse-shadow: #9db9d1;
@@ -246,6 +240,16 @@
     --ui-shadow: 0 4px 0 var(--ui-lift), 0 6px 16px -8px rgb(0 0 0 / 0.6);
     --ui-shadow-lg: 0 8px 0 var(--ui-lift), 0 24px 48px -16px rgb(0 0 0 / 0.75);
     --ui-scrim: rgb(4 10 20 / 0.7);
+
+    --board-code-bg: #161618;
+    --board-code-gutter: #121214;
+    --board-code-frame: rgb(255 255 255 / 0.15);
+    --board-code-line: rgb(255 255 255 / 0.075);
+    --board-code-line-major: rgb(255 255 255 / 0.17);
+    --board-code-hover: rgb(68 147 248 / 0.12);
+    --board-code-crosshair: rgb(255 255 255 / 0.03);
+    --board-code-text: #8f8f8f;        /*  5.80:1 on the gutter */
+    --board-code-text-active: #f0f0f0;
   }
 }
 
@@ -271,10 +275,6 @@
   --ui-accent-ring: rgb(79 184 236 / 0.5);
   --ui-accent-shadow: #0c5c8a;
 
-  --ui-brand: #ffa53d;
-  --ui-brand-fg: #3a1a00;
-  --ui-brand-text: #ffa53d;
-
   --ui-inverse: #eaf4fc;
   --ui-inverse-fg: #0d2b45;
 
@@ -294,6 +294,16 @@
   --ui-shadow: 0 4px 0 var(--ui-lift), 0 6px 16px -8px rgb(0 0 0 / 0.6);
   --ui-shadow-lg: 0 8px 0 var(--ui-lift), 0 24px 48px -16px rgb(0 0 0 / 0.75);
   --ui-scrim: rgb(4 10 20 / 0.7);
+
+  --board-code-bg: #161618;
+  --board-code-gutter: #121214;
+  --board-code-frame: rgb(255 255 255 / 0.15);
+  --board-code-line: rgb(255 255 255 / 0.075);
+  --board-code-line-major: rgb(255 255 255 / 0.17);
+  --board-code-hover: rgb(68 147 248 / 0.12);
+  --board-code-crosshair: rgb(255 255 255 / 0.03);
+  --board-code-text: #8f8f8f;        /*  5.80:1 on the gutter */
+  --board-code-text-active: #f0f0f0;
 }
 
 /* --- Tailwind theme --------------------------------------------------------
@@ -323,10 +333,6 @@
   --color-accent-text: var(--ui-accent-text);
   --color-accent-soft: var(--ui-accent-soft);
 
-  --color-brand: var(--ui-brand);
-  --color-brand-fg: var(--ui-brand-fg);
-  --color-brand-text: var(--ui-brand-text);
-
   --color-inverse: var(--ui-inverse);
   --color-inverse-fg: var(--ui-inverse-fg);
 
@@ -350,14 +356,12 @@
   --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 28px;
-  --radius-xl: 36px;
 
   /* Spacing steps stay 4 / 8 / 16 / 24 / 36 / 48 / 60 / 80 and are
      deliberately NOT registered as --spacing-* theme keys: Tailwind resolves
      max-w-* and w-* against the spacing namespace before the container one,
      so naming a step "md" or "4xl" silently redefines max-w-md and max-w-4xl. */
 
-  --shadow-e1: var(--ui-shadow);
   --shadow-e2: var(--ui-shadow-lg);
 
   /* --ease-pop overshoots hard enough to read as a bounce. */

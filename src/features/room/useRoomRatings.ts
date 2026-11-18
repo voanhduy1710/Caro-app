@@ -1,15 +1,15 @@
 import type { MutableRefObject } from 'react';
 import { supabase } from '../../config/supabase';
-import { requestSeatTicket, resendPendingRatedResults, saveMatchRecord, submitRatedResult } from '../history/historyService';
+import { requestSeatTicket, resendPendingRatedResults, saveLocalMatchRecord, submitRatedResult } from '../history/historyService';
 import type { RatedSubmitOutcome } from '../history/historyService';
 import type { UserProfile } from '../auth/AuthContext';
 import { SEATS, seatOf } from './roomEngine';
 import type { Clocks, Game, GameResult, RoomState } from './roomEngine';
 import type { Intent, IntentPayloads, RatingReportStatus, Seat } from './protocol';
 import { buildRatedBody, verifyResult } from './ratingCheck';
-import { signed } from './useRoomUtilities';
+import { signed } from './roomRating';
 
-export interface RoomRatingState {
+interface RoomRatingState {
   mirror: RoomState | null;
   memberId: string | null;
   games: Map<string, Game>;
@@ -30,6 +30,21 @@ interface CreateRoomRatingsOptions {
   writeHandled: (handled: string[]) => void;
 }
 
+/** submit-match's reasons for keeping a game off the ratings, as a player reads them. */
+const UNRATED_NOTES: Record<string, string> = {
+  pair_daily_limit: 'Recorded without a rating: you have played this opponent rated 10 times today.',
+  pair_gain_cap: 'Recorded without a rating: the daily rating limit against this opponent is reached.',
+};
+
+const REFUSED_NOTES: Record<string, string> = {
+  game_too_short: 'Not rated: the game was too short.',
+  shape_mismatch: "Not rated: the two players' devices disagree about the game.",
+  seat_tickets_missing: 'Rating pending: waiting for both players to confirm their seats.',
+  seat_taken: 'Not rated: someone else holds this seat for the game.',
+  seat_mismatch: 'Not rated: the seats do not match this game.',
+  no_game_id: 'Not rated.',
+};
+
 export const createRoomRatings = ({ state, userRef, handlersRef, sendIntent, setRatingNotes, writeHandled }: CreateRoomRatingsOptions) => {
   const setRatingNote = (gameId: string, text: string) =>
     setRatingNotes((previous) => (previous[gameId] === text ? previous : { ...previous, [gameId]: text }));
@@ -44,12 +59,12 @@ export const createRoomRatings = ({ state, userRef, handlersRef, sendIntent, set
   const writeLocalHistory = (result: GameResult) => {
     const { X, O } = result.players;
     const winner = result.winner === 'DRAW' ? null : result.players[result.winner];
-    void saveMatchRecord({
+    saveLocalMatchRecord({
       mode: 'pvp', player1Uid: X.uid, player2Uid: O.uid, player1Name: X.name, player2Name: O.name,
       winnerUid: winner ? winner.uid : 'DRAW', winnerName: winner ? winner.name : 'DRAW',
       boardSize: result.settings.boardSize, timerConfig: `${result.settings.totalTimeMinutes}m / ${result.settings.turnTimeSeconds}s`,
       eloDeltaPlayer1: 0, eloDeltaPlayer2: 0, gameId: result.gameId,
-    }, { localOnly: true });
+    });
   };
 
   const submitFor = async (result: GameResult, seat: Seat) => {
@@ -78,7 +93,7 @@ export const createRoomRatings = ({ state, userRef, handlersRef, sendIntent, set
     // The consent was written when the double down was accepted; repeating it
     // here only closes the race with a game that ended moments later.
     if (result.doubleDown && seat !== 'T' && state.mirror) await requestSeatTicket(result.gameId, seat, state.mirror.roomId, true);
-    const body = buildRatedBody(result, game);
+    const body = buildRatedBody(result, game, state.resultClocks.get(result.gameId) ?? null);
     if (verdict === 'contradicted') body.dispute = true;
     let outcome: RatedSubmitOutcome = await submitRatedResult(body);
     for (let attempt = 1; outcome.status === 'network' && attempt < 3; attempt += 1) {
@@ -93,10 +108,14 @@ export const createRoomRatings = ({ state, userRef, handlersRef, sendIntent, set
         handlersRef.current.onRated?.(); return;
       }
       case 'duplicate': if (isSubmitter) report(result.gameId, 'saved'); handlersRef.current.onRated?.(); return;
+      case 'unrated':
+        setRatingNote(result.gameId, UNRATED_NOTES[outcome.code] ?? 'Recorded without a rating.');
+        if (isSubmitter) report(result.gameId, 'skipped', outcome.code);
+        handlersRef.current.onRated?.(); return;
       case 'pending_claim': setRatingNote(result.gameId, 'Rating pending: recorded in 10 minutes unless disputed.'); if (isSubmitter) report(result.gameId, 'skipped', 'claim_pending'); return;
       case 'disputed': setRatingNote(result.gameId, 'Not rated: the result was disputed.'); if (isSubmitter) report(result.gameId, 'skipped', 'disputed'); return;
       case 'refused':
-        if (outcome.code !== 'caller_would_gain' && outcome.code !== 'already_recorded') setRatingNote(result.gameId, 'Not rated.');
+        if (outcome.code !== 'caller_would_gain' && outcome.code !== 'already_recorded') setRatingNote(result.gameId, REFUSED_NOTES[outcome.code] ?? 'Not rated.');
         if (outcome.code === 'caller_would_gain' && !isSubmitter) setRatingNote(result.gameId, 'Rating pending: confirming both players were seated…');
         if (isSubmitter) report(result.gameId, 'skipped', outcome.code); return;
       case 'failed': setRatingNote(result.gameId, 'The rating could not be saved.'); if (isSubmitter) report(result.gameId, 'failed', outcome.why); return;

@@ -1,0 +1,265 @@
+/* =============================================================================
+   Orca style — motion, board frame budget, overlays and the Sheets disguise
+   (PR 5 src/styles/index-motion.css + index-game.css, the parts that differ
+   from today). Same scoping as tokens.css: nothing here matches without
+   <html data-ui-style="orca">.
+
+   Board themes are NOT restyled here: bamboo, laser and spreadsheet look the
+   same in both styles, and the Orca code grid that replaces graph paper lives
+   in index-motion.css (.board-theme-orca-code).
+
+   Keyframes cannot be scoped, so PR 5's softer versions are added under
+   orca-* names and the scoped rules point at them.
+   ========================================================================== */
+
+@keyframes orca-panel-pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes orca-winning-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1.1); }
+  50% { transform: scale(1.12); filter: brightness(1.3); }
+}
+
+@keyframes orca-piece-drop {
+  0% { opacity: 0; transform: scale(0.75); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes orca-pop-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes orca-tease-pop {
+  0% { transform: translate(-50%, -8px) scale(0.96); opacity: 0; }
+  100% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+}
+
+@keyframes orca-board-ping-wave {
+  0% { transform: scale(0.35); opacity: 0.9; }
+  20%, 100% { transform: scale(3.8); opacity: 0; }
+}
+
+@keyframes orca-board-ping-pop {
+  0% { transform: scale(0.4); }
+  100% { transform: scale(1); }
+}
+
+:root[data-ui-style='orca'] {
+  /* --- Motion -------------------------------------------------------------- */
+
+  & .animate-winning-cell {
+    animation: orca-winning-pulse 0.9s infinite ease-in-out;
+  }
+
+  & .animate-piece-drop {
+    animation: orca-piece-drop 0.16s var(--ease-out-quart);
+  }
+
+  & .animate-pop-in {
+    animation: orca-pop-in 0.22s var(--ease-out-quart) both;
+    animation-delay: calc(var(--i, 0) * 35ms);
+  }
+
+  /* PR 5 has no bobbing turn marker. */
+  & .animate-turn-bob {
+    animation: none;
+  }
+
+  & .chat-flash {
+    animation: chat-flash 1.2s ease-out;
+  }
+
+  & .animate-tease {
+    animation: orca-tease-pop 200ms var(--ease-out-quart) both;
+  }
+
+  /* --- Board frame budget --------------------------------------------------
+     Viewport-driven, never content-derived (see index-game.css). Desktop
+     leaves room for the 36px titlebar + 44px match toolbar + padding; mobile
+     for the opponent strip, the self/action strip and the chat pill. */
+
+  & .board-frame {
+    height: min(calc(100dvh - 168px), 100vw);
+    min-height: 256px;
+    max-height: 960px;
+  }
+
+  & .board-frame.board-frame--fill,
+  &[data-sheet-disguise='on'] .sheet-board .board-frame {
+    height: auto;
+    flex: 1 1 0%;
+    min-height: 0;
+    max-height: none;
+  }
+
+  /* --- Forced-four cells and 1v1v1 pings ---------------------------------- */
+
+  & .board-cell--forced::before {
+    border-width: 2.5px;
+    box-shadow: inset 0 0 8px #facc154d;
+  }
+
+  & .board-ping-sign {
+    font: 800 28px/1 var(--font-sans);
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.6), 0 0 8px currentColor;
+    animation: orca-board-ping-pop 220ms ease-out;
+  }
+
+  & .board-ping-owner {
+    padding: 0 3px;
+    font: 600 9px/12px var(--font-mono);
+  }
+
+  & .board-ping-wave {
+    box-shadow: none;
+    animation: orca-board-ping-wave 7s ease-out infinite;
+  }
+
+  & .board-ping-wave--delayed {
+    animation-delay: 250ms;
+  }
+
+  /* --- Spreadsheet disguise ------------------------------------------------
+     PR 5's disguise rules, restated at Orca specificity: the Orca .btn /
+     .modal-panel rules above outrank the shared html[data-sheet-disguise]
+     ones, so every property those set is repeated here. */
+
+  &[data-sheet-disguise='on'] .modal-scrim {
+    background-color: rgba(32, 33, 36, 0.4);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  &[data-sheet-disguise='on'] .modal-panel {
+    background-color: #ffffff;
+    color: #202124;
+    border-color: #dadce0;
+    border-radius: 8px;
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+    box-shadow: 0 4px 8px 3px rgba(60, 64, 67, 0.15), 0 1px 3px rgba(60, 64, 67, 0.3);
+    animation: scrim-in 0.12s var(--ease-out-quart);
+  }
+
+  &[data-sheet-disguise='on'] .btn {
+    min-height: 36px;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-radius: 20px;
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.25px;
+    box-shadow: none;
+  }
+
+  &[data-sheet-disguise='on'] .btn-primary {
+    background-color: #0b57d0;
+    border-color: #0b57d0;
+    color: #ffffff;
+  }
+
+  &[data-sheet-disguise='on'] .btn-primary:not(:disabled):hover {
+    background-color: #0842a0;
+    border-color: #0842a0;
+  }
+
+  &[data-sheet-disguise='on'] .btn-secondary,
+  &[data-sheet-disguise='on'] .btn-ghost,
+  &[data-sheet-disguise='on'] .btn-tonal {
+    background-color: transparent;
+    color: #0b57d0;
+    border-color: transparent;
+  }
+
+  &[data-sheet-disguise='on'] .btn-secondary {
+    border-color: #747775;
+  }
+
+  &[data-sheet-disguise='on'] .btn-secondary:not(:disabled):hover,
+  &[data-sheet-disguise='on'] .btn-ghost:not(:disabled):hover,
+  &[data-sheet-disguise='on'] .btn-tonal:not(:disabled):hover {
+    background-color: rgba(11, 87, 208, 0.08);
+    color: #0b57d0;
+  }
+
+  &[data-sheet-disguise='on'] .btn-danger,
+  &[data-sheet-disguise='on'] .btn-danger-solid {
+    background-color: #d93025;
+    border-color: #d93025;
+    color: #ffffff;
+  }
+
+  & .sheet-dialog-actions .btn {
+    height: 36px;
+    padding: 0 16px;
+    border-radius: 20px;
+    background: transparent;
+    color: #0b57d0;
+    border-color: transparent;
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0.25px;
+    box-shadow: none;
+  }
+
+  & .sheet-dialog-actions .btn:not(:disabled):hover {
+    background: rgba(11, 87, 208, 0.08);
+  }
+
+  & .sheet-dialog-actions .btn.btn-primary,
+  & .sheet-dialog-actions .btn.btn-danger-solid,
+  & .sheet-dialog-actions .btn.btn-inverse {
+    background: #0b57d0;
+    color: #ffffff;
+  }
+
+  & .sheet-dialog-actions .btn.btn-primary:not(:disabled):hover,
+  & .sheet-dialog-actions .btn.btn-danger-solid:not(:disabled):hover,
+  & .sheet-dialog-actions .btn.btn-inverse:not(:disabled):hover {
+    background: #0842a0;
+    box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  }
+}
+
+@media (min-width: 1024px) {
+  :root[data-ui-style='orca'] {
+    & .board-frame {
+      height: calc(100dvh - 104px);
+    }
+
+    & .sheet-board .board-frame {
+      height: max(280px, calc(100dvh - 280px));
+    }
+
+    & .board-frame.board-frame--fill,
+    &[data-sheet-disguise='on'] .sheet-board .board-frame {
+      height: auto;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-ui-style='orca'] {
+    & .animate-winning-cell {
+      animation: none;
+      filter: brightness(1.3);
+    }
+
+    & .animate-pop-in,
+    & .animate-tease,
+    & .board-ping-wave,
+    & .board-ping-sign {
+      animation: none;
+    }
+
+    & .animate-pop-in {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}

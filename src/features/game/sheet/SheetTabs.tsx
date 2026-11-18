@@ -13,7 +13,7 @@ import { REPORTS } from './financeData';
 import { decorative, SEPARATOR, type SheetMenuItem } from './menuTypes';
 import { SheetDropdownButton } from './SheetMenus';
 import { showSheetSnackbar } from './sheetSnackbar';
-import { CHROME_FONT, formatClock, formatNumber, HIDDEN_SCROLLBAR } from './sheetStyle';
+import { CHROME_FONT, SHEETS_GREEN, formatClock, formatNumber, HIDDEN_SCROLLBAR } from './sheetStyle';
 
 /**
  * The bottom bar: sheet tabs on the left, Sheets' status readout on the right.
@@ -247,7 +247,7 @@ export const SheetTabs = memo(({ board }: { board: BoardMatrix }) => {
       </div>
 
       <div className="flex shrink-0 items-center gap-3 pl-2 whitespace-nowrap">
-        <span className="hidden font-semibold text-[#0F9D58] sm:inline">Sẵn sàng</span>
+        <span className="hidden font-semibold sm:inline" style={{ color: SHEETS_GREEN }}>Sẵn sàng</span>
         {ui.view === 'game' && match && <MatchPill match={match} />}
         <span className="hidden tabular-nums lg:inline">Trung bình: {stats.count ? formatAverage(stats.average) : '0'}</span>
         <span className="hidden tabular-nums md:inline">Đếm: {stats.count}</span>
@@ -259,7 +259,7 @@ export const SheetTabs = memo(({ board }: { board: BoardMatrix }) => {
           onClick={() => showSheetSnackbar('Không có đề xuất nào cho dữ liệu này')}
           className="hidden h-7 items-center gap-1.5 rounded-[14px] border border-[#dadce0] bg-white px-3 text-[12px] font-medium text-[#444746] outline-none hover:bg-[#f1f3f4] focus-visible:ring-2 focus-visible:ring-[#0b57d0] sm:inline-flex"
         >
-          <Sparkles size={14} className="text-[#0F9D58]" aria-hidden="true" />
+          <Sparkles size={14} color={SHEETS_GREEN} aria-hidden="true" />
           Khám phá
         </button>
       </div>

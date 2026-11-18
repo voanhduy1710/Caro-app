@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getRankTitle } from './eloCalculator';
+import { getRankTitle } from './rankTiers';
 
 describe('getRankTitle', () => {
   const cases: [number, string][] = [

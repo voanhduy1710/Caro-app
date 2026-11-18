@@ -5,17 +5,17 @@ import type { UserProfile } from '../features/auth/AuthContext';
 import type { RoomSettings } from '../features/settings/types';
 import { getAvatarPublicUrl } from '../features/avatar/avatarService';
 import { t } from '../features/i18n/language';
+import { AI_BOT_UID } from '../shared/constants';
 import type { StringKey } from '../features/i18n/strings';
 
 export type PracticePiece = 'X' | 'O' | 'T';
 export interface MoveHistoryItem { row: number; col: number; piece: PracticePiece; corner?: BoardCorner; }
 export const lmaoCornerFor = (row: number, col: number): BoardCorner => (['top-left', 'top', 'top-right', 'left', 'right', 'bottom-left', 'bottom', 'bottom-right'] as const)[Math.abs(row * 31 + col) % 8];
-export const nextPracticePiece = (piece: PracticePiece, threePlayer: boolean): PracticePiece => threePlayer ? (piece === 'X' ? 'O' : piece === 'O' ? 'T' : 'X') : piece === 'X' ? 'O' : 'X';
 const RESULT_REASONS: Record<string, StringKey> = { '5_in_a_row': 'game.reason5InARow', board_full: 'game.reasonBoardFull', turn_timeout: 'game.reasonTurnTimeout', total_time_out: 'game.reasonTotalTimeOut', resigned: 'game.reasonResigned' };
 export const describeResultReason = (reason?: string) => t((reason && RESULT_REASONS[reason]) || 'game.reasonOver');
 export const ROOM_STATUS_TEXT = (room: ActiveRoomInfo) => room.status === 'waiting' ? t('home.statusWaiting') : room.status === 'playing' ? t('home.statusPlaying') : room.status === 'paused' ? room.openSeat ? t('home.statusPausedOpen') : t('home.statusPaused') : t('home.statusFinished');
 export const stagger = (i: number) => ({ '--i': i }) as React.CSSProperties;
-export type ConfirmCopy = { title: string; body: string; confirmLabel: string; };
+type ConfirmCopy = { title: string; body: string; confirmLabel: string; };
 export type ConfirmSpec = ConfirmCopy & {
   /**
    * The same question in Sheets' Vietnamese, shown instead while the
@@ -49,7 +49,7 @@ export const sheetNoticeText = (message: string) =>
 /** The bots as the Spreadsheet disguise names them: colleagues editing the file. */
 export const SHEET_BOT_NAME = 'Nguyễn Minh Anh';
 export const SHEET_TRIANGLE_BOT_NAME = 'Trần Thu Hà';
-export const BOT_USER: UserProfile = { uid: 'ai_bot', displayName: 'AI Bot 🤖', photoURL: getAvatarPublicUrl('Blitzcrank'), email: '', elo: 1350, wins: 50, losses: 50, draws: 10, streak: 0 };
+export const BOT_USER: UserProfile = { uid: AI_BOT_UID, displayName: 'AI Bot 🤖', photoURL: getAvatarPublicUrl('Blitzcrank'), email: '', elo: 1350, wins: 50, losses: 50, draws: 10, streak: 0 };
 export const TRIANGLE_BOT_USER: UserProfile = { uid: 'ai_triangle_bot', displayName: 'AI Triangle 🤖', photoURL: getAvatarPublicUrl('Leona'), email: '', elo: 1350, wins: 50, losses: 50, draws: 10, streak: 0 };
 /** The practice bot always plays on 19x19: the search stays local, so it runs as fast as 15x15. */
 export const AI_BOARD_SIZE = 19;

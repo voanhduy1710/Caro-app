@@ -1,6 +1,10 @@
-import React, { useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, MoreHorizontal } from 'lucide-react';
+import { useT } from '../../i18n/language';
+import { useIsOrca } from '../../theme/uiStyle';
+import { useAppVisualMode } from '../../../app/shell/useAppVisualMode';
+import { updateSheetUi } from '../sheetBridge';
 import type { SheetMenuDef, SheetMenuItem } from './menuTypes';
 import { useDismiss, type DismissReason } from './useDismiss';
 import { CHROME_FONT, MENU_SHADOW } from './sheetStyle';
@@ -181,7 +185,29 @@ const MENU_BUTTON =
   'inline-flex h-6 shrink-0 items-center rounded px-[7px] text-[14px] leading-none whitespace-nowrap text-[#202124] outline-none focus-visible:ring-2 focus-visible:ring-[#0b57d0] focus-visible:ring-inset';
 
 /** Tệp, Chỉnh sửa, Xem… — click to open, hover to move between open menus. */
-export const SheetMenuBar: React.FC<{ menus: SheetMenuDef[] }> = ({ menus }) => {
+export const SheetMenuBar: React.FC<{ menus: SheetMenuDef[] }> = ({ menus: baseMenus }) => {
+  // Orca style (PR 5): the View menu ends with a way back to the Orca IDE. The
+  // Default style keeps the disguise exactly as it was, with no such item.
+  const t = useT();
+  const isOrca = useIsOrca();
+  const { setAppMode } = useAppVisualMode();
+  const switchLabel = t('common.switchToOrca');
+  const menus = useMemo<SheetMenuDef[]>(() => {
+    if (!isOrca) return baseMenus;
+    const switchItem: SheetMenuItem = {
+      kind: 'item',
+      label: switchLabel,
+      ariaLabel: switchLabel,
+      onSelect: () => {
+        updateSheetUi({ view: 'game', commentsOpen: false, helpOpen: false });
+        setAppMode('orca');
+      },
+    };
+    const targetId = baseMenus.some((menu) => menu.id === 'view') ? 'view' : baseMenus[0]?.id;
+    return baseMenus.map((menu) =>
+      menu.id === targetId ? { ...menu, items: [...menu.items, { kind: 'separator' }, switchItem] } : menu,
+    );
+  }, [baseMenus, isOrca, setAppMode, switchLabel]);
   const [open, setOpen] = useState<{ id: string; focusFirst: boolean } | null>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const barRef = useRef<HTMLDivElement>(null);

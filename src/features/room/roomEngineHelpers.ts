@@ -1,7 +1,7 @@
 import { createEmptyBoard } from '../../shared/utils/gomokuLogic';
 import type { BoardMatrix } from '../../shared/utils/gomokuLogic';
 import type { RoomSettings } from '../settings/types';
-import { MAX_MEMBERS, RESULTS_CEILING, SEAT_LOG_CAP } from './roomEngineTypes';
+import { CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, GRACE_MS, MAX_MEMBERS, RESULTS_CEILING, SEAT_LOG_CAP } from './roomEngineTypes';
 import type { Clocks, EngineState, Game, GameResult, Member, PlayerRef, RoomState } from './roomEngineTypes';
 import type { Seat } from './protocol';
 
@@ -51,6 +51,17 @@ export const seatOf = (state: EngineState | RoomState, memberId: string | null):
 export const occupant = (state: EngineState | RoomState, seat: Seat): Member | undefined =>
   findMember(state, roomOf(state).seats[seat]);
 
+/**
+ * Whether a member counts toward MAX_MEMBERS. A disconnected viewer does not:
+ * it gives up its place to a new arrival rather than keep the room full.
+ */
+export const holdsPlace = (state: EngineState | RoomState, member: Member): boolean =>
+  member.connected || member.isHost || seatOf(state, member.id) !== null;
+
+/** Identifies the players a session score belongs to; a new player in any active seat starts it over. */
+export const scorePairKey = (seats: RoomState['seats'], playerMode: RoomSettings['playerMode']): string =>
+  playerMode === 'oneVsOneVsOne' ? `${seats.X}|${seats.O}|${seats.T}` : `${seats.X}|${seats.O}`;
+
 export const bothSeatedAndConnected = (state: EngineState | RoomState): boolean =>
   activeSeats(roomOf(state).settings).every((seat) => occupant(state, seat)?.connected === true);
 
@@ -59,6 +70,24 @@ export const latestResult = (state: EngineState | RoomState): GameResult | null 
   const { results } = roomOf(state);
   return results.length ? results[results.length - 1] : null;
 };
+
+/**
+ * Who calls a coin toss: the host's seat on odd games and the other seat on
+ * even ones, so both players take turns. A host who is not playing (or sits
+ * in T) hands the first call to X, or nobody could ever call.
+ */
+export const coinCallerSeat = (state: EngineState | RoomState, game: Pick<Game, 'number'>): 'X' | 'O' => {
+  const room = roomOf(state);
+  const hostId = room.members.find((m) => m.isHost)?.id ?? null;
+  const base: 'X' | 'O' = hostId !== null && room.seats.O === hostId ? 'O' : 'X';
+  return game.number % 2 === 1 ? base : base === 'X' ? 'O' : 'X';
+};
+
+/** How long the remaining 1v1 player still waits before claiming a win, given the absentee's grace left. */
+export const claimWaitMs = (graceMsLeft: number): number => CLAIM_DISCONNECT_WIN_MS - (GRACE_MS - graceMsLeft);
+
+/** How long the discard guard still runs for a seat emptied at `vacatedAt`; 0 once it has passed. */
+export const discardGuardLeftMs = (vacatedAt: number, now: number): number => Math.max(0, DISCARD_GUARD_MS - (now - vacatedAt));
 
 export const turnLimitMs = (settings: RoomSettings): number => settings.turnTimeSeconds * 1000;
 export const bankLimitMs = (settings: RoomSettings): number => settings.totalTimeMinutes * 60_000;

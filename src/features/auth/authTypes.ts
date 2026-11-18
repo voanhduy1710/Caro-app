@@ -26,9 +26,6 @@ export interface AuthContextType {
   loginAsGuest: (customName?: string) => void;
   signInWithCredentials: (username: string, password: string) => Promise<boolean>;
   createAccount: (username: string, password: string, displayName?: string) => Promise<CreateAccountResult>;
-  updateLocalGuestName: (newName: string) => void;
-  showConfigGuide: boolean;
-  setShowConfigGuide: (show: boolean) => void;
   showAuthModal: boolean;
   setShowAuthModal: (show: boolean) => void;
   authModalTab: 'signin' | 'create';

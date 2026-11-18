@@ -22,8 +22,23 @@
       (function () {
         try {
           var t = localStorage.getItem('caro:ui-theme');
+          var orca = localStorage.getItem('caro:ui-style') === 'orca';
           if (t === 'light' || t === 'dark') {
             document.documentElement.setAttribute('data-ui-theme', t);
+          } else if (orca && t !== 'system') {
+            /* The Orca style opens dark when nothing was chosen (useUiTheme). */
+            document.documentElement.setAttribute('data-ui-theme', 'dark');
+          }
+          if (orca) {
+            document.documentElement.setAttribute('data-ui-style', 'orca');
+            /* Orca's face, preloaded only when Orca is the style in use. */
+            var f = document.createElement('link');
+            f.rel = 'preload';
+            f.as = 'font';
+            f.type = 'font/woff2';
+            f.href = '/fonts/Geist-Variable.woff2';
+            f.crossOrigin = 'anonymous';
+            document.head.appendChild(f);
           }
         } catch (e) {
           /* Private windows and blocked site data both throw on access. */

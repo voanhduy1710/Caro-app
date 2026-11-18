@@ -1,6 +1,10 @@
-import React, { memo, useRef, useState } from 'react';
-import { CloudCheck, FolderInput, Globe, History, Lock, MessageSquareText, Star, Video } from 'lucide-react';
+import React, { memo, useCallback, useRef, useState } from 'react';
+import { CloudCheck, Code2, FolderInput, Globe, History, Lock, MessageSquareText, Star, Video } from 'lucide-react';
+import { useT } from '../../i18n/language';
 import { useTheme } from '../../theme/ThemeContext';
+import { useIsOrca } from '../../theme/uiStyle';
+import { useAppVisualMode } from '../../../app/shell/useAppVisualMode';
+import { pieceColor as themePieceColor } from '../../theme/types';
 import {
   DEFAULT_SHEET_TITLE,
   updateSheetUi,
@@ -106,7 +110,16 @@ interface SheetTopBarProps {
 
 /** Memoised: SheetChrome re-renders on every hovered cell, this does not need to. */
 export const SheetTopBar = memo(({ disguised, onToggleDisguise, menus }: SheetTopBarProps) => {
+  const t = useT();
   const { theme } = useTheme();
+  // Orca style only (PR 5): a one-click way back to the Orca IDE. The Default
+  // style's disguise keeps nothing that could give the game away.
+  const isOrca = useIsOrca();
+  const { setAppMode } = useAppVisualMode();
+  const handleSwitchToOrca = useCallback(() => {
+    updateSheetUi({ view: 'game', commentsOpen: false, helpOpen: false });
+    setAppMode('orca');
+  }, [setAppMode]);
   const ui = useSheetUi();
   const chat = useSheetChat();
   const match = useSheetMatch();
@@ -118,7 +131,7 @@ export const SheetTopBar = memo(({ disguised, onToggleDisguise, menus }: SheetTo
   const me = match?.seats.find((seat) => seat.isMe && !seat.empty);
   const myName = me?.name ?? 'Tôi';
   const myTurn = Boolean(me?.isTurn);
-  const pieceColor = (piece: SheetSeat['piece']) => (piece === 'X' ? theme.xColor : piece === 'O' ? theme.oColor : '#7c3aed');
+  const pieceColor = (piece: SheetSeat['piece']) => themePieceColor(theme, piece);
   const unread = chat?.unread ?? 0;
   const shared = Boolean(actions.share);
   const exit = actions.exit;
@@ -199,6 +212,21 @@ export const SheetTopBar = memo(({ disguised, onToggleDisguise, menus }: SheetTo
               <PresenceAvatar key={`${seat.piece}-${i}`} seat={seat} color={pieceColor(seat.piece)} />
             ))}
           </div>
+        )}
+
+        {isOrca && (
+          <button
+            type="button"
+            data-testid="sheet-switch-to-orca"
+            onClick={handleSwitchToOrca}
+            title={t('common.switchToOrca')}
+            aria-label={t('common.switchToOrca')}
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-[#dadce0] bg-white px-2.5 text-[12px] font-medium text-[#444746] outline-none transition-colors hover:bg-[#f1f3f4] hover:text-[#1f1f1f] focus-visible:ring-2 focus-visible:ring-[#0b57d0] sm:px-3"
+          >
+            <Code2 size={14} strokeWidth={1.9} className="shrink-0 text-[#5f6368]" aria-hidden="true" />
+            <span className="hidden sm:inline">{t('common.modeOrca')}</span>
+            <span className="sm:hidden">Orca</span>
+          </button>
         )}
 
         <button

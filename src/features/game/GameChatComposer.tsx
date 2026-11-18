@@ -4,6 +4,8 @@ import type { ChatMessage } from '../webrtc/types';
 import { quoteSnippet } from './GameControlsShared';
 import { EmoteInput } from './EmoteInput';
 import { useT } from '../i18n/language';
+import { useIsOrca } from '../theme/uiStyle';
+import { GameChatComposerOrca } from './GameChatComposer.orca';
 
 export interface GameChatComposerProps {
   attachedImage: string | null; setAttachedImage: React.Dispatch<React.SetStateAction<string | null>>; reactionRow: React.ReactNode;
@@ -15,7 +17,7 @@ export interface GameChatComposerProps {
   replyingTo?: ChatMessage | null; onCancelReply?: () => void;
 }
 
-export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
+const GameChatComposerDefault: React.FC<GameChatComposerProps> = (props) => {
   const t = useT();
   const { attachedImage, setAttachedImage, reactionRow, handleChatSubmit, isAiMode, isReactionsOpen, setIsReactionsOpen, attachmentInputRef, handleAttachmentChange, emoteButtonRef, textareaRef, chatText, setChatText, handleKeyDown, handlePaste, role, handleBuzzClick, isBuzzCooldown, replyingTo, onCancelReply } = props;
   return (
@@ -135,3 +137,6 @@ export const GameChatComposer: React.FC<GameChatComposerProps> = (props) => {
     </div>
   );
 };
+
+export const GameChatComposer: React.FC<GameChatComposerProps> = (props) =>
+  useIsOrca() ? <GameChatComposerOrca {...props} /> : <GameChatComposerDefault {...props} />;

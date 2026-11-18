@@ -199,8 +199,7 @@
 
   /* A blue face needs a non-blue focus ring. */
   .btn-primary:focus-visible,
-  .btn-inverse:focus-visible,
-  .btn-danger-solid:focus-visible {
+  .btn-inverse:focus-visible {
     outline-color: var(--ui-text);
   }
 
@@ -263,12 +262,6 @@
     color: var(--ui-danger-text-hover);
   }
 
-  .btn-danger-solid {
-    background-color: var(--ui-danger-solid);
-    color: var(--ui-danger-fg);
-    --btn-shadow: var(--ui-danger-shadow);
-  }
-
   /* High-emphasis alternative to primary, for the one action per surface that
      competes with it (sign out, close a match) without borrowing the accent. */
   .btn-inverse {
@@ -286,46 +279,6 @@
     width: 40px;
     height: 40px;
     gap: 0;
-  }
-
-  /* --- Display type -------------------------------------------------------
-
-     Orange on white is 2.30:1, which no size rescues, so the navy outline IS
-     the contrast. Fill and outline are welded together here so no caller can
-     take one without the other.                                            */
-
-  .display-brand {
-    --outline: var(--ui-text);
-    font-family: var(--font-display);
-    font-weight: 800;
-    line-height: 1.05;
-    letter-spacing: 0.02em;
-    color: var(--ui-brand);
-    text-shadow:
-      -2px -2px 0 var(--outline), 0 -2px 0 var(--outline), 2px -2px 0 var(--outline),
-      -2px 0 0 var(--outline), 2px 0 0 var(--outline),
-      -2px 2px 0 var(--outline), 0 2px 0 var(--outline), 2px 2px 0 var(--outline),
-      0 6px 0 var(--outline);
-  }
-
-  /* A real stroke joins more cleanly than eight stacked shadows. */
-  @supports (paint-order: stroke) {
-    .display-brand {
-      paint-order: stroke fill;
-      -webkit-text-stroke: 5px var(--outline);
-      text-shadow: 0 6px 0 var(--outline);
-    }
-  }
-
-  /* On navy the outline flips to the page colour. */
-  :root[data-ui-theme='dark'] .display-brand {
-    --outline: #05101f;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-ui-theme='light']) .display-brand {
-      --outline: #05101f;
-    }
   }
 
   /* --- Surfaces ---------------------------------------------------------- */
@@ -374,12 +327,6 @@
   .chip-accent {
     background-color: var(--ui-accent-soft);
     color: var(--ui-accent-text);
-  }
-
-  /* Celebration tag: orange face, dark ink at 6.89:1. */
-  .chip-brand {
-    background-color: var(--ui-brand);
-    color: var(--ui-brand-fg);
   }
 
   /* --- Forms ------------------------------------------------------------- */

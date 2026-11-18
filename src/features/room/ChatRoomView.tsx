@@ -6,6 +6,8 @@ import { useSheetAwareSound } from '../game/sheet/useSheetAwareSound';
 import type { Member, RoomState } from './roomEngine';
 import type { RoomApi } from './useRoom';
 import { useT } from '../i18n/language';
+import { useIsOrca } from '../theme/uiStyle';
+import { ChatRoomLayoutOrca } from './ChatRoomView.orca';
 
 export interface ChatRoomViewProps {
   room: RoomApi; s: RoomState; me: string | null; members: Member[];
@@ -19,8 +21,10 @@ export interface ChatRoomViewProps {
  * the match's own (useGameChat): replies, reactions, images, buzz, the arrival
  * sound and "Seen" all behave exactly as they do mid-game.
  */
-export const ChatRoomView: React.FC<ChatRoomViewProps> = ({ room, s, me, members, copyState, roomLink, copyRoomLink, requestExit, roster, hostLostStrip, confirmDialog }) => {
+export const ChatRoomView: React.FC<ChatRoomViewProps> = (props) => {
+  const { room, s, me, members, copyState, roomLink, copyRoomLink, requestExit, roster, hostLostStrip, confirmDialog } = props;
   const t = useT();
+  const isOrca = useIsOrca();
   const { playBuzzSound } = useSheetAwareSound();
   const messages = room.chatMessages;
 
@@ -57,6 +61,9 @@ export const ChatRoomView: React.FC<ChatRoomViewProps> = ({ room, s, me, members
     avatarFor: (m) => members.find((member) => member.id === m.senderId)?.profile.avatar,
     receipt,
   });
+
+  // One chat (and one useGameChat) for both styles; only the layout differs.
+  if (isOrca) return <ChatRoomLayoutOrca {...props} chat={chat} />;
 
   return (
     // Two columns on a wide screen: the invite and the people on the left, the

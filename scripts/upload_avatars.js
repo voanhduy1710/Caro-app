@@ -1,31 +1,31 @@
+/**
+ * Uploads public/Avatar/*.gif to the public `avatar` storage bucket.
+ *
+ *   node scripts/upload_avatars.js
+ *
+ * Needs SUPABASE_SERVICE_ROLE_KEY (in .env or the environment): since row level
+ * security, the anon key may not create buckets or write objects.
+ */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
+import { loadEnv, require_ } from './_env.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Read .env file
-const envPath = path.resolve(__dirname, '../.env');
-const envContent = fs.readFileSync(envPath, 'utf8');
-const envVars = {};
-envContent.split('\n').forEach((line) => {
-  const [key, ...vals] = line.split('=');
-  if (key && vals.length > 0) {
-    envVars[key.trim()] = vals.join('=').trim();
-  }
+const env = loadEnv();
+const supabaseUrl = require_(env, 'VITE_SUPABASE_URL');
+const serviceRoleKey = require_(
+  env,
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'Add the service role key (Supabase dashboard > Project Settings > API) to .env; the anon key cannot upload.',
+);
+
+console.log(`Project: ${new URL(supabaseUrl).host}`);
+const supabase = createClient(supabaseUrl, serviceRoleKey, {
+  auth: { persistSession: false, autoRefreshToken: false },
 });
-
-const supabaseUrl = envVars['VITE_SUPABASE_URL'];
-const supabaseAnonKey = envVars['VITE_SUPABASE_ANON_KEY'];
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Supabase URL or Key missing in .env');
-  process.exit(1);
-}
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const BUCKET_NAME = 'avatar';
 const AVATAR_DIR = path.resolve(__dirname, '../public/Avatar');
 

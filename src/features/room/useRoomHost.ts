@@ -1,13 +1,13 @@
 import type { DataConnection } from 'peerjs';
 import { roomDiscoveryManager } from '../webrtc/roomDiscoveryService';
 import type { HostedRoomInfo } from '../webrtc/roomDiscoveryService';
-import { MAX_MEMBERS, PING_INTERVAL_MS, activeSeats, applyIntent, checkInvariants, clockSync, noteMalformed, onConnectionLost, tick, toWire } from './roomEngine';
+import { MAX_MEMBERS, PING_INTERVAL_MS, activeSeats, applyIntent, checkInvariants, clockSync, hasHiddenPick, kickForMalformed, noteMalformed, onConnectionLost, tick, toWire } from './roomEngine';
 import type { EngineResult, EngineState, RoomState } from './roomEngine';
 import { PROTOCOL_VERSION, parseIntent } from './protocol';
 import type { HostMessage } from './protocol';
 import { closeConn, send } from './useRoomUtilities';
 
-export interface RoomHostState {
+interface RoomHostState {
   engine: EngineState | null;
   conns: Map<string, DataConnection>;
   connMember: Map<DataConnection, string>;
@@ -71,7 +71,7 @@ export const createRoomHost = ({ state, setMirror, receive, writeSnapshot, hello
     const host = room.members[0];
     const info: HostedRoomInfo = {
       hostName: host.profile.name, hostAvatar: host.profile.avatar ?? undefined, boardSize: room.settings.boardSize, mode: room.mode === 'casual' ? 'casual' : 'ranked',
-      createdAt: room.createdAt, seatsFilled: seatsFilled as 0 | 1 | 2, viewers: room.members.length - seatsFilled,
+      createdAt: room.createdAt, seatsFilled: seatsFilled as 0 | 1 | 2 | 3, seats: activeSeats(room.settings).length as 2 | 3, viewers: room.members.length - seatsFilled,
       members: room.members.length, capacity: MAX_MEMBERS, status: room.phase === 'countdown' || room.phase === 'opening' ? 'playing' : room.phase,
       openSeat: seatsFilled < activeSeats(room.settings).length && room.phase !== 'countdown' && room.phase !== 'opening',
     };
@@ -81,7 +81,7 @@ export const createRoomHost = ({ state, setMirror, receive, writeSnapshot, hello
   const publish = (now: number, force = false) => {
     const engine = state.engine;
     if (!engine || (!force && state.mirror?.rev === engine.room.rev)) return;
-    setMirror(toWire(engine, now));
+    setMirror(toWire(engine, now, engine.host.hostMemberId));
     saveSnapshot(now);
     announce();
     if (import.meta.env.DEV) {
@@ -98,8 +98,13 @@ export const createRoomHost = ({ state, setMirror, receive, writeSnapshot, hello
     for (const reply of result.replies) deliver(reply.to, reply.message, origin);
     for (const event of result.events) {
       if (event.kind === 'room_state') {
-        const message = wire({ type: 'ROOM_STATE', payload: { state: toWire(result.state, now) } });
-        for (const [id, connection] of state.conns) if (!event.except.includes(id)) send(connection, message);
+        // One copy for everyone, except while a rock-paper-scissors pick must reach only its player.
+        const personal = hasHiddenPick(result.state);
+        const shared = personal ? null : wire({ type: 'ROOM_STATE', payload: { state: toWire(result.state, now) } });
+        for (const [id, connection] of state.conns) {
+          if (event.except.includes(id)) continue;
+          send(connection, shared ?? wire({ type: 'ROOM_STATE', payload: { state: toWire(result.state, now, id) } }));
+        }
       } else if (event.kind === 'broadcast') {
         const message = wire(event.message);
         for (const [id, connection] of state.conns) if (!event.except.includes(id)) send(connection, message);
@@ -127,7 +132,7 @@ export const createRoomHost = ({ state, setMirror, receive, writeSnapshot, hello
       if (memberId === null) { state.pending.delete(connection); closeConn(connection); return; }
       const noted = noteMalformed(engine, memberId, now);
       state.engine = noted.state;
-      if (noted.kick) { unbind(memberId); closeConn(connection); apply(onConnectionLost(noted.state, memberId, now), null); }
+      if (noted.kick) apply(kickForMalformed(noted.state, memberId, now), connection);
       return;
     }
     if (memberId === null && intent.type !== 'HELLO') { state.pending.delete(connection); closeConn(connection); return; }
