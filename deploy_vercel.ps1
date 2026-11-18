@@ -58,7 +58,7 @@ $whoami = ($whoamiRaw | Where-Object { $_ -notmatch 'telemetry' -and $_ -notmatc
 Write-Host "   ✅ Authenticated Vercel User: $whoami" -ForegroundColor Green
 
 # Vite substitutes VITE_* values during the remote Vercel build. The .env file
-# is intentionally excluded from uploads, so the project must hold these two
+# is excluded from uploads (.vercelignore lists .env, .env.* and .mcp.json), so the project must hold these two
 # public Supabase client settings itself. Syncing them here prevents a deploy
 # that works locally but ships a bundle where all account actions are disabled.
 if (-not (Test-Path ".env")) {
@@ -96,6 +96,9 @@ Write-Host "   ✅ Production Supabase configuration synced." -ForegroundColor G
 # Optional: Cloudflare TURN key used by /api/turn so players behind a VPN
 # (Cloudflare 1.1.1.1 / WARP) or strict NAT can still connect. These are server
 # secrets, so they are stored encrypted and never prefixed with VITE_.
+# /api/turn also reads VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY at runtime to
+# check a player's session, and an optional TURN_ALLOWED_ORIGINS (set it in the
+# Vercel dashboard if the app is served from more than its own host).
 $turnKeyId = Get-DotEnvValue "CLOUDFLARE_TURN_KEY_ID"
 $turnToken = Get-DotEnvValue "CLOUDFLARE_TURN_API_TOKEN"
 if ($turnKeyId -and $turnToken) {
