@@ -1,5 +1,47 @@
 # Task list
 
+## 2026-11-18 — delete review, commit, push, deploy
+- ⏳ 1. Delete the code review (`CODE_REVIEW.md` removed)
+- ⏳ 2. Commit and push everything
+- ⏳ 3. Deploy to Vercel with `deploy_vercel.ps1`
+
+## 2026-11-18 — Orca as an app style, not a board
+- ✅ 1. Remove the Orca board option: gone from the board list; PR 5's code grid now shows only inside the Orca style (in place of graph paper). tsc clean, vitest 402 passed; not committed
+- ✅ 2. Add a Style section in Settings: Default / Orca (`src/features/theme/uiStyle.ts`, stamped before first paint). Not committed
+- ✅ 3. Orca style = UI exactly like PR 5 (shell, sidebar, titlebar, mobile, every restyled screen), without PR's multi-room tabs; Default (today's look) stays the default for new visitors
+- ✅ Opus 5.5 subagent (orca A, shell) — scoped Orca CSS (`src/styles/orca/`) + Geist, primitives + cn, shared useUiTheme (Orca dark default), Orca shell (titlebar tabs, Orca|GGS pill, sidebar, mobile bars, right-pane slot), lobby `*.orca.tsx`, AppView switches layout without remounting the Board (browser-checked); Leaderboard/History/Settings tabs still open today's modals (phase C); tsc clean, vitest 407 passed, oxlint no new warnings, build OK; not committed
+- ✅ Opus 5.5 subagent (orca B, match) — PR 5 match stage in Orca (248px match sidebar, chat column, phone strips + 80dvh chat sheet), seat cards, action rail, chat, board overlays/code-grid cells, coin/RPS dialogs, Sheets "Orca IDE" return (Orca only); Board never remounts (browser-checked 1440/390/320, light+dark, GGS, Ctrl+Q, 1v1v1); tsc/vitest 407/oxlint/build clean; online-room chat + minigames not tried in a browser; not committed
+- ⚠️ Opus 5.5 subagent (orca C, rooms + dialogs) — Orca looks for waiting room, roster, chat room, room prompts, tease toast, sign-in, profile (today's password form), opponent, history/leaderboard/rank guide/settings (dialogs + embedded workspace pages), pairing; Default unchanged; tsc clean, vitest 407 passed, oxlint no new warnings, build OK; browser-checked Orca dark/light desktop+phone and Default; ⚠️ pair-mobile/QR/remote phone not tried (need sign-in); not committed
+- ✅ Claude (main) — all 3 phases in; own checks: tsc clean, vitest 407 passed, build OK, no new lint warnings; browser /bot Orca 1440 dark: stones survive Orca↔GGS↔Orca, no console errors; fixed board losing its centre after switching to Spreadsheet and back (both styles). Not tried by me: coin toss / RPS in a two-browser Orca room, pairing screens (need sign-in). Not committed
+
+## 2026-11-18 — new values for `.env` + `.mcp.json`
+- ⚠️ 1. Update `.env` + `.mcp.json`, links for new values: Supabase URL + anon key checked against live project, already current (no change). Vercel token, Cloudflare TURN token, Supabase access token, Stitch key must be made by owner in their dashboards (links given)
+- ✅ 2. Owner deleted all old keys → remove Stitch MCP from `.mcp.json`: done, JSON valid, servers left: supabase-mcp-server, vercel. File gitignored, nothing to commit
+
+## 2026-11-18 — fix the open review items
+- ✅ 8. Owner rotated the leaked keys: every token in `.env` / `.mcp.json` now differs from the leaked copy (checked by comparison, values not shown); Supabase URL + anon key unchanged (public by design)
+- ✅ 1. "Reset to 123456" button → reset to a typed password: button removed, one new-password + confirm form (min 8). Not tried with a real sign-in; not committed
+- ✅ 2. `gomoku_users` emails readable with the anon key → fix: migration `20261118000100` (column grants). File only, NOT applied to Supabase
+- ✅ 3. submit-match Elo farming: points 1–4 implemented (both tickets on every rated row, first-writer tickets, 10 games/day per pair, +60 Elo/day per opponent, min 9 moves / 20 s with both reports compared); sign-up gate rejected. Migration `20261118000400` + `submit-match` NOT applied / deployed; client sends moveCount + durationMs; not committed
+- ✅ 4. Fix the six medium security items, room takeover by uid, and the 17 open bugs (incl. "3/2 players"): all fixed, see the round-2 commit. Migrations + edge functions are files only (NOT applied / deployed); vitest 402 passed; not committed
+- ✅ 5. Explain the `.env` + `.mcp.json` in pushed history point (answered in chat)
+- ⚠️ 6. Delete `.env` + `.mcp.json` from git history: origin (voanhduy1710) already holds no ref with them (redesign branch gone, no tags/PRs). Local `backup-remote-sept18` + old `redesign/antigravity-ui` rewritten without the two files (59 / 53 commits kept), stale cnttatino ref dropped. ❌ `cnttatino-spec/Caro-app` not reachable from either gh account (private) — owner must delete the `redesign/antigravity-ui` branch there. Nothing pushed
+- ✅ 7. Say which keys are in the old `.env` / `.mcp.json` and whether they are still live (names only, answered in chat)
+- ✅ Claude (main) — subagents done; client wired (rated body moveCount/durationMs, new result codes, TURN auth header + TTL); browser-checked keyboard play, dialog focus, Back button on /bot
+- ⚠️ Opus 5.5 subagent (backend) — emails hidden (column grants), profile CHECKs + update grant, seat-ticket first-writer-wins, submit-match: names from DB, both tickets for every rated insert, min 9 moves/20 s, 10 games + 60 Elo per pair/day (also in finaliser), api/turn session/origin check + TTL 1 h/30 min + rate limit, .env out of uploads; 4 migrations 20261118000100-400; tsc clean, vitest 400 passed; needs client wiring (moveCount/durationMs, turn Bearer + refetch, new codes); files only: NOT applied to Supabase, NOT deployed, not committed
+- ✅ Opus 5.5 subagent (room2) — items 1–9 done and verified (token-only reclaim, 60 s viewer grace + absent viewers yield their place, malformed kick removes member and token, duplicate chat ids rejected + id in REJECTED, full-state timestamp for countdowns/hostNow, T in 3-player score key, restored room keeps isPublic/mode, lobby {n}/{total}); item 10 (react purity) skipped as not clean; tsc clean, oxlint no new warnings; not committed; vitest 371 passed
+- ✅ Opus 5.5 subagent (app) — 123456 reset removed (one typed-password form, min 8, i18n), practice sync re-runs, rated queue per uid, history modal uid/stale-safe, no fake Blitz timer, Back guard removed on exit, keyboard cell moves (focus-visible, not LMAO), dialog focus trap in useModalChrome + lightbox + emote picker, scripts on service-role key (clear_data --yes + project), inspect_gomoku.js git rm; tsc/oxlint/build clean; not committed; vitest 376 passed
+
+## 2026-11-17 — code review + clean-up; Orca style from PR 5
+- ✅ 1. Thorough code review of the project (read task list + commit history first): report was in `CODE_REVIEW.md` (deleted 2026-11-18). Not committed
+- ✅ 2. Clean up dead code: 5 files, 8 assets, 2 deps, ~45 dead / over-exported symbols, unused CSS + i18n keys. knip now lists only entry points. Not committed
+- ✅ 3. Refactoring points; unify constants: theme lists, `src/shared/constants.ts`, piece colours, room TTLs / limits unified. ⚠️ big file splits (Board, AppView, AuthContextProvider, OnlineRoomView) only listed in the review, not done
+- ✅ 4. Some UI clean-up: board centring, minigame / error text in i18n (EN + VI), accessibility one-liners, unused CSS. Checked in a browser on `/bot` only
+- ✅ 5. PR 5 NOT merged. Orca style added as a new board theme (Laser grid kept). Checked in a browser, light + dark. Not committed
+- ✅ Bugs fixed on the way : 7 room engine bugs with 19 new tests, bot stone after game over, AI worker crash hang, chat IME send, auth listener deadlock risk (⚠️ not tried with a real sign-in). tsc clean, vitest 346 passed, build OK
+- ⚠️ Open, need owner decision : 10 security items (secrets in pushed history, "Reset to 123456" button, emails readable by anon key, Elo farming via submit-match …) and 16 bugs. Nothing changed for these
+- ✅ Opus subagent (room) — all 13 room/webrtc items done (seat T, hidden RPS pick, opening reset, coin caller, 3p rematch, rejoin name, 3p lobby, 5h TTLs, board sizes/limits, signed/isRecord, tick/ping consts, claim/discard helpers, dead v1 keys + rematch.expiresAt); 19 tests added; tsc clean; lobby "{n}/2 players" text left for main; not committed; vitest 346 passed
+
 ## 2026-11-13 — push to GitHub, pull PR 5
 - ⚠️ 1. Push project to GH: `main` already equals `origin/main` (voanhduy1710/Caro-app), nothing to push. Local-only branches (feat/mobile-pairing, feat/mobile-pairing-core, pr-3, pr-4) and untracked AGENTS.md / CLAUDE.md / Task list.md not pushed; waiting for user
 - ❌ 2. Pull PR https://github.com/cnttatino-spec/Caro-app/pull/5 to local: blocked, repo "not found" for both gh accounts (voanhduy1710, cntt-atino). Not pulled
