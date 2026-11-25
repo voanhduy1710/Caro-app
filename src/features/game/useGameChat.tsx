@@ -244,7 +244,7 @@ export const useGameChat = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleChatSubmit();
     } else if (e.key === 'Escape' && replyingTo) {
@@ -387,8 +387,6 @@ export const useGameChat = ({
     lightboxOpen: lightboxImage !== null,
     setLightboxImage,
     unreadCount,
-    hasNewBelow,
-    sendChat,
     handleBuzzClick,
     canBuzz,
     isBuzzCooldown,

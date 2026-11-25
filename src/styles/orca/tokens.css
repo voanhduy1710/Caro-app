@@ -1,0 +1,357 @@
+/* =============================================================================
+   Orca style — design tokens (PR 5 "Orca IDE" look as a switchable app style)
+
+   Everything here applies only while <html data-ui-style="orca"> is set (see
+   src/features/theme/uiStyle.ts). The Default style never sees these values.
+
+   Scoping pattern (all files in src/styles/orca/ follow it):
+     - Tokens:   :root[data-ui-style='orca']                         -> light
+                 :root[data-ui-style='orca']:not([data-ui-theme='light'])
+                   inside @media (prefers-color-scheme: dark)        -> dark (system)
+                 :root[data-ui-style='orca'][data-ui-theme='dark']   -> dark (explicit)
+       Each one is one step more specific than the matching Default rule in
+       tokens.css, so it wins whatever order the files load in.
+     - Disguise: html:root[data-ui-style='orca'][data-sheet-disguise='on'] beats
+       every Orca token block, the same way the Default disguise beats tokens.css.
+     - Rules:    :root[data-ui-style='orca'] .class { … } inside the same
+       @layer as the Default rule it replaces, so Tailwind utilities still win.
+
+   Values are PR 5's src/styles/tokens.css, verbatim.
+   ========================================================================== */
+
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --- Tailwind theme indirection ---------------------------------------------
+   tokens.css registers fonts and radii with @theme inline, which bakes the
+   literal value into each utility, so a scoped token could never reach them.
+   These re-declarations route the same utilities through --ui-* variables,
+   whose fallbacks are exactly today's values: with no data-ui-style the
+   computed result is unchanged. The new colour names are PR 5's (bg-editor,
+   bg-sidebar, bg-primary, text-success …); no Default markup uses them. */
+
+@theme inline {
+  --font-display: var(--ui-font-display, 'Baloo 2', 'Google Sans Flex', ui-rounded, system-ui, sans-serif);
+  --font-sans: var(--ui-font-sans, 'Google Sans Flex', 'Google Sans', ui-sans-serif, system-ui, sans-serif);
+  --font-mono: var(--ui-font-mono, 'Google Sans Code', ui-monospace, 'SF Mono', Menlo, monospace);
+
+  --radius-xs: var(--ui-radius-xs, 0.125rem);
+  --radius-sm: var(--ui-radius-sm, 10px);
+  --radius-md: var(--ui-radius-md, 16px);
+  --radius-lg: var(--ui-radius-lg, 28px);
+  --radius-xl: var(--ui-radius-xl, 0.75rem);
+
+  --shadow-e1: var(--ui-shadow);
+
+  --ease-pop: var(--ui-ease-pop, cubic-bezier(0.22, 1.6, 0.36, 1));
+
+  --color-editor: var(--ui-editor);
+  --color-sidebar: var(--ui-sidebar);
+  --color-primary: var(--ui-primary);
+  --color-primary-hover: var(--ui-primary-hover);
+  --color-primary-fg: var(--ui-primary-fg);
+  --color-brand: var(--ui-brand);
+  --color-brand-fg: var(--ui-brand-fg);
+  --color-brand-text: var(--ui-brand-text);
+  --color-success: var(--ui-success);
+  --color-success-soft: var(--ui-success-soft);
+}
+
+/* --- Light (base) ---------------------------------------------------------- */
+
+:root[data-ui-style='orca'] {
+  color-scheme: light;
+
+  --ui-font-sans: 'Geist', 'Google Sans Flex', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --ui-font-display: 'Geist', 'Google Sans Flex', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --ui-font-mono: 'SF Mono', SFMono-Regular, 'Cascadia Code', 'Google Sans Code', Menlo, Consolas, ui-monospace, monospace;
+  /* Plain var(--font-sans) readers (body, the board's ping glyphs) follow too. */
+  --font-sans: var(--ui-font-sans);
+  --font-display: var(--ui-font-display);
+  --font-mono: var(--ui-font-mono);
+
+  --ui-radius-xs: 4px;
+  --ui-radius-sm: 6px;
+  --ui-radius-md: 8px;
+  --ui-radius-lg: 12px;
+  --ui-radius-xl: 16px;
+
+  --ui-ease-pop: cubic-bezier(0.165, 0.84, 0.44, 1);
+
+  --ui-bg: #ffffff;
+  --ui-editor: #fafafa;
+  --ui-sidebar: #fafafa;
+  --ui-worktree-sidebar: #f5f5f5;
+  --ui-surface: #ffffff;
+  --ui-surface-2: #f5f5f5;
+  --ui-surface-3: #eaeaea;
+  --ui-border: #e5e5e5;
+  --ui-border-strong: #d4d4d4;
+  --ui-ring: #a1a1a1;
+
+  --ui-text: #0a0a0a;
+  --ui-text-muted: #636363;
+  --ui-text-subtle: #6f6f6f;
+
+  --ui-primary: #171717;
+  --ui-primary-hover: #2c2c2c;
+  --ui-primary-fg: #fafafa;
+
+  --ui-accent: #0969da;
+  --ui-accent-hover: #0757b8;
+  --ui-accent-fg: #ffffff;
+  --ui-accent-text: #0969da;
+  --ui-accent-soft: rgb(9 105 218 / 0.1);
+  --ui-accent-soft-hover: rgb(9 105 218 / 0.16);
+  --ui-accent-text-hover: #054899;
+  --ui-accent-ring: rgb(9 105 218 / 0.35);
+
+  --ui-brand: #171717;
+  --ui-brand-fg: #fafafa;
+  --ui-brand-text: #0a0a0a;
+
+  --ui-inverse: #171717;
+  --ui-inverse-fg: #fafafa;
+
+  --ui-success: #147638;
+  --ui-success-soft: rgb(20 118 56 / 0.1);
+  --ui-success-border: rgb(20 118 56 / 0.25);
+
+  --ui-danger: #cf222e;
+  --ui-danger-soft: rgb(207 34 46 / 0.1);
+  --ui-danger-soft-hover: rgb(207 34 46 / 0.16);
+  --ui-danger-text-hover: #a40e26;
+  --ui-danger-solid: #cf222e;
+  --ui-danger-fg: #ffffff;
+
+  --ui-warning: #9a6700;
+  --ui-warning-soft: rgb(202 138 4 / 0.12);
+  --ui-warning-solid: #ca8a04;
+  --ui-warning-fg: #ffffff;
+
+  --ui-info: #0969da;
+  --ui-info-soft: rgb(9 105 218 / 0.1);
+
+  --ui-tab-bar: #fafafa;
+  --ui-tab-active: #ffffff;
+  --ui-tab-inactive: #f3f3f3;
+
+  --ui-shadow: 0 2px 8px rgb(0 0 0 / 0.06);
+  --ui-shadow-lg: 0 12px 32px rgb(0 0 0 / 0.16);
+  --ui-scrim: rgb(0 0 0 / 0.45);
+
+  /* Default-only extrusion colours. Orca is flat, so any Default-styled piece
+     still on screen (a screen not yet given an Orca variant) loses its ledge. */
+  --ui-lift: transparent;
+  --ui-accent-shadow: transparent;
+  --ui-inverse-shadow: transparent;
+  --ui-danger-shadow: transparent;
+}
+
+/* --- Dark ------------------------------------------------------------------ */
+
+@media (prefers-color-scheme: dark) {
+  :root[data-ui-style='orca']:not([data-ui-theme='light']) {
+    color-scheme: dark;
+
+    --ui-bg: #0a0a0a;
+    --ui-editor: #1e1e1e;
+    --ui-sidebar: #171717;
+    --ui-worktree-sidebar: #202020;
+    --ui-surface: #171717;
+    --ui-surface-2: #262626;
+    --ui-surface-3: #353535;
+    --ui-border: rgb(255 255 255 / 0.08);
+    --ui-border-strong: rgb(255 255 255 / 0.16);
+    --ui-ring: #737373;
+
+    --ui-text: #f0f0f0;
+    --ui-text-muted: #acacac;
+    --ui-text-subtle: #969696;
+
+    --ui-primary: #e5e5e5;
+    --ui-primary-hover: #ffffff;
+    --ui-primary-fg: #171717;
+
+    --ui-accent: #4493f8;
+    --ui-accent-hover: #60a5fa;
+    --ui-accent-fg: #0a0a0a;
+    --ui-accent-text: #6cb0ff;
+    --ui-accent-soft: rgb(68 147 248 / 0.14);
+    --ui-accent-soft-hover: rgb(68 147 248 / 0.22);
+    --ui-accent-text-hover: #93c5fd;
+    --ui-accent-ring: rgb(68 147 248 / 0.4);
+
+    --ui-brand: #f0f0f0;
+    --ui-brand-fg: #171717;
+    --ui-brand-text: #f0f0f0;
+
+    --ui-inverse: #f0f0f0;
+    --ui-inverse-fg: #171717;
+
+    --ui-success: #86efac;
+    --ui-success-soft: rgb(134 239 172 / 0.12);
+    --ui-success-border: rgb(134 239 172 / 0.25);
+
+    --ui-danger: #ff6568;
+    --ui-danger-soft: rgb(255 101 104 / 0.14);
+    --ui-danger-soft-hover: rgb(255 101 104 / 0.22);
+    --ui-danger-text-hover: #ff8f91;
+    --ui-danger-solid: #dc2626;
+    --ui-danger-fg: #ffffff;
+
+    --ui-warning: #eab308;
+    --ui-warning-soft: rgb(234 179 8 / 0.14);
+    --ui-warning-solid: #eab308;
+    --ui-warning-fg: #171717;
+
+    --ui-info: #4493f8;
+    --ui-info-soft: rgb(68 147 248 / 0.14);
+
+    --ui-tab-bar: #141414;
+    --ui-tab-active: #1e1e1e;
+    --ui-tab-inactive: #141414;
+
+    --ui-shadow: 0 4px 14px rgb(0 0 0 / 0.45);
+    --ui-shadow-lg: 0 18px 42px rgb(0 0 0 / 0.65);
+    --ui-scrim: rgb(0 0 0 / 0.68);
+  }
+}
+
+:root[data-ui-style='orca'][data-ui-theme='dark'] {
+  color-scheme: dark;
+
+  --ui-bg: #0a0a0a;
+  --ui-editor: #1e1e1e;
+  --ui-sidebar: #171717;
+  --ui-worktree-sidebar: #202020;
+  --ui-surface: #171717;
+  --ui-surface-2: #262626;
+  --ui-surface-3: #353535;
+  --ui-border: rgb(255 255 255 / 0.08);
+  --ui-border-strong: rgb(255 255 255 / 0.16);
+  --ui-ring: #737373;
+
+  --ui-text: #f0f0f0;
+  --ui-text-muted: #acacac;
+  --ui-text-subtle: #969696;
+
+  --ui-primary: #e5e5e5;
+  --ui-primary-hover: #ffffff;
+  --ui-primary-fg: #171717;
+
+  --ui-accent: #4493f8;
+  --ui-accent-hover: #60a5fa;
+  --ui-accent-fg: #0a0a0a;
+  --ui-accent-text: #6cb0ff;
+  --ui-accent-soft: rgb(68 147 248 / 0.14);
+  --ui-accent-soft-hover: rgb(68 147 248 / 0.22);
+  --ui-accent-text-hover: #93c5fd;
+  --ui-accent-ring: rgb(68 147 248 / 0.4);
+
+  --ui-brand: #f0f0f0;
+  --ui-brand-fg: #171717;
+  --ui-brand-text: #f0f0f0;
+
+  --ui-inverse: #f0f0f0;
+  --ui-inverse-fg: #171717;
+
+  --ui-success: #86efac;
+  --ui-success-soft: rgb(134 239 172 / 0.12);
+  --ui-success-border: rgb(134 239 172 / 0.25);
+
+  --ui-danger: #ff6568;
+  --ui-danger-soft: rgb(255 101 104 / 0.14);
+  --ui-danger-soft-hover: rgb(255 101 104 / 0.22);
+  --ui-danger-text-hover: #ff8f91;
+  --ui-danger-solid: #dc2626;
+  --ui-danger-fg: #ffffff;
+
+  --ui-warning: #eab308;
+  --ui-warning-soft: rgb(234 179 8 / 0.14);
+  --ui-warning-solid: #eab308;
+  --ui-warning-fg: #171717;
+
+  --ui-info: #4493f8;
+  --ui-info-soft: rgb(68 147 248 / 0.14);
+
+  --ui-tab-bar: #141414;
+  --ui-tab-active: #1e1e1e;
+  --ui-tab-inactive: #141414;
+
+  --ui-shadow: 0 4px 14px rgb(0 0 0 / 0.45);
+  --ui-shadow-lg: 0 18px 42px rgb(0 0 0 / 0.65);
+  --ui-scrim: rgb(0 0 0 / 0.68);
+}
+
+/* --- Spreadsheet disguise ---------------------------------------------------
+   PR 5's html:root[data-sheet-disguise="on"] block. One step more specific
+   than every Orca block above, as the Default disguise is over tokens.css. */
+
+html:root[data-ui-style='orca'][data-sheet-disguise='on'] {
+  color-scheme: light;
+
+  --font-sans: 'Google Sans', Roboto, Arial, sans-serif;
+  --font-display: 'Google Sans', Roboto, Arial, sans-serif;
+
+  --ui-bg: #ffffff;
+  --ui-editor: #ffffff;
+  --ui-sidebar: #f8f9fa;
+  --ui-surface: #ffffff;
+  --ui-surface-2: #f8f9fa;
+  --ui-surface-3: #f1f3f4;
+  --ui-border: #dadce0;
+  --ui-border-strong: #c4c7c5;
+
+  --ui-text: #202124;
+  --ui-text-muted: #5f6368;
+  --ui-text-subtle: #5f6368;
+
+  --ui-primary: #0b57d0;
+  --ui-primary-hover: #0842a0;
+  --ui-primary-fg: #ffffff;
+
+  --ui-accent: #0b57d0;
+  --ui-accent-hover: #0842a0;
+  --ui-accent-fg: #ffffff;
+  --ui-accent-text: #0b57d0;
+  --ui-accent-soft: #d3e3fd;
+  --ui-accent-soft-hover: #c2d7fb;
+  --ui-accent-text-hover: #041e49;
+  --ui-accent-ring: rgb(11 87 208 / 0.4);
+
+  --ui-brand: #0f9d58;
+  --ui-brand-fg: #ffffff;
+  --ui-brand-text: #137333;
+
+  --ui-inverse: #323232;
+  --ui-inverse-fg: #ffffff;
+
+  --ui-danger: #d93025;
+  --ui-danger-soft: #fce8e6;
+  --ui-danger-soft-hover: #fad2cf;
+  --ui-danger-text-hover: #a50e0e;
+  --ui-danger-solid: #d93025;
+  --ui-danger-fg: #ffffff;
+  --ui-warning: #b06000;
+  --ui-warning-soft: #fef7e0;
+  --ui-info: #1a73e8;
+  --ui-info-soft: #e8f0fe;
+
+  --ui-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  --ui-shadow-lg: 0 4px 8px 3px rgba(60, 64, 67, 0.15), 0 1px 3px rgba(60, 64, 67, 0.3);
+  --ui-scrim: rgba(32, 33, 36, 0.4);
+}
+
+/* PR 5 switched transitions off for the two frames a light/dark swap takes, so
+   every surface changes at once (useUiTheme sets the class in Orca only). */
+:root[data-ui-style='orca'].theme-transition-disabled *,
+:root[data-ui-style='orca'].theme-transition-disabled *::before,
+:root[data-ui-style='orca'].theme-transition-disabled *::after {
+  transition: none !important;
+}

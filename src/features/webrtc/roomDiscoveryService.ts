@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../config/supabase';
 import { ROOM_CODE_PATTERN } from './roomCode';
-import { sanitizeAvatar } from '../room/protocol';
+import { BOARD_SIZES, MAX_NAME_CODE_POINTS, sanitizeAvatar } from '../room/protocol';
+import { MAX_MEMBERS } from '../room/roomEngineTypes';
 
-export type AnnouncedStatus = 'waiting' | 'playing' | 'paused' | 'ended';
+type AnnouncedStatus = 'waiting' | 'playing' | 'paused' | 'ended';
 
 /** A public room as the lobby lists it. Only rooms from this version of the app are kept. */
 export interface ActiveRoomInfo {
@@ -15,7 +16,10 @@ export interface ActiveRoomInfo {
   mode: 'casual' | 'ranked';
   createdAt: number;
   lastHeartbeat: number;
-  seatsFilled: 0 | 1 | 2;
+  /** Up to 3 in a three-player room. */
+  seatsFilled: 0 | 1 | 2 | 3;
+  /** Seats the room plays with: 3 in a three-player room. Hosts from before it was announced are read as 2. */
+  seats: 2 | 3;
   viewers: number;
   members: number;
   capacity: number;
@@ -36,15 +40,11 @@ const HEARTBEAT_MS = 2000;
 
 // Anyone can announce a room on the public lobby, and whatever is kept is
 // rendered on the home page and saved to localStorage across reloads. So an
-// announced room is only accepted in the shape this app itself sends.
-// The sizes the settings dialog offers.
-const BOARD_SIZES = [15, 19, 30, 50];
+// announced room is only accepted in the shape this app itself sends: a board
+// size the settings offer, a name no longer than a room member's, and no more
+// members than a room holds.
 const STATUSES: readonly string[] = ['waiting', 'playing', 'paused', 'ended'];
-// The longest display name signup accepts.
-const MAX_HOST_NAME_LENGTH = 40;
 const DEFAULT_HOST_NAME = 'Host Player';
-/** The room size the app enforces. A larger claim is not a room this app sent. */
-const MAX_CAPACITY = 8;
 
 /**
  * The one rule for a host's name, applied to rooms read from the network and to
@@ -53,7 +53,7 @@ const MAX_CAPACITY = 8;
  * middle of an emoji and left ending in a broken glyph.
  */
 const normaliseHostName = (name: string) =>
-  Array.from(name.trim()).slice(0, MAX_HOST_NAME_LENGTH).join('') || DEFAULT_HOST_NAME;
+  Array.from(name.trim()).slice(0, MAX_NAME_CODE_POINTS).join('') || DEFAULT_HOST_NAME;
 
 const isCount = (value: unknown, max: number): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= max;
@@ -66,7 +66,7 @@ const isCount = (value: unknown, max: number): value is number =>
  * rendered, and because that room had been saved, the home page stayed blank
  * on every reload after.
  */
-const parseAnnouncedRoom = (value: unknown, now: number): ActiveRoomInfo | null => {
+export const parseAnnouncedRoom = (value: unknown, now: number): ActiveRoomInfo | null => {
   if (typeof value !== 'object' || value === null) return null;
   const {
     v,
@@ -78,6 +78,7 @@ const parseAnnouncedRoom = (value: unknown, now: number): ActiveRoomInfo | null 
     createdAt,
     lastHeartbeat,
     seatsFilled,
+    seats,
     viewers,
     members,
     capacity,
@@ -90,14 +91,17 @@ const parseAnnouncedRoom = (value: unknown, now: number): ActiveRoomInfo | null 
   if (v !== 2) return null;
   if (typeof roomId !== 'string' || !ROOM_CODE_PATTERN.test(roomId)) return null;
   if (typeof hostName !== 'string') return null;
-  if (typeof boardSize !== 'number' || !BOARD_SIZES.includes(boardSize)) return null;
+  if (typeof boardSize !== 'number' || !(BOARD_SIZES as readonly number[]).includes(boardSize)) return null;
   if (mode !== undefined && mode !== 'casual' && mode !== 'ranked') return null;
   if (hostAvatar !== undefined && typeof hostAvatar !== 'string') return null;
   if (typeof lastHeartbeat !== 'number' || !Number.isFinite(lastHeartbeat)) return null;
-  if (!isCount(capacity, MAX_CAPACITY) || capacity < 2) return null;
+  if (!isCount(capacity, MAX_MEMBERS) || capacity < 2) return null;
   if (!isCount(members, capacity) || members < 1) return null;
-  if (seatsFilled !== 0 && seatsFilled !== 1 && seatsFilled !== 2) return null;
+  if (seatsFilled !== 0 && seatsFilled !== 1 && seatsFilled !== 2 && seatsFilled !== 3) return null;
   if (!isCount(viewers, capacity) || seatsFilled + viewers !== members) return null;
+  if (seats !== undefined && seats !== 2 && seats !== 3) return null;
+  const seatTotal: 2 | 3 = seats ?? (seatsFilled === 3 ? 3 : 2);
+  if (seatsFilled > seatTotal) return null;
   if (typeof status !== 'string' || !STATUSES.includes(status)) return null;
   if (typeof openSeat !== 'boolean') return null;
 
@@ -117,6 +121,7 @@ const parseAnnouncedRoom = (value: unknown, now: number): ActiveRoomInfo | null 
     createdAt: typeof createdAt === 'number' && Number.isFinite(createdAt) ? Math.min(createdAt, now) : now,
     lastHeartbeat: Math.min(lastHeartbeat, now),
     seatsFilled,
+    seats: seatTotal,
     viewers,
     members,
     capacity,
@@ -349,7 +354,7 @@ class RoomDiscoveryManager {
     const signature = activeList
       .map(
         (room) =>
-          `${room.roomId}|${room.hostName}|${room.hostAvatar || ''}|${room.boardSize}|${room.seatsFilled}|${room.viewers}|${room.status}|${room.openSeat}`
+          `${room.roomId}|${room.hostName}|${room.hostAvatar || ''}|${room.boardSize}|${room.seatsFilled}/${room.seats}|${room.viewers}|${room.status}|${room.openSeat}`
       )
       .join('~');
 

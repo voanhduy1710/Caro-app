@@ -2,20 +2,25 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../../config/supabase';
 import { getAvatarPublicUrl, getChampionIdForSeed } from '../avatar/avatarService';
 import { fetchOrCreateProfile } from './profileService';
+import {
+  DISPLAY_NAME_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  isAllowedPhotoUrl,
+  isValidDisplayName,
+  isValidPassword,
+  isValidUsername,
+  normalizeUsername,
+} from './authRules';
 
 import type { AuthContextType, CreateAccountResult, ProfileSaveResult, UserProfile } from './authTypes';
-export type { CreateAccountResult, ProfileSaveResult, UserProfile } from './authTypes';
+import { DEFAULT_ELO, GUEST_UID_PREFIX } from '../../shared/constants';
+export type { UserProfile } from './authTypes';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const GUEST_STORAGE_KEY = 'caro_app_guest_user';
-const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
-
-const normalizeUsername = (value: string) => value.trim().toLowerCase();
 
 const usernameToEmail = (username: string) => `${username}@gomoku.app`;
-
-const GUEST_UID_PREFIX = 'guest_';
 
 /** What every guest was called before names came from the uid. */
 const LEGACY_GUEST_NAME = 'Guest Player';
@@ -35,7 +40,6 @@ const guestNameFor = (uid: string): string => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [showConfigGuide, setShowConfigGuide] = useState<boolean>(false);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'create'>('signin');
@@ -92,7 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       displayName: customName?.trim() || guestNameFor(guestId),
       photoURL: getChampionIdForSeed(guestId),
       email: '',
-      elo: 1200,
+      elo: DEFAULT_ELO,
       wins: 0,
       losses: 0,
       draws: 0,
@@ -125,27 +129,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const profile = await fetchOrCreateProfile(session.user);
-        setUser(profile);
-      } else {
-        setUser(getInitialGuest());
-      }
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        const profile = await fetchOrCreateProfile(session.user);
-        setUser(profile);
-      } else {
-        setUser(getInitialGuest());
-      }
-      setLoading(false);
+    // One source for the session: the subscription fires INITIAL_SESSION on
+    // its own, so a separate getSession() only fetched the profile twice.
+    let latest = 0;
+    let disposed = false;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // A refreshed token changes nothing the profile is built from.
+      if (event === 'TOKEN_REFRESHED') return;
+      const run = ++latest;
+      const authUser = session?.user ?? null;
+      // Deferred, never awaited in here: this callback runs under the auth
+      // lock, and a Supabase query made from inside it waits on that same lock.
+      setTimeout(async () => {
+        // Only the newest event may write, so a slow profile fetch cannot put
+        // a signed-in profile back after a sign-out that came later.
+        const stale = () => disposed || run !== latest;
+        if (stale()) return;
+        try {
+          const next = authUser ? await fetchOrCreateProfile(authUser) : getInitialGuest();
+          if (!stale()) setUser(next);
+        } catch (error) {
+          console.warn('Failed to load the signed-in profile:', error);
+        } finally {
+          if (!stale()) setLoading(false);
+        }
+      }, 0);
     });
 
     return () => {
+      disposed = true;
       subscription.unsubscribe();
     };
   }, []);
@@ -180,16 +192,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const username = normalizeUsername(usernameInput);
     const displayName = customDisplayName?.trim() || username;
 
-    if (!USERNAME_PATTERN.test(username)) {
+    if (!isValidUsername(username)) {
       setAuthError('Username must be 3-24 characters: lowercase letters, numbers, or underscores.');
       return { ok: false };
     }
-    if (password.length < 8) {
-      setAuthError('Password must be at least 8 characters long.');
+    if (!isValidPassword(password)) {
+      setAuthError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters long.`);
       return { ok: false };
     }
-    if (displayName.length > 40) {
-      setAuthError('Display name must be 40 characters or fewer.');
+    if (!isValidDisplayName(displayName)) {
+      setAuthError(`Display name must be ${DISPLAY_NAME_MAX_LENGTH} characters or fewer.`);
       return { ok: false };
     }
 
@@ -225,7 +237,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             displayName,
             photoURL: getAvatarPublicUrl(),
             email,
-            elo: 1200,
+            elo: DEFAULT_ELO,
             wins: 0,
             losses: 0,
             draws: 0,
@@ -273,7 +285,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithCredentials = async (username: string, password: string): Promise<boolean> => {
     const normalizedUsername = normalizeUsername(username);
-    if (!USERNAME_PATTERN.test(normalizedUsername)) {
+    if (!isValidUsername(normalizedUsername)) {
       setAuthError('Enter the username used when you created your account.');
       return false;
     }
@@ -332,6 +344,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       displayName: updates.displayName !== undefined ? updates.displayName.trim() : user.displayName,
       photoURL: updates.photoURL !== undefined ? updates.photoURL : user.photoURL,
     };
+    // The database refuses a name or avatar outside these rules, so a value it
+    // would refuse is never shown as if it had been saved.
+    if (!updated.isGuest && (!isValidDisplayName(updated.displayName) || !isAllowedPhotoUrl(updated.photoURL))) {
+      return 'refused';
+    }
     // Shown straight away so the navbar keeps up with the modal. Nothing else
     // is written until the server has taken the change.
     setUser(updated);
@@ -422,13 +439,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateLocalGuestName = (newName: string) => {
-    updateUserProfile({ displayName: newName });
-  };
-
   const changePassword = async (newPassword: string): Promise<{ success: boolean; message?: string }> => {
-    if (!newPassword || newPassword.length < 6) {
-      return { success: false, message: 'Password must be at least 6 characters long.' };
+    if (!isValidPassword(newPassword)) {
+      return { success: false, message: `Password must be at least ${PASSWORD_MIN_LENGTH} characters long.` };
     }
 
     if (!user || user.isGuest) {
@@ -470,12 +483,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginAsGuest,
         signInWithCredentials,
         createAccount,
-        updateLocalGuestName,
         updateUserProfile,
         refreshUserProfile,
         changePassword,
-        showConfigGuide,
-        setShowConfigGuide,
         showAuthModal,
         setShowAuthModal,
         showProfileModal,

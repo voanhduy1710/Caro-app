@@ -3,6 +3,15 @@ import { getBestAiMove } from './aiEngine';
 import type { BoardMatrix } from '../../shared/utils/gomokuLogic';
 import type { AiRequest, AiResponse } from './aiEngine.worker';
 
+interface PendingRequest {
+  resolve: (move: [number, number]) => void;
+  reject: (reason: unknown) => void;
+  board: BoardMatrix;
+  size: number;
+  aiPiece: 'X' | 'O';
+  timeLimitMs?: number;
+}
+
 /**
  * Asks the AI for a move on a worker thread, falling back to a direct call when
  * workers are unavailable. Only the newest request is ever answered, so an undo
@@ -11,7 +20,7 @@ import type { AiRequest, AiResponse } from './aiEngine.worker';
 export const useAiEngine = () => {
   const workerRef = useRef<Worker | null>(null);
   const requestIdRef = useRef(0);
-  const pendingRef = useRef<Map<number, (move: [number, number]) => void>>(new Map());
+  const pendingRef = useRef<Map<number, PendingRequest>>(new Map());
 
   useEffect(() => {
     let worker: Worker | null = null;
@@ -19,14 +28,30 @@ export const useAiEngine = () => {
       worker = new Worker(new URL('./aiEngine.worker.ts', import.meta.url), { type: 'module' });
       worker.onmessage = (event: MessageEvent<AiResponse>) => {
         const { id, move } = event.data;
-        const resolve = pendingRef.current.get(id);
+        const request = pendingRef.current.get(id);
         pendingRef.current.delete(id);
-        if (resolve) resolve(move);
+        if (request) request.resolve(move);
       };
-      worker.onerror = (err) => {
-        console.warn('AI worker failed, falling back to the main thread:', err.message);
+      // A dead worker never answers, so a search in flight would leave the bot
+      // "thinking" forever. Settle it on the main thread, as the no-worker path does.
+      const failWorker = (reason: string) => {
+        console.warn('AI worker failed, falling back to the main thread:', reason);
+        const dying = worker;
+        if (!dying || workerRef.current !== dying) return;
         workerRef.current = null;
+        dying.terminate();
+        const stranded = [...pendingRef.current.values()];
+        pendingRef.current.clear();
+        for (const { resolve, reject, board, size, aiPiece, timeLimitMs } of stranded) {
+          try {
+            resolve(getBestAiMove(board, size, aiPiece, { timeLimitMs }));
+          } catch (err) {
+            reject(err);
+          }
+        }
       };
+      worker.onerror = (err) => failWorker(err.message);
+      worker.onmessageerror = () => failWorker('unreadable message from the worker');
       workerRef.current = worker;
     } catch (err) {
       console.warn('AI worker unavailable, using the main thread:', err);
@@ -52,8 +77,8 @@ export const useAiEngine = () => {
     pendingRef.current.clear();
 
     const id = ++requestIdRef.current;
-    return new Promise<[number, number]>((resolve) => {
-      pendingRef.current.set(id, resolve);
+    return new Promise<[number, number]>((resolve, reject) => {
+      pendingRef.current.set(id, { resolve, reject, board, size, aiPiece, timeLimitMs });
       const request: AiRequest = { id, board, size, aiPiece, timeLimitMs };
       worker.postMessage(request);
     });

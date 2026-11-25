@@ -3,6 +3,7 @@ import { CheckCircle2, Loader2, Smartphone, X } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
 import { useT } from '../i18n/language';
+import { useIsOrca } from '../theme/uiStyle';
 
 interface PairMobileModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface PairMobileModalProps {
 /** The desktop's "Pair mobile" dialog: a QR the phone scans, and the pairing's status. */
 export const PairMobileModal: React.FC<PairMobileModalProps> = ({ isOpen, link, secondsLeft, phoneConnected, onClose, onUnpair }) => {
   const t = useT();
+  const isOrca = useIsOrca();
   const dialogProps = useModalChrome(isOpen, onClose, 'pair-mobile-modal-title');
   const [qr, setQr] = useState<{ link: string; dataUrl: string } | null>(null);
 
@@ -35,6 +37,55 @@ export const PairMobileModal: React.FC<PairMobileModalProps> = ({ isOpen, link, 
   if (!isOpen) return null;
   // A code drawn for a secret that has since rotated is never shown.
   const dataUrl = qr && qr.link === link ? qr.dataUrl : null;
+
+  if (isOrca) {
+    // Orca style (PR 5): the same dialog as a compact IDE panel.
+    return (
+      <div {...dialogProps} className="modal-scrim">
+        <div className="modal-panel flex max-h-[calc(100dvh-2rem)] max-w-sm flex-col overflow-hidden border border-line-strong bg-surface">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <Smartphone size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-accent-text" />
+              <h2 id="pair-mobile-modal-title" className="truncate text-sm font-semibold text-ink">
+                {t('pair.title')}
+              </h2>
+            </div>
+            <button type="button" onClick={onClose} className="orca-icon-btn -mr-1" aria-label={t('common.close')}>
+              <X size={15} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="space-y-4 p-4">
+            <p className="text-xs leading-relaxed text-muted">{t('pair.instructions')}</p>
+
+            <div className="mx-auto flex h-60 w-60 items-center justify-center rounded-lg border border-line-strong bg-white p-3 shadow-e1">
+              {dataUrl ? (
+                <img src={dataUrl} alt={t('pair.title')} width={216} height={216} className="h-full w-full rounded-sm object-contain" />
+              ) : (
+                <Loader2 size={22} strokeWidth={1.75} className="animate-spin text-neutral-500" aria-hidden="true" />
+              )}
+            </div>
+
+            <p className="text-center font-mono text-xs tabular-nums text-muted">
+              {t('pair.refreshesIn', { seconds: secondsLeft })}
+            </p>
+
+            {phoneConnected && (
+              <div className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface-2 px-3 py-2">
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success">
+                  <CheckCircle2 size={15} strokeWidth={1.75} aria-hidden="true" />
+                  <span>{t('pair.connected')}</span>
+                </span>
+                <button type="button" onClick={onUnpair} className="btn btn-danger btn-sm">
+                  {t('pair.unpair')}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div {...dialogProps} className="modal-scrim">

@@ -6,8 +6,10 @@ import { useT } from '../i18n/language';
 import type { Seat } from './protocol';
 import { SEATS } from './roomEngine';
 import type { Member } from './roomEngine';
+import { useIsOrca } from '../theme/uiStyle';
+import { RoomRosterOrca } from './RoomRoster.orca';
 
-interface RoomRosterProps {
+export interface RoomRosterProps {
   members: Member[];
   seats: Record<Seat, string | null>;
   myMemberId: string | null;
@@ -31,7 +33,10 @@ interface RoomRosterProps {
  * Everyone in the room, seated or watching. A seated player can explicitly
  * pass their seat to the watching group from their own roster row.
  */
-export const RoomRoster: React.FC<RoomRosterProps> = ({
+export const RoomRoster: React.FC<RoomRosterProps> = (props) =>
+  useIsOrca() ? <RoomRosterOrca {...props} /> : <RoomRosterDefault {...props} />;
+
+const RoomRosterDefault: React.FC<RoomRosterProps> = ({
   members,
   seats,
   myMemberId,

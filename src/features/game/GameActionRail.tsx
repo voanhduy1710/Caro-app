@@ -10,8 +10,8 @@ import { BOT_HINT_EVENT, hasBotHint } from './botHint';
 import { PairingContext } from '../pairing/PairingContext';
 import { useIsDesktop } from '../../shared/hooks/useMediaQuery';
 
-export interface GameActionRailProps extends Pick<GameControlsProps, 'exitLabel' | 'isAiMode' | 'onExitMatch' | 'role' | 'openSeat' | 'onTakeSeat' | 'onProposeUndo' | 'allowUndo' | 'gameStatus' | 'canUndo' | 'undoPending' | 'onProposeRematch' | 'rematchPending' | 'onResign' | 'canResign' | 'doubleDown' | 'onOfferDoubleDown'> {
-  simulationCount: number; undoTitle: string; rematchDisabled: boolean; prefs: DisplayPrefs;
+export interface GameActionRailProps extends Pick<GameControlsProps, 'exitLabel' | 'isAiMode' | 'onExitMatch' | 'role' | 'openSeat' | 'onTakeSeat' | 'onProposeUndo' | 'gameStatus' | 'undoPending' | 'onProposeRematch' | 'rematchPending' | 'onResign' | 'doubleDown' | 'onOfferDoubleDown'> {
+  simulationCount: number; undoTitle: string; undoDisabled: boolean; resignDisabled: boolean; rematchDisabled: boolean; prefs: DisplayPrefs;
   gearRef: React.RefObject<HTMLButtonElement | null>; prefsRef: React.RefObject<HTMLDivElement | null>;
   isPrefsOpen: boolean; setIsPrefsOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }
@@ -21,7 +21,7 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
   const { user } = useAuth();
   const pairing = useContext(PairingContext);
   const isDesktop = useIsDesktop();
-  const { exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown } = props;
+  const { exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, undoDisabled, gameStatus, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, resignDisabled, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown } = props;
   return (
     <div className="flex flex-wrap items-center justify-center gap-0.5">
       <RailButton
@@ -65,7 +65,7 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
         label={t('game.takeBack')}
         title={undoTitle}
         onClick={onProposeUndo}
-        disabled={!allowUndo || gameStatus !== 'playing' || !canUndo}
+        disabled={undoDisabled}
         pending={undoPending}
         tone="danger"
       />
@@ -96,7 +96,7 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
           label={t('game.resign')}
           title={t('game.resignTitle')}
           onClick={onResign}
-          disabled={canResign === undefined ? gameStatus !== 'playing' : !canResign}
+          disabled={resignDisabled}
           tone="danger"
         />
       )}
@@ -111,7 +111,7 @@ export const GameActionRail: React.FC<GameActionRailProps> = (props) => {
           ref={gearRef}
           type="button"
           onClick={() => setIsPrefsOpen((open) => !open)}
-          aria-haspopup="true"
+          aria-haspopup="dialog"
           aria-expanded={isPrefsOpen}
           title={t('game.displayAndSound')}
           aria-label={t('game.displayAndSound')}

@@ -11,7 +11,6 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
  * the project and links to its dashboard, and both had gone stale against .env
  * within one project migration.
  */
-export const supabaseProjectRef = supabaseUrl.split('//')[1]?.split('.')[0] ?? '';
 
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)

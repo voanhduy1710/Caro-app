@@ -1,5 +1,6 @@
 import React from 'react';
 import { clearSavedRooms } from '../../features/webrtc/roomDiscoveryService';
+import { t } from '../../features/i18n/language';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -49,13 +50,13 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           {/* Only the sentence is the alert, so a screen reader does not read
               the button labels out as part of it. Focus goes to Reload, since
               the tree that held it has just been unmounted. */}
-          <p role="alert" className="font-semibold text-ink">Something went wrong while showing this page.</p>
+          <p role="alert" className="font-semibold text-ink">{t('common.error.generic')}</p>
           <div className="mt-5 flex flex-col gap-2">
             <button type="button" onClick={this.reload} className="btn btn-primary" autoFocus>
-              Reload
+              {t('common.error.reload')}
             </button>
             <button type="button" onClick={this.clearSavedDataAndReload} className="btn btn-secondary">
-              Clear saved data and reload
+              {t('common.error.clearAndReload')}
             </button>
           </div>
         </div>

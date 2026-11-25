@@ -2,6 +2,8 @@ import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { supabase } from '../../config/supabase';
 import { getChampionIdForSeed } from '../avatar/avatarService';
 import type { UserProfile } from './authTypes';
+import { DEFAULT_ELO } from '../../shared/constants';
+import { toValidDisplayName } from './authRules';
 
 export const fetchOrCreateProfile = async (authUser: SupabaseAuthUser): Promise<UserProfile> => {
     if (!supabase) throw new Error('Supabase not initialized');
@@ -31,7 +33,7 @@ export const fetchOrCreateProfile = async (authUser: SupabaseAuthUser): Promise<
           // to the default LoL avatar.
           photoURL: data.photo_url || authUser.user_metadata?.avatar_url || getChampionIdForSeed(authUser.id),
           email: authUser.email || '',
-          elo: data.elo ?? 1200,
+          elo: data.elo ?? DEFAULT_ELO,
           wins: data.wins ?? 0,
           losses: data.losses ?? 0,
           draws: data.draws ?? 0,
@@ -43,10 +45,12 @@ export const fetchOrCreateProfile = async (authUser: SupabaseAuthUser): Promise<
       const newProfile: UserProfile = {
         uid: authUser.id,
         username: authUser.user_metadata?.username,
-        displayName: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Gomoku Master',
+        // A Google name can be longer than the database allows; it is cut to fit
+        // the same way the signup trigger cuts it.
+        displayName: toValidDisplayName(authUser.user_metadata?.full_name || authUser.email?.split('@')[0], 'Gomoku Master'),
         photoURL: authUser.user_metadata?.avatar_url || getChampionIdForSeed(authUser.id),
         email: authUser.email || '',
-        elo: 1200,
+        elo: DEFAULT_ELO,
         wins: 0,
         losses: 0,
         draws: 0,
@@ -74,7 +78,7 @@ export const fetchOrCreateProfile = async (authUser: SupabaseAuthUser): Promise<
         displayName: authUser.user_metadata?.full_name || 'Gomoku Master',
         photoURL: authUser.user_metadata?.avatar_url || getChampionIdForSeed(authUser.id),
         email: authUser.email || '',
-        elo: 1200,
+        elo: DEFAULT_ELO,
         wins: 0,
         losses: 0,
         draws: 0,

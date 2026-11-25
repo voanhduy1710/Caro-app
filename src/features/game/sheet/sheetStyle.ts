@@ -6,6 +6,7 @@
 export const CHROME_FONT = "'Google Sans', Roboto, Arial, sans-serif";
 export const CELL_FONT = 'Arial, Helvetica, sans-serif';
 
+/** Class strings (`text-[#0F9D58]`) cannot interpolate this, Tailwind needs the literal; keep them in step. */
 export const SHEETS_GREEN = '#0F9D58';
 
 /** The panel shadow every Sheets dropdown and dialog uses. */

@@ -1,8 +1,15 @@
 import React from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useT } from '../i18n/language';
+import { useIsOrca } from '../theme/uiStyle';
+import { GameChatHeaderOrca } from './GameChatHeader.orca';
 
-export const GameChatHeader: React.FC<{ open: boolean; unreadCount: number; messageCount: number; preview: string; onToggle: () => void }> = ({ open, unreadCount, messageCount, preview, onToggle }) => {
+export interface GameChatHeaderProps { open: boolean; unreadCount: number; messageCount: number; preview: string; onToggle: () => void }
+
+const GameChatHeaderDefault: React.FC<GameChatHeaderProps> = ({ open, unreadCount, messageCount, preview, onToggle }) => {
   const t = useT();
-  return <button type="button" onClick={onToggle} aria-expanded={open} aria-controls="chat-panel-body" className="flex w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface-2"><span className="text-xs font-semibold text-ink shrink-0">{t('game.chat')}</span>{unreadCount > 0 && !open && <span className="px-1.5 py-0.5 rounded-full bg-danger-solid text-danger-fg text-[10px] font-semibold leading-none shrink-0">{unreadCount > 99 ? '99+' : unreadCount}</span>}<span className="flex-1 min-w-0 truncate text-[11px] text-muted font-medium">{open ? t(messageCount === 1 ? 'game.messageOne' : 'game.messageMany', { count: messageCount }) : preview}</span><span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-subtle" aria-hidden="true">{open ? <ChevronUp size={13} strokeWidth={2.25} /> : <ChevronDown size={13} strokeWidth={2.25} />}{open ? t('game.hide') : t('game.show')}</span></button>;
+  return <button type="button" onClick={onToggle} aria-expanded={open} aria-controls={open ? 'chat-panel-body' : undefined} className="flex w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface-2"><span className="text-xs font-semibold text-ink shrink-0">{t('game.chat')}</span>{unreadCount > 0 && !open && <span className="px-1.5 py-0.5 rounded-full bg-danger-solid text-danger-fg text-[10px] font-semibold leading-none shrink-0">{unreadCount > 99 ? '99+' : unreadCount}</span>}<span className="flex-1 min-w-0 truncate text-[11px] text-muted font-medium">{open ? t(messageCount === 1 ? 'game.messageOne' : 'game.messageMany', { count: messageCount }) : preview}</span><span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-subtle" aria-hidden="true">{open ? <ChevronUp size={13} strokeWidth={2.25} /> : <ChevronDown size={13} strokeWidth={2.25} />}{open ? t('game.hide') : t('game.show')}</span></button>;
 };
+
+export const GameChatHeader: React.FC<GameChatHeaderProps> = (props) =>
+  useIsOrca() ? <GameChatHeaderOrca {...props} /> : <GameChatHeaderDefault {...props} />;

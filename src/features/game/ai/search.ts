@@ -13,10 +13,10 @@ const DEFAULT_TIME_MS = 900;
 const DEFAULT_MAX_DEPTH = 12;
 const ROOT_WIDTH = 20;
 const NODE_WIDTH = 10;
-/** Share of the move budget the forced-win defence may use before the main search. */
 /** Share of the move budget spent looking for our own chain of threes. */
 const ATTACK_SHARE = 0.3;
 const ATTACK_VCT: VcfLimits = { depth: 6, nodes: 3_000 };
+/** Share of the move budget the forced-win defence may use before the main search. */
 const DEFENCE_SHARE = 0.6;
 const DEFENCE_WIDTH = 40;
 /** Opponent strong points tried when looking for a move that stops a chain of threes. */

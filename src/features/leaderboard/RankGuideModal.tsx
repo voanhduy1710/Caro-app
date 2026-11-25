@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
-import { RANK_TIERS } from '../../shared/utils/eloCalculator';
-import type { RankTier } from '../../shared/utils/eloCalculator';
+import { RANK_TIERS } from '../../shared/utils/rankTiers';
+import type { RankTier } from '../../shared/utils/rankTiers';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
+import { useIsOrca } from '../theme/uiStyle';
+import { RankGuideModalOrca } from './RankGuideModal.orca';
+import { formatEloRange } from './rankRange';
 
 interface RankGuideModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-export const RankGuideModal: React.FC<RankGuideModalProps> = ({ isOpen, onClose }) => {
+export const RankGuideModal: React.FC<RankGuideModalProps> = (props) =>
+  useIsOrca() ? <RankGuideModalOrca {...props} /> : <RankGuideModalDefault {...props} />;
+
+const RankGuideModalDefault: React.FC<RankGuideModalProps> = ({ isOpen, onClose }) => {
   const [selectedTier, setSelectedTier] = useState<RankTier | null>(null);
   const dialogProps = useModalChrome(isOpen && selectedTier === null, onClose, 'rank-guide-modal-title');
 
@@ -34,12 +40,7 @@ export const RankGuideModal: React.FC<RankGuideModalProps> = ({ isOpen, onClose 
         <p className="text-xs text-muted mb-2">Ranks are based on your Elo rating.</p>
         <div className="flex-1 overflow-y-auto space-y-1">
           {RANK_TIERS.map((tier, index) => {
-            const nextMinElo = RANK_TIERS[index - 1]?.minElo;
-            const eloRange = tier.minElo === null
-              ? `Below ${nextMinElo} Elo`
-              : typeof nextMinElo !== 'number'
-                ? `${tier.minElo}+ Elo`
-                : `${tier.minElo}–${nextMinElo - 1} Elo`;
+            const eloRange = formatEloRange(tier, index);
 
             return (
               <div key={tier.title} className="flex items-center gap-2 rounded-md border border-line bg-surface-2 px-2.5 py-1">

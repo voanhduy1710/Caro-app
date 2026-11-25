@@ -2,28 +2,28 @@ import { checkWin } from '../../shared/utils/gomokuLogic';
 import { forcedFourMoves } from '../../shared/utils/forcedFour';
 import { cutToCodePoints, isAllowedSettings, MAX_NAME_CODE_POINTS, sanitizeProfile } from './protocol';
 import type { IntentPayloads, RatingReportStatus, RoomChatMessage, Seat } from './protocol';
-import { BUZZ_INTERVAL_MS, CHAT_BACKLOG_SIZE, CHAT_IMAGE_MAX, CHAT_QUOTE_MAX, CHAT_QUOTES_SIZE, CHAT_MIN_INTERVAL_MS, CHAT_TEXT_MAX, CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, DOUBLE_DOWN_ANSWER_MOVES, GRACE_MS, INSTANT_UNDO_MS, MAX_MEMBERS, OFFER_TTL_MS, RATING_DELTA_MAX, REFUND_AFTER_LAST_SEEN_MS, ROOM_IMAGE_INTERVAL_MS, STALE_MOVER_MS, TEASE_PAIR_COOLDOWN_MS, TEASE_SENDER_COOLDOWN_MS } from './roomEngineTypes';
+import { BUZZ_INTERVAL_MS, CHAT_BACKLOG_SIZE, CHAT_IMAGE_MAX, CHAT_QUOTE_MAX, CHAT_QUOTES_SIZE, CHAT_MIN_INTERVAL_MS, CHAT_TEXT_MAX, DOUBLE_DOWN_ANSWER_MOVES, INSTANT_UNDO_MS, MAX_MEMBERS, OFFER_TTL_MS, RATING_DELTA_MAX, REFUND_AFTER_LAST_SEEN_MS, ROOM_IMAGE_INTERVAL_MS, STALE_MOVER_MS, TEASE_PAIR_COOLDOWN_MS, TEASE_SENDER_COOLDOWN_MS } from './roomEngineTypes';
 import type { EngineEnv, EngineState, Member } from './roomEngineTypes';
 import type { ChatQuote } from '../webrtc/types';
-import { activeSeats, boardFromMoves, bothSeatedAndConnected, findMember, nextSeat, occupant, otherSeat, pieceAt, playerRef, seatOf, turnLimitMs } from './roomEngineHelpers';
-import { appendSeatChange, bankClocks, endGame, expiredClock, pause, reject, removeMember, sendEvent, settleRating, startCountdown, startNewGame, vacateSeat } from './roomEngineLifecycle';
+import { activeSeats, boardFromMoves, bothSeatedAndConnected, claimWaitMs, coinCallerSeat, discardGuardLeftMs, findMember, holdsPlace, nextSeat, occupant, otherSeat, pieceAt, playerRef, seatOf, turnLimitMs } from './roomEngineHelpers';
+import { appendSeatChange, bankClocks, endGame, expiredClock, pause, reject, removeMember, sendEvent, settleRating, startCountdown, startNewGame, toViewerGrace, vacateSeat } from './roomEngineLifecycle';
 import type { Ctx } from './roomEngineLifecycle';
 
-export const uniqueMemberId = (d: EngineState, env: EngineEnv): string => {
+const uniqueMemberId = (d: EngineState, env: EngineEnv): string => {
   for (;;) {
     const id = env.randomId(10);
     if (!findMember(d, id)) return id;
   }
 };
 
-export const nameKey = (name: string): string => name.normalize('NFKC').toLowerCase();
+const nameKey = (name: string): string => name.normalize('NFKC').toLowerCase();
 
 /**
  * Names are self-chosen, so a viewer could call themselves after a seated
  * player and speak in chat as them. A clash gets " (2)", " (3)" and so on,
  * compared case-insensitively so "alice" cannot pass for "Alice".
  */
-export const dedupeName = (name: string, taken: string[]): string => {
+const dedupeName = (name: string, taken: string[]): string => {
   const used = new Set(taken.map(nameKey));
   if (!used.has(nameKey(name))) return name;
   for (let k = 2; ; k += 1) {
@@ -34,7 +34,7 @@ export const dedupeName = (name: string, taken: string[]): string => {
   }
 };
 
-export const sameAccountInOtherSeat = (d: EngineState, seat: Seat, uid: string): boolean =>
+const sameAccountInOtherSeat = (d: EngineState, seat: Seat, uid: string): boolean =>
   activeSeats(d.room.settings).some((other) => other !== seat && occupant(d, other)?.profile.uid === uid);
 
 /**
@@ -43,7 +43,7 @@ export const sameAccountInOtherSeat = (d: EngineState, seat: Seat, uid: string):
  * fails, they join as a guest, then come back signed in as a new member while
  * the guest copy keeps the seat for the whole grace period.
  */
-export const seatHeldByAbsentee = (d: EngineState, seat: Seat): boolean => {
+const seatHeldByAbsentee = (d: EngineState, seat: Seat): boolean => {
   const { phase } = d.room;
   if (phase !== 'waiting' && phase !== 'ended') return false;
   const held = occupant(d, seat);
@@ -51,12 +51,14 @@ export const seatHeldByAbsentee = (d: EngineState, seat: Seat): boolean => {
 };
 
 /** Frees an absentee's seat for whoever is about to sit; no "seat open" notice, it is filled at once. */
-const evictAbsentee = (d: EngineState, seat: Seat): void => {
+const evictAbsentee = (d: EngineState, seat: Seat, now: number): void => {
   const { game } = d.room;
   if (game) {
     game.undo = null;
     game.rematch = null;
   }
+  const held = d.room.seats[seat];
+  if (held !== null) toViewerGrace(d, held, now);
   d.room.seats[seat] = null;
   d.room.autoStartArmed = true;
 };
@@ -88,8 +90,10 @@ export const handleHello = (d: EngineState, p: IntentPayloads['HELLO'], from: st
   const restoreMember = (member: Member, token: string): void => {
     const supersede = host.tabIds[member.id] !== p.tabId;
     // Refresh display-only account data too, so reconnecting after changing a
-    // profile does not leave the room showing the old name or avatar.
-    member.profile = profile;
+    // profile does not leave the room showing the old name or avatar. The new
+    // name still may not pass for anyone else's.
+    const others = room.members.filter((other) => other.id !== member.id).map((other) => other.profile.name);
+    member.profile = { ...profile, name: dedupeName(profile.name, others) };
     member.connected = true;
     member.graceMsLeft = null;
     delete host.graceEndsAt[member.id];
@@ -107,19 +111,19 @@ export const handleHello = (d: EngineState, p: IntentPayloads['HELLO'], from: st
       return;
     }
   }
-  // A registered account may reopen the invite from another device, where the
-  // per-browser resume token is unavailable. Reclaim its still-graceful seat
-  // instead of creating a duplicate "Name (2)" room member. Guests have no
-  // durable identity, so they deliberately remain token-only.
-  const accountToRestore = room.members.find((member) =>
-    !member.isHost && !member.connected && !member.profile.guest && !profile.guest && member.profile.uid === profile.uid,
-  );
-  if (accountToRestore) {
-    const token = host.tokens[accountToRestore.id];
-    if (token !== undefined) {
-      restoreMember(accountToRestore, token);
-      return;
-    }
+  // Only the resume token reclaims a member. The uid is self-claimed and shown
+  // to everyone in the room, so reclaiming by uid handed a dropped player's
+  // seat, mid-game, to anyone who copied it. The same account back without
+  // its token (another device, cleared storage) joins as a new member: between
+  // games it takes its old seat through seatHeldByAbsentee below; mid-game the
+  // seat stays with the absent copy, and sameAccountInOtherSeat keeps the new
+  // copy out of the opponent's seat.
+  if (room.members.length >= MAX_MEMBERS) {
+    // A disconnected viewer gives up its place, the one longest gone first.
+    const yielding = room.members
+      .filter((member) => !holdsPlace(d, member))
+      .sort((a, b) => (host.graceEndsAt[a.id] ?? 0) - (host.graceEndsAt[b.id] ?? 0))[0];
+    if (yielding) removeMember(d, yielding.id, ctx);
   }
   if (room.members.length >= MAX_MEMBERS) {
     ctx.replies.push({ to: null, message: { type: 'ROOM_FULL', payload: { capacity: MAX_MEMBERS } } });
@@ -148,7 +152,7 @@ export const handleHello = (d: EngineState, p: IntentPayloads['HELLO'], from: st
     const seats = activeSeats(room.settings);
     const open = seats.find((s) => room.seats[s] === null && fits(s));
     const taken = open ?? seats.find((s) => seatHeldByAbsentee(d, s) && fits(s));
-    if (taken && !open) evictAbsentee(d, taken);
+    if (taken && !open) evictAbsentee(d, taken, ctx.now);
     if (taken) room.seats[taken] = id;
   }
   ctx.events.push({ kind: 'bind', memberId: id, supersede: false });
@@ -160,13 +164,14 @@ export const handleHello = (d: EngineState, p: IntentPayloads['HELLO'], from: st
 export const handleTakeSeat = (d: EngineState, m: Member, seat: Seat, ctx: Ctx): void => {
   const { room } = d;
   if (room.mode === 'chat') return reject(ctx, m.id, 'TAKE_SEAT', 'locked');
+  if (!activeSeats(room.settings).includes(seat)) return reject(ctx, m.id, 'TAKE_SEAT', 'locked');
   if (seatOf(d, m.id)) return reject(ctx, m.id, 'TAKE_SEAT', 'already_seated');
   // seat_taken comes before the count-in check: the loser of a race for the
   // last seat arrives just after the winner's sit started a count-in, and
   // "someone else took that seat" is what actually happened to them.
   if (room.seats[seat] !== null && !seatHeldByAbsentee(d, seat)) return reject(ctx, m.id, 'TAKE_SEAT', 'seat_taken');
   if (sameAccountInOtherSeat(d, seat, m.profile.uid)) return reject(ctx, m.id, 'TAKE_SEAT', 'same_account');
-  if (room.seats[seat] !== null) evictAbsentee(d, seat);
+  if (room.seats[seat] !== null) evictAbsentee(d, seat, ctx.now);
   if (room.phase === 'countdown') return reject(ctx, m.id, 'TAKE_SEAT', 'countdown');
   const { game } = room;
   room.seats[seat] = m.id;
@@ -269,7 +274,7 @@ export const handleMove = (
 };
 
 /** Takes back moves from the end through `seat`'s most recent one, and gives `seat` the move. */
-export const takeBack = (d: EngineState, seat: Seat, ctx: Ctx): void => {
+const takeBack = (d: EngineState, seat: Seat, ctx: Ctx): void => {
   const game = d.room.game;
   if (!game) return;
   bankClocks(d, ctx.now);
@@ -369,7 +374,8 @@ export const handleRematchAnswer = (d: EngineState, m: Member, p: IntentPayloads
   if (p.gameId !== game.id) return reject(ctx, m.id, 'REMATCH_ANSWER', 'wrong_game');
   if (!game.rematch) return reject(ctx, m.id, 'REMATCH_ANSWER', 'no_offer');
   if (game.settings.playerMode === 'oneVsOneVsOne') {
-    if (seatOf(d, m.id) === game.rematch.from) return reject(ctx, m.id, 'REMATCH_ANSWER', 'not_addressed');
+    const seat = seatOf(d, m.id);
+    if (!seat || seat === game.rematch.from || !activeSeats(game.settings).includes(seat)) return reject(ctx, m.id, 'REMATCH_ANSWER', 'not_addressed');
     if (!p.accept) {
       const offerer = occupant(d, game.rematch.from);
       game.rematch = null;
@@ -412,8 +418,7 @@ export const handleClaimDisconnectWin = (d: EngineState, m: Member, p: IntentPay
   if (claimantSeat !== 'X' && claimantSeat !== 'O') return reject(ctx, m.id, 'CLAIM_DISCONNECT_WIN', 'not_seated');
   const opponent = occupant(d, otherSeat(claimantSeat));
   if (!opponent || opponent.connected) return reject(ctx, m.id, 'CLAIM_DISCONNECT_WIN', 'not_paused');
-  const lostAt = (host.graceEndsAt[opponent.id] ?? ctx.now) - GRACE_MS;
-  const remaining = CLAIM_DISCONNECT_WIN_MS - (ctx.now - lostAt);
+  const remaining = claimWaitMs((host.graceEndsAt[opponent.id] ?? ctx.now) - ctx.now);
   if (remaining > 0) return reject(ctx, m.id, 'CLAIM_DISCONNECT_WIN', 'reconnect_grace', remaining);
   endGame(d, claimantSeat, 'disconnected', null, ctx);
 };
@@ -432,9 +437,8 @@ export const handleDiscard = (d: EngineState, m: Member, p: IntentPayloads['DISC
     if (!seat || activeSeats(room.settings).some((other) => other !== seat && room.seats[other] !== null)) {
       return reject(ctx, m.id, 'DISCARD_GAME', 'not_host');
     }
-    const since = game.vacatedAt[empty] ?? ctx.now;
-    const waited = ctx.now - since;
-    if (waited < DISCARD_GUARD_MS) return reject(ctx, m.id, 'DISCARD_GAME', 'too_soon', DISCARD_GUARD_MS - waited);
+    const left = discardGuardLeftMs(game.vacatedAt[empty] ?? ctx.now, ctx.now);
+    if (left > 0) return reject(ctx, m.id, 'DISCARD_GAME', 'too_soon', left);
   }
   room.game = null;
   room.phase = 'waiting';
@@ -495,6 +499,7 @@ export const handleUpdateSettings = (d: EngineState, m: Member, p: IntentPayload
     game.rematch = null;
     sendEvent(ctx, offerer, 'rematch_declined', { why: 'rules_changed' });
   }
+  if (room.seats.T !== null && !activeSeats(room.settings).includes('T')) vacateSeat(d, 'T', 'removed', ctx);
 };
 
 export const handleFirstMoveChoice = (d: EngineState, m: Member, p: IntentPayloads['FIRST_MOVE_CHOICE'], ctx: Ctx): void => {
@@ -528,17 +533,11 @@ export const handleCoinCall = (d: EngineState, m: Member, p: IntentPayloads['COI
     return reject(ctx, m.id, 'COIN_CALL', 'not_playing');
   }
   if (game.firstMove.call !== null) return reject(ctx, m.id, 'COIN_CALL', 'not_playing');
-  const hostSeat = seatOf(d, m.id);
-  if (hostSeat !== 'X' && hostSeat !== 'O') return reject(ctx, m.id, 'COIN_CALL', 'not_seated');
-  const hostMember = findMember(d, d.host.hostMemberId);
-  const hostPlayerSeat = hostMember ? seatOf(d, hostMember.id) : null;
-  if (hostPlayerSeat !== 'X' && hostPlayerSeat !== 'O') return reject(ctx, m.id, 'COIN_CALL', 'not_seated');
-  // The host calls the first toss. Each completed rematch switches the caller,
-  // so both players get an equal turn at choosing the coin side.
-  const callerSeat = game.number % 2 === 1 ? hostPlayerSeat : otherSeat(hostPlayerSeat);
-  if (hostSeat !== callerSeat) return reject(ctx, m.id, 'COIN_CALL', 'not_host');
+  const callerSeat = seatOf(d, m.id);
+  if (callerSeat !== 'X' && callerSeat !== 'O') return reject(ctx, m.id, 'COIN_CALL', 'not_seated');
+  if (callerSeat !== coinCallerSeat(d, game)) return reject(ctx, m.id, 'COIN_CALL', 'not_host');
   const face: 'X' | 'O' = ctx.env.randomId(1).charCodeAt(0) % 2 === 0 ? 'X' : 'O';
-  const winner: Seat = p.call === face ? hostSeat : otherSeat(hostSeat);
+  const winner: Seat = p.call === face ? callerSeat : otherSeat(callerSeat);
   game.firstMove.call = p.call;
   game.firstMove.face = face;
   game.firstMove.callerMemberId = m.id;
@@ -552,17 +551,22 @@ export const handleChat = (d: EngineState, m: Member, p: IntentPayloads['CHAT'],
   const { host } = d;
   const text = p.text.trim();
   const image = p.image;
-  if (!text && !image) return reject(ctx, m.id, 'CHAT', 'empty');
-  if (Array.from(text).length > CHAT_TEXT_MAX) return reject(ctx, m.id, 'CHAT', 'too_long');
+  if (!text && !image) return reject(ctx, m.id, 'CHAT', 'empty', undefined, p.id);
+  if (Array.from(text).length > CHAT_TEXT_MAX) return reject(ctx, m.id, 'CHAT', 'too_long', undefined, p.id);
   if (image !== undefined && (!image.startsWith('data:image/') || image.length > CHAT_IMAGE_MAX)) {
-    return reject(ctx, m.id, 'CHAT', 'bad_image');
+    return reject(ctx, m.id, 'CHAT', 'bad_image', undefined, p.id);
+  }
+  // Ids are client-chosen: a reused one would swap another message's quote
+  // and give later joiners two messages under one key.
+  if (host.recentQuotes.some((q) => q.id === p.id) || host.chatBacklog.some((c) => c.id === p.id)) {
+    return reject(ctx, m.id, 'CHAT', 'duplicate_id', undefined, p.id);
   }
   const lastChat = host.lastChatAt[m.id];
   if (lastChat !== undefined && ctx.now - lastChat < CHAT_MIN_INTERVAL_MS) {
-    return reject(ctx, m.id, 'CHAT', 'rate_limited', CHAT_MIN_INTERVAL_MS - (ctx.now - lastChat));
+    return reject(ctx, m.id, 'CHAT', 'rate_limited', CHAT_MIN_INTERVAL_MS - (ctx.now - lastChat), p.id);
   }
   if (image !== undefined && host.lastImageAt !== null && ctx.now - host.lastImageAt < ROOM_IMAGE_INTERVAL_MS) {
-    return reject(ctx, m.id, 'CHAT', 'rate_limited', ROOM_IMAGE_INTERVAL_MS - (ctx.now - host.lastImageAt));
+    return reject(ctx, m.id, 'CHAT', 'rate_limited', ROOM_IMAGE_INTERVAL_MS - (ctx.now - host.lastImageAt), p.id);
   }
   host.lastChatAt[m.id] = ctx.now;
   if (image !== undefined) host.lastImageAt = ctx.now;
@@ -579,7 +583,7 @@ export const handleChat = (d: EngineState, m: Member, p: IntentPayloads['CHAT'],
     timestamp: ctx.now,
   };
   const quote: ChatQuote = { id: p.id, senderId: m.id, sender: m.profile.name, text: cutToCodePoints(text, CHAT_QUOTE_MAX), hasImage: image !== undefined };
-  host.recentQuotes = [...host.recentQuotes.filter((q) => q.id !== p.id), quote].slice(-CHAT_QUOTES_SIZE);
+  host.recentQuotes = [...host.recentQuotes, quote].slice(-CHAT_QUOTES_SIZE);
   if (image === undefined) {
     host.chatBacklog = [...host.chatBacklog, message].slice(-CHAT_BACKLOG_SIZE);
   }

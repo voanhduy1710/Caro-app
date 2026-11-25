@@ -7,6 +7,9 @@ import { formatTime, quoteSnippet } from './GameControlsShared';
 import type { ChatReceipt } from './GameControlsShared';
 import { renderWithEmotes } from './chatEmotes';
 import { useT } from '../i18n/language';
+import { useIsOrca } from '../theme/uiStyle';
+import { jumpTo } from './chatJump';
+import { GameChatFeedOrca } from './GameChatFeed.orca';
 
 export interface GameChatFeedProps {
   messages: ChatMessage[]; emptyText?: string; opponent: UserProfile | null; avatarFor?: (message: ChatMessage) => string | null | undefined;
@@ -20,19 +23,9 @@ export interface GameChatFeedProps {
   onAnswerDoubleDown?: (accept: boolean) => void;
 }
 
-/** Brings the answered message into view and flashes it, when it is still in the feed. */
-const jumpTo = (list: HTMLDivElement | null, id: string) => {
-  const target = list?.querySelector<HTMLElement>(`[data-chat-id="${CSS.escape(id)}"]`);
-  if (!target) return;
-  target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  target.classList.remove('chat-flash');
-  void target.offsetWidth;
-  target.classList.add('chat-flash');
-};
-
-export const GameChatFeed: React.FC<GameChatFeedProps> = ({ messages, emptyText, opponent, avatarFor, listRef, onScroll, isOwn, receipt, onOpenImage, hasNewBelow, onShowNew, onReply, onAnswerDoubleDown }) => {
+const GameChatFeedDefault: React.FC<GameChatFeedProps> = ({ messages, emptyText, opponent, avatarFor, listRef, onScroll, isOwn, receipt, onOpenImage, hasNewBelow, onShowNew, onReply, onAnswerDoubleDown }) => {
   const t = useT();
-  return <div className="relative flex-1 min-h-0"><div ref={listRef} onScroll={onScroll} className="chat-message-list h-full overflow-y-auto overscroll-contain space-y-2 pr-1 text-xs">{messages.length === 0 ? <p className="py-10 text-center text-[13px] text-subtle">{emptyText ?? t('game.noMessagesHello')}</p> : messages.map((m) => {
+  return <div className="relative flex-1 min-h-0"><div ref={listRef} onScroll={onScroll} role="log" aria-live="polite" aria-relevant="additions" className="chat-message-list h-full overflow-y-auto overscroll-contain space-y-2 pr-1 text-xs">{messages.length === 0 ? <p className="py-10 text-center text-[13px] text-subtle">{emptyText ?? t('game.noMessagesHello')}</p> : messages.map((m) => {
   const mine = isOwn(m);
   if (m.system) return <div key={m.id} className="flex justify-center"><span className="chip max-w-full min-w-0 whitespace-normal break-words text-center text-[11px]">{m.text}</span></div>;
   if (m.doubleDownOffer) return <div key={m.id} data-chat-id={m.id} className="flex justify-center animate-pop-in">
@@ -66,3 +59,6 @@ export const GameChatFeed: React.FC<GameChatFeedProps> = ({ messages, emptyText,
   </div>;
 })}</div>{hasNewBelow && <button type="button" onClick={onShowNew} className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-inverse px-3 py-1 text-[11px] font-medium text-inverse-fg shadow-lg transition hover:opacity-90">{t('game.newMessages')}<ArrowDown size={12} strokeWidth={2} aria-hidden="true" /></button>}</div>;
 };
+
+export const GameChatFeed: React.FC<GameChatFeedProps> = (props) =>
+  useIsOrca() ? <GameChatFeedOrca {...props} /> : <GameChatFeedDefault {...props} />;

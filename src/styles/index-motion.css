@@ -154,11 +154,10 @@
 /* =============================================================================
    Board
 
-   The four board themes are a user-facing feature, so each keeps its own
-   material identity and none of them follow the app theme. That is deliberate:
-   a board is a physical object on the table, and it also keeps the player's
-   chosen piece colours legible in both light and dark, which a theme-following
-   board could not promise.
+   The board themes are a user-facing feature, so each keeps its own material
+   identity. Bamboo, laser and spreadsheet are fixed materials that ignore the
+   app theme: a board is a physical object on the table. Graph paper and Orca
+   are the two that swap with light/dark.
    ========================================================================== */
 
 .board-cell {
@@ -217,6 +216,114 @@
 
 .board-cell--gy {
   border-bottom-width: 2px !important;
+}
+
+/* 0. Orca - a code-editor canvas: hairline grid, a line-number gutter for the
+      coordinates, star points and a faint crosshair under the pointer.
+      Theme-aware like graph paper, but on its own neutral palette. */
+.board-theme-orca-code {
+  background: var(--board-code-gutter);
+  border: 1px solid var(--board-code-frame);
+  border-radius: 6px;
+}
+
+.board-theme-orca-code .board-grid-inner {
+  border-top: 1px solid var(--board-code-line-major);
+  border-left: 1px solid var(--board-code-line-major);
+}
+
+.board-theme-orca-code .board-cell {
+  background: var(--board-code-bg);
+  border-right: 1px solid var(--board-code-line);
+  border-bottom: 1px solid var(--board-code-line);
+}
+
+/* Colour instead of thickness here: a 2px rule is what makes the other boards
+   look like tiles, and an editor grid is all hairlines. */
+.board-theme-orca-code .board-cell--gx {
+  border-right-width: 1px !important;
+  border-right-color: var(--board-code-line-major);
+}
+
+.board-theme-orca-code .board-cell--gy {
+  border-bottom-width: 1px !important;
+  border-bottom-color: var(--board-code-line-major);
+}
+
+.board-theme-orca-code .board-cell:hover:not(:disabled) {
+  background: var(--board-code-hover);
+}
+
+.board-theme-orca-code .board-cell:focus-visible {
+  outline-color: var(--board-code-text-active);
+}
+
+.orca-gutter {
+  display: flex;
+  position: sticky;
+  background: var(--board-code-gutter);
+  color: var(--board-code-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.orca-gutter--cols {
+  top: 0;
+  z-index: 26;
+}
+
+.orca-gutter--rows {
+  left: 0;
+  z-index: 25;
+  flex-direction: column;
+}
+
+.orca-gutter--corner {
+  top: 0;
+  left: 0;
+  z-index: 27;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: var(--board-code-text-active);
+}
+
+.orca-gutter__cell {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.orca-gutter--rows .orca-gutter__cell {
+  justify-content: flex-end;
+  padding-right: 6px;
+}
+
+.orca-gutter__cell--active {
+  background: var(--board-code-hover);
+  color: var(--board-code-text-active);
+  font-weight: 600;
+}
+
+.orca-crosshair {
+  position: absolute;
+  z-index: 2;
+  background: var(--board-code-crosshair);
+  pointer-events: none;
+}
+
+.orca-star {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--board-code-text);
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 /* 1. Graph paper - the neutral default, theme-aware. Thin rules rather than
@@ -552,14 +659,12 @@
 }
 
 .sheet-dialog-actions .btn.btn-primary,
-.sheet-dialog-actions .btn.btn-danger-solid,
 .sheet-dialog-actions .btn.btn-inverse {
   background: #0b57d0;
   color: #ffffff;
 }
 
 .sheet-dialog-actions .btn.btn-primary:not(:disabled):hover,
-.sheet-dialog-actions .btn.btn-danger-solid:not(:disabled):hover,
 .sheet-dialog-actions .btn.btn-inverse:not(:disabled):hover {
   background: #0842a0;
   box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);

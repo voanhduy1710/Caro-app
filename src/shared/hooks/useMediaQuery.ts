@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
  * Used to pick structurally different layouts (in-flow sidebar vs. fixed bottom dock)
  * instead of trying to express both with responsive utility classes.
  */
-export const useMediaQuery = (query: string): boolean => {
+const useMediaQuery = (query: string): boolean => {
   const [matches, setMatches] = useState<boolean>(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return false;
     return window.matchMedia(query).matches;

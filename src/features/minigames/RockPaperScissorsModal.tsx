@@ -1,8 +1,11 @@
 import React from 'react';
+import { useT } from '../i18n/language';
+import { useIsOrca } from '../theme/uiStyle';
+import { RockPaperScissorsModalOrca } from './RockPaperScissorsModal.orca';
 
 type Hand = 'rock' | 'paper' | 'scissors';
 
-interface RockPaperScissorsModalProps {
+export interface RockPaperScissorsModalProps {
   myChoice: Hand | null;
   choices: { X: Hand | null; O: Hand | null };
   isPlayer: boolean;
@@ -27,8 +30,11 @@ const StoneSlab: React.FC<{
   hand?: Hand;
   selected?: boolean;
   hidden?: boolean;
+  /** A repeat of the marquee: still clickable, but out of the tab order and the accessibility tree. */
+  decorative?: boolean;
   onClick?: () => void;
-}> = ({ hand, selected = false, hidden = false, onClick }) => {
+}> = ({ hand, selected = false, hidden = false, decorative = false, onClick }) => {
+  const t = useT();
   const src = hidden ? SLAB_IMAGES.eye : hand ? SLAB_IMAGES[hand] : SLAB_IMAGES.eye;
 
   return (
@@ -36,11 +42,13 @@ const StoneSlab: React.FC<{
       type="button"
       disabled={!onClick}
       onClick={onClick}
+      aria-hidden={decorative || undefined}
+      tabIndex={decorative ? -1 : undefined}
       className={`stone-slab ${selected ? 'stone-slab--selected' : ''} ${hidden ? 'stone-slab--hidden' : ''}`}
     >
       <img
         src={src}
-        alt={hidden ? 'Opponent hidden stone' : `${hand} stone`}
+        alt={hidden ? t('game.minigame.opponentHidden') : hand ? t('game.minigame.stone', { hand: t(`game.minigame.${hand}`) }) : ''}
         className="stone-slab__img"
         draggable={false}
       />
@@ -49,13 +57,14 @@ const StoneSlab: React.FC<{
   );
 };
 
-export const RockPaperScissorsModal: React.FC<RockPaperScissorsModalProps> = ({
+const RockPaperScissorsModalDefault: React.FC<RockPaperScissorsModalProps> = ({
   myChoice,
   choices,
   isPlayer,
   winnerName,
   onChoose,
 }) => {
+  const t = useT();
   const resolved = choices.X && choices.O;
 
   if (resolved) {
@@ -67,18 +76,18 @@ export const RockPaperScissorsModal: React.FC<RockPaperScissorsModalProps> = ({
         <div className="rps-clash">
           <div className="rps-clash__doors rps-clash__doors--left" />
           <div className="rps-clash__doors rps-clash__doors--right" />
-          <h2 className="minigame-title">Clash!</h2>
+          <h2 className="minigame-title">{t('game.minigame.clash')}</h2>
           <div className="rps-clash__hands">
             <div className="rps-clash__hand rps-clash__hand--top">
-              <img src={SLAB_IMAGES[oHand]} alt={oHand} className="rps-clash__img rps-clash__img--top" draggable={false} />
+              <img src={SLAB_IMAGES[oHand]} alt={t(`game.minigame.${oHand}`)} className="rps-clash__img rps-clash__img--top" draggable={false} />
             </div>
             <span className="rps-clash__impact" aria-hidden="true" />
             <div className="rps-clash__hand rps-clash__hand--bottom">
-              <img src={SLAB_IMAGES[xHand]} alt={xHand} className="rps-clash__img" draggable={false} />
+              <img src={SLAB_IMAGES[xHand]} alt={t(`game.minigame.${xHand}`)} className="rps-clash__img" draggable={false} />
             </div>
           </div>
           <p className="minigame-copy">
-            {winnerName ? `${winnerName} wins the clash and moves first.` : 'A tie — choose again.'}
+            {winnerName ? t('game.minigame.clashWinner', { name: winnerName }) : t('game.minigame.clashTie')}
           </p>
         </div>
       </div>
@@ -90,15 +99,15 @@ export const RockPaperScissorsModal: React.FC<RockPaperScissorsModalProps> = ({
   const playerHands = [...HANDS, ...HANDS, ...HANDS, ...HANDS, ...HANDS];
 
   return (
-    <div className="minigame-overlay rps-game" role="dialog" aria-modal="true" aria-label="Rock paper scissors">
+    <div className="minigame-overlay rps-game" role="dialog" aria-modal="true" aria-label={t('game.minigame.rpsLabel')}>
       <div className="rps-conveyor">
-        <h2 className="minigame-title">Choose your hand</h2>
+        <h2 className="minigame-title">{t('game.minigame.chooseHand')}</h2>
 
         {/* Opponent rail with infinite scrolling Millennium Eye slabs */}
-        <div className="rps-rail rps-rail--opponent" aria-label="Opponent choices hidden">
+        <div className="rps-rail rps-rail--opponent" aria-label={t('game.minigame.opponentChoicesHidden')}>
           <div className="rps-rail__track">
             {opponentSlabs.map((index) => (
-              <StoneSlab key={`opp-${index}`} hidden />
+              <StoneSlab key={`opp-${index}`} hidden decorative={index > 0} />
             ))}
           </div>
         </div>
@@ -110,6 +119,7 @@ export const RockPaperScissorsModal: React.FC<RockPaperScissorsModalProps> = ({
               <StoneSlab
                 key={`${hand.id}-${index}`}
                 hand={hand.id}
+                decorative={index >= HANDS.length}
                 selected={myChoice === hand.id}
                 onClick={isPlayer && !myChoice ? () => onChoose?.(hand.id) : undefined}
               />
@@ -119,14 +129,15 @@ export const RockPaperScissorsModal: React.FC<RockPaperScissorsModalProps> = ({
 
         <p className="minigame-copy">
           {myChoice
-            ? 'Your stone is locked. Waiting for the other duelist…'
+            ? t('game.minigame.locked')
             : isPlayer
             ? null
-            : 'The duelists are choosing their hands…'}
+            : t('game.minigame.choosing')}
         </p>
       </div>
     </div>
   );
 };
 
-
+export const RockPaperScissorsModal: React.FC<RockPaperScissorsModalProps> = (props) =>
+  useIsOrca() ? <RockPaperScissorsModalOrca {...props} /> : <RockPaperScissorsModalDefault {...props} />;

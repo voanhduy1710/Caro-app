@@ -21,8 +21,10 @@ import { RockPaperScissorsModal } from '../minigames/RockPaperScissorsModal';
 import { OnlineRoomLobby } from './OnlineRoomLobby';
 import { ChatRoomView } from './ChatRoomView';
 import { HostLostStrip, OnlineRoomConnecting, RoomConfirmDialog } from './OnlineRoomOverlays';
+import { OnlineRoomRequestsOrca } from './OnlineRoomOverlays.orca';
+import { useIsOrca } from '../theme/uiStyle';
 import type { Seat } from './protocol';
-import { CLAIM_DISCONNECT_WIN_MS, DISCARD_GUARD_MS, DOUBLE_DOWN_ANSWER_MOVES, DOUBLE_DOWN_BONUS, GRACE_MS, MAX_MEMBERS, SEATS, activeSeats, boardFromMoves, latestResult, otherSeat, pieceAt } from './roomEngine';
+import { DOUBLE_DOWN_ANSWER_MOVES, DOUBLE_DOWN_BONUS, MAX_MEMBERS, SEATS, activeSeats, boardFromMoves, claimWaitMs, coinCallerSeat, discardGuardLeftMs, latestResult, otherSeat, pieceAt, scorePairKey } from './roomEngine';
 import type { Member } from './roomEngine';
 import type { ChatMessage } from '../webrtc/types';
 import { describeRating } from './roomRating';
@@ -40,6 +42,7 @@ const formatReconnectTime = (seconds: number | null | undefined) => {
 export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules, onViewMyProfile, onViewProfile, exitRef }) => {
   const t = useT();
   const isDesktop = useIsDesktop();
+  const isOrca = useIsOrca();
   const { playWinSound, playTimerWarningSound, playClickSound, playBuzzSound, playPingSound } = useSheetAwareSound();
   // Under the Spreadsheet board the room speaks Sheets: the paused panel
   // always (it is drawn inside the sheet), and the room's own dialogs and
@@ -482,9 +485,9 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
     ? [mySeat, otherSeat(mySeat)]
     : ['X', 'O'];
   const scoreOf = (seat: Seat) => {
-    if (game?.settings.playerMode === 'oneVsOneVsOne') return s.score[seat];
-    const pair = s.seats.X && s.seats.O ? `${s.seats.X}|${s.seats.O}` : null;
-    return pair && s.score.pair === pair ? s.score[seat] : 0;
+    const scoreMode = game?.settings.playerMode ?? s.settings.playerMode;
+    const filled = activeSeats({ ...s.settings, playerMode: scoreMode }).every((active) => s.seats[active] !== null);
+    return filled && s.score.pair === scorePairKey(s.seats, scoreMode) ? s.score[seat] : 0;
   };
   // The same seats, in the same order, as the Spreadsheet disguise shows them.
   const sheetMatch: SheetMatch = {
@@ -531,6 +534,8 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       : secondsLeft && secondsLeft > 0
       ? t('room.claimIn', { seconds: secondsLeft })
       : t('room.claimDisconnect');
+  // Orca (PR 5) draws the paused overlay's buttons small.
+  const pausedBtn = isOrca ? ' btn-sm tabular-nums' : '';
   let paused: { title: string; body?: string; actions?: React.ReactNode } | null = null;
   if (room.status === 'host_lost' && (phase === 'playing' || phase === 'paused')) {
     const host = members.find((member) => member.isHost);
@@ -544,7 +549,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         <button
           onClick={room.claimLostHostWin}
           disabled={room.hostClaimSecondsLeft === null || room.hostClaimSecondsLeft > 0}
-          className="btn btn-primary"
+          className={`btn btn-primary${pausedBtn}`}
         >
           {claimLabel(room.hostClaimSecondsLeft)}
         </button>
@@ -556,7 +561,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       const lastChange = [...game.seatLog].reverse().find((c) => c.seat === emptySeat && c.to === null);
       const previousName = lastChange?.from?.name ?? t('room.lastPlayer');
       const vacatedAt = game.vacatedAt[emptySeat];
-      const guardLeft = vacatedAt === null ? 0 : Math.max(0, DISCARD_GUARD_MS - (room.hostNow() - vacatedAt));
+      const guardLeft = vacatedAt === null ? 0 : discardGuardLeftMs(vacatedAt, room.hostNow());
       const canEnd = room.isHost || (mySeat !== null && guardLeft === 0);
       const endButton =
         room.isHost || mySeat ? (
@@ -564,7 +569,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
             onClick={requestDiscard}
             disabled={!canEnd}
             title={canEnd ? undefined : t('room.endHint')}
-            className="btn btn-ghost"
+            className={`btn btn-ghost${pausedBtn}`}
           >
             {sheetTheme
               ? canEnd
@@ -581,12 +586,12 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
           actions: (
             <>
               {isViewer && openSeat && (
-                <button onClick={() => room.takeSeat(openSeat)} className="btn btn-primary">
+                <button onClick={() => room.takeSeat(openSeat)} className={`btn btn-primary${pausedBtn}`}>
                   Yêu cầu quyền chỉnh sửa
                 </button>
               )}
               {!isViewer && (
-                <button onClick={requestBecomeViewer} className="btn btn-secondary">
+                <button onClick={requestBecomeViewer} className={`btn btn-secondary${pausedBtn}`}>
                   Chỉ xem
                 </button>
               )}
@@ -601,7 +606,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
           actions: (
             <>
               {openSeat && (
-                <button onClick={() => room.takeSeat(openSeat)} className="btn btn-primary">
+                <button onClick={() => room.takeSeat(openSeat)} className={`btn btn-primary${pausedBtn}`}>
                   {t('room.takeSeatN', { seat: openSeat })}
                 </button>
               )}
@@ -615,7 +620,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
           body: t('room.paused.clocksStopped', { seat: emptySeat }),
           actions: (
             <>
-              <button onClick={requestBecomeViewer} className="btn btn-secondary">
+              <button onClick={requestBecomeViewer} className={`btn btn-secondary${pausedBtn}`}>
                 {t('room.becomeViewer')}
               </button>
               {endButton}
@@ -627,7 +632,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
       const reconnectSeconds = room.graceSecondsLeft(away.id);
       const claimWaitSeconds = reconnectSeconds === null
         ? null
-        : Math.max(0, Math.ceil((CLAIM_DISCONNECT_WIN_MS - (GRACE_MS - reconnectSeconds * 1000)) / 1000));
+        : Math.max(0, Math.ceil(claimWaitMs(reconnectSeconds * 1000) / 1000));
       const canClaimWin =
         game.settings.playerMode === 'oneVsOne' &&
         mySeat !== null &&
@@ -641,7 +646,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
           <button
             onClick={room.claimDisconnectWin}
             disabled={claimWaitSeconds === null || claimWaitSeconds > 0}
-            className="btn btn-primary"
+            className={`btn btn-primary${pausedBtn}`}
           >
             {claimLabel(claimWaitSeconds)}
           </button>
@@ -679,11 +684,7 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
   const rps = game?.firstMove.method === 'rockPaperScissors' ? game.firstMove : null;
   const myRpsChoice = mySeat === 'X' || mySeat === 'O' ? rps?.choices?.[mySeat] : null;
   const coin = game?.firstMove.method === 'coinFlip' ? game.firstMove : null;
-  const hostMember = s.members.find((member) => member.isHost);
-  const hostSeat = hostMember
-    ? (s.seats.X === hostMember.id ? 'X' : s.seats.O === hostMember.id ? 'O' : null)
-    : null;
-  const coinChooserSeat = hostSeat && game ? (game.number % 2 === 1 ? hostSeat : otherSeat(hostSeat)) : null;
+  const coinChooserSeat = game ? coinCallerSeat(s, game) : null;
   const coinChooserName = coinChooserSeat ? occupantOf(coinChooserSeat)?.profile.name ?? coinChooserSeat : t('room.aPlayer');
   const coinCallerName = coin?.callerMemberId ? s.members.find((member) => member.id === coin.callerMemberId)?.profile.name : undefined;
   const preGame = game?.firstMove.method === 'rockPaperScissors' && (phase === 'opening' || phase === 'countdown') && rps
@@ -834,76 +835,92 @@ export const OnlineRoom: React.FC<OnlineRoomProps> = ({ room, user, onOpenRules,
         sheetMatch={sheetMatch}
       />
 
-      {/* Take-back: either other seated player may answer in 1v1v1. The opponent
-          triggers it at a moment the player does not choose, so under the
-          disguise it asks in Sheets' words (and global CSS keeps it out of
-          sight while a fake report is up). */}
-      {undoFrom && mySeat && mySeat !== undoFrom && (
-        <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby="undo-request-title">
-          <div className="w-full max-w-sm space-y-4 rounded-lg border border-line bg-surface p-6 text-center">
-            <h3 id="undo-request-title" className="text-base font-semibold text-ink">
-              {sheetDisguise ? 'Khôi phục phiên bản trước?' : t('room.undo.title')}
-            </h3>
-            <p className="text-xs text-muted">
-              {sheetDisguise
-                ? `${occupantOf(undoFrom)?.profile.name ?? 'Người cộng tác'} muốn khôi phục phiên bản trước của tệp.`
-                : t('room.undo.body', { name: occupantOf(undoFrom)?.profile.name ?? t('room.yourOpponent') })}
-            </p>
-            <div className="flex gap-2 pt-2">
-              <button onClick={() => room.answerUndo(true)} className="btn btn-primary btn-sm flex-1">
-                {sheetDisguise ? 'Cho phép' : t('room.allowIt')}
-              </button>
-              <button onClick={() => room.answerUndo(false)} className="btn btn-secondary btn-sm flex-1">
-                {sheetDisguise ? 'Từ chối' : t('room.decline')}
-              </button>
+      {isOrca ? (
+        <OnlineRoomRequestsOrca
+          room={room}
+          mySeat={mySeat}
+          undoFrom={undoFrom}
+          rematchFrom={rematchFrom}
+          seatPrompt={seatPrompt}
+          sheetDisguise={sheetDisguise}
+          occupantOf={occupantOf}
+          onDismissSeatPrompt={() => setDismissedPromptAt(room.seatOpened?.at ?? null)}
+          hostLostStrip={hostLostStrip}
+        />
+      ) : (
+        <>
+        {/* Take-back: either other seated player may answer in 1v1v1. The opponent
+            triggers it at a moment the player does not choose, so under the
+            disguise it asks in Sheets' words (and global CSS keeps it out of
+            sight while a fake report is up). */}
+        {undoFrom && mySeat && mySeat !== undoFrom && (
+          <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby="undo-request-title">
+            <div className="w-full max-w-sm space-y-4 rounded-lg border border-line bg-surface p-6 text-center">
+              <h3 id="undo-request-title" className="text-base font-semibold text-ink">
+                {sheetDisguise ? 'Khôi phục phiên bản trước?' : t('room.undo.title')}
+              </h3>
+              <p className="text-xs text-muted">
+                {sheetDisguise
+                  ? `${occupantOf(undoFrom)?.profile.name ?? 'Người cộng tác'} muốn khôi phục phiên bản trước của tệp.`
+                  : t('room.undo.body', { name: occupantOf(undoFrom)?.profile.name ?? t('room.yourOpponent') })}
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => room.answerUndo(true)} className="btn btn-primary btn-sm flex-1">
+                  {sheetDisguise ? 'Cho phép' : t('room.allowIt')}
+                </button>
+                <button onClick={() => room.answerUndo(false)} className="btn btn-secondary btn-sm flex-1">
+                  {sheetDisguise ? 'Từ chối' : t('room.decline')}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {rematchFrom && mySeat && mySeat !== rematchFrom && (
-        <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby="rematch-title">
-          <div className="w-full max-w-sm space-y-4 rounded-lg border border-line bg-surface p-6 text-center">
-            <h3 id="rematch-title" className="text-base font-semibold text-ink">
-              {sheetDisguise ? 'Tạo bản sao mới?' : t('room.rematch.title')}
-            </h3>
-            <p className="text-xs text-muted">
-              {sheetDisguise
-                ? `${occupantOf(rematchFrom)?.profile.name ?? 'Người cộng tác'} muốn tạo một bản sao mới của tệp.`
-                : t('room.rematch.body', { name: occupantOf(rematchFrom)?.profile.name ?? t('room.yourOpponent') })}
-            </p>
-            <div className="flex gap-2 pt-2">
-              <button onClick={() => room.answerRematch(true)} className="btn btn-primary btn-sm flex-1">
-                {sheetDisguise ? 'Tạo bản sao' : t('room.rematch.accept')}
-              </button>
-              <button onClick={() => room.answerRematch(false)} className="btn btn-secondary btn-sm flex-1">
-                {sheetDisguise ? 'Không, cảm ơn' : t('room.rematch.decline')}
-              </button>
+        {rematchFrom && mySeat && mySeat !== rematchFrom && (
+          <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby="rematch-title">
+            <div className="w-full max-w-sm space-y-4 rounded-lg border border-line bg-surface p-6 text-center">
+              <h3 id="rematch-title" className="text-base font-semibold text-ink">
+                {sheetDisguise ? 'Tạo bản sao mới?' : t('room.rematch.title')}
+              </h3>
+              <p className="text-xs text-muted">
+                {sheetDisguise
+                  ? `${occupantOf(rematchFrom)?.profile.name ?? 'Người cộng tác'} muốn tạo một bản sao mới của tệp.`
+                  : t('room.rematch.body', { name: occupantOf(rematchFrom)?.profile.name ?? t('room.yourOpponent') })}
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => room.answerRematch(true)} className="btn btn-primary btn-sm flex-1">
+                  {sheetDisguise ? 'Tạo bản sao' : t('room.rematch.accept')}
+                </button>
+                <button onClick={() => room.answerRematch(false)} className="btn btn-secondary btn-sm flex-1">
+                  {sheetDisguise ? 'Không, cảm ơn' : t('room.rematch.decline')}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* A seat opened while this viewer was watching a finished game. Not
-          under the disguise: there it is Tệp > Yêu cầu quyền chỉnh sửa, and
-          this pill would float over the sheet in game words. */}
-      {seatPrompt && !sheetDisguise && (
-        <div
-          role="status"
-          className="fixed bottom-24 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-surface px-3 py-2 shadow-lg"
-        >
-          <span className="text-xs font-medium text-ink">{t('room.seatIsOpen', { seat: seatPrompt })}</span>
-          <button onClick={() => room.takeSeat(seatPrompt)} className="btn btn-primary btn-sm">
-            {t('room.takeSeatN', { seat: seatPrompt })}
-          </button>
-          <button onClick={() => setDismissedPromptAt(room.seatOpened?.at ?? null)} className="btn btn-ghost btn-sm">
-            {t('room.notNow')}
-          </button>
-        </div>
-      )}
+        {/* A seat opened while this viewer was watching a finished game. Not
+            under the disguise: there it is Tệp > Yêu cầu quyền chỉnh sửa, and
+            this pill would float over the sheet in game words. */}
+        {seatPrompt && !sheetDisguise && (
+          <div
+            role="status"
+            className="fixed bottom-24 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-surface px-3 py-2 shadow-lg"
+          >
+            <span className="text-xs font-medium text-ink">{t('room.seatIsOpen', { seat: seatPrompt })}</span>
+            <button onClick={() => room.takeSeat(seatPrompt)} className="btn btn-primary btn-sm">
+              {t('room.takeSeatN', { seat: seatPrompt })}
+            </button>
+            <button onClick={() => setDismissedPromptAt(room.seatOpened?.at ?? null)} className="btn btn-ghost btn-sm">
+              {t('room.notNow')}
+            </button>
+          </div>
+        )}
 
-      {/* The paused panel inside the sheet already says the host is gone. */}
-      {hostLostStrip && !sheetDisguise && <div className="fixed left-1/2 top-20 z-[55] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2">{hostLostStrip}</div>}
+        {/* The paused panel inside the sheet already says the host is gone. */}
+        {hostLostStrip && !sheetDisguise && <div className="fixed left-1/2 top-20 z-[55] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2">{hostLostStrip}</div>}
+        </>
+      )}
       {confirmDialog}
       {teaseToast}
     </>

@@ -38,7 +38,8 @@ export const PracticeMatchView: React.FC<PracticeMatchViewProps> = (p) => {
   const myTurn = p.gameStatus === 'playing' && p.currentTurn === p.myPiece;
   const botTurn = p.gameStatus === 'playing' && (p.currentTurn === 'O' || (three && p.currentTurn === 'T'));
   const movesBy = (piece: PracticePiece) => p.moveHistory.filter((move) => move.piece === piece).length;
-  const player = { name: p.user?.displayName || t('common.you'), photoURL: p.user?.photoURL, piece: p.myPiece, clock: p.myPiece === 'X' ? p.p1TotalTime : p.p2TotalTime, moveClock: myTurn ? p.turnTimeLeft : 0, isTurn: myTurn, tag: t('common.you'), onClick: p.openProfileModal, title: t('game.viewProfileMine') };
+  // elo / isGuest: the Orca style's seat cards show ratings; the Default header ignores them.
+  const player = { name: p.user?.displayName || t('common.you'), photoURL: p.user?.photoURL, piece: p.myPiece, clock: p.myPiece === 'X' ? p.p1TotalTime : p.p2TotalTime, moveClock: myTurn ? p.turnTimeLeft : 0, isTurn: myTurn, tag: t('common.you'), onClick: p.openProfileModal, title: t('game.viewProfileMine'), elo: p.user && !p.user.isGuest ? p.user.elo : null, isGuest: !p.user || Boolean(p.user.isGuest) };
   // After a game the bot says something: a promise when it lost, a gloat when it won.
   // In 3-player a defeat may be the triangle's win, so the winning line decides there.
   const winnerPiece = p.winningLine ? p.board[p.winningLine[0][0]][p.winningLine[0][1]] : null;
@@ -51,8 +52,8 @@ export const PracticeMatchView: React.FC<PracticeMatchViewProps> = (p) => {
   const botAction = canLetBotOpen({ gameStatus: p.gameStatus, moveCount: p.moveHistory.length, threePlayer: three, currentTurn: p.currentTurn, myPiece: p.myPiece, isAiThinking: p.isAiThinking })
     ? { label: t('game.botFirst'), onClick: p.onBotFirst, tone: 'secondary' as const }
     : undefined;
-  const bot = { name: BOT_USER.displayName, bubble: botBubble, action: botAction, photoURL: BOT_USER.photoURL, piece: botPiece, clock: botPiece === 'X' ? p.p1TotalTime : p.p2TotalTime, moveClock: botTurn ? p.turnTimeLeft : 0, isTurn: botTurn, tag: p.isAiThinking ? t('game.thinking') : undefined, onClick: () => p.setOpponent(BOT_USER), title: t('game.viewProfileOpponent') };
-  const triangle = { name: TRIANGLE_BOT_USER.displayName, photoURL: TRIANGLE_BOT_USER.photoURL, piece: 'T' as const, clock: 0, moveClock: p.currentTurn === 'T' ? p.turnTimeLeft : 0, isTurn: p.currentTurn === 'T', tag: p.currentTurn === 'T' && p.isAiThinking ? t('game.thinking') : undefined, onClick: () => p.setOpponent(TRIANGLE_BOT_USER), title: t('game.viewProfileOpponent') };
+  const bot = { name: BOT_USER.displayName, bubble: botBubble, action: botAction, photoURL: BOT_USER.photoURL, piece: botPiece, clock: botPiece === 'X' ? p.p1TotalTime : p.p2TotalTime, moveClock: botTurn ? p.turnTimeLeft : 0, isTurn: botTurn, tag: p.isAiThinking ? t('game.thinking') : undefined, onClick: () => p.setOpponent(BOT_USER), title: t('game.viewProfileOpponent'), elo: BOT_USER.elo, isGuest: false };
+  const triangle = { name: TRIANGLE_BOT_USER.displayName, photoURL: TRIANGLE_BOT_USER.photoURL, piece: 'T' as const, clock: 0, moveClock: p.currentTurn === 'T' ? p.turnTimeLeft : 0, isTurn: p.currentTurn === 'T', tag: p.currentTurn === 'T' && p.isAiThinking ? t('game.thinking') : undefined, onClick: () => p.setOpponent(TRIANGLE_BOT_USER), title: t('game.viewProfileOpponent'), elo: TRIANGLE_BOT_USER.elo, isGuest: false };
   const triangleTurn = p.gameStatus === 'playing' && p.currentTurn === 'T';
   // The same seats MatchHeader draws, as the Spreadsheet disguise shows them:
   // editors in the document, the one on turn "editing". The bots appear as

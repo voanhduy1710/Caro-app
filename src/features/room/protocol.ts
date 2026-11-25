@@ -16,7 +16,7 @@ import type { Clocks, DoubleDown, RoomState } from './roomEngine';
 
 // The room code rule has exactly one home. Join and the public lobby already
 // read it from there, and a copy here would drift the moment either changed.
-export { ROOM_CODE_PATTERN, parseRoomCode } from '../webrtc/roomCode';
+export { parseRoomCode } from '../webrtc/roomCode';
 
 export const PROTOCOL_VERSION = 2;
 
@@ -65,7 +65,7 @@ export interface MemberProfile {
 }
 
 export const MAX_NAME_CODE_POINTS = 40;
-export const MAX_AVATAR_LENGTH = 300;
+const MAX_AVATAR_LENGTH = 300;
 const DEFAULT_NAME = 'Guest';
 const UID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -74,7 +74,7 @@ const RAGNAROK_GIF_KEY = /^ragnarok:([^/\\\u0000-\u001f?#]{1,260}\.gif)$/i;
 const STAT_KEYS = ['elo', 'wins', 'losses', 'draws', 'streak'] as const;
 const STAT_MAX = 10_000;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
@@ -179,8 +179,8 @@ export const sanitizeProfile = (claim: unknown): MemberProfile | null => {
 
 /** The option lists SettingsAndThemeModal offers; nothing else is accepted. */
 export const BOARD_SIZES = [15, 19, 30, 50] as const;
-export const TOTAL_TIME_MINUTES = [0, 5, 15, 30] as const;
-export const TURN_TIME_SECONDS = [0, 10, 30, 60] as const;
+const TOTAL_TIME_MINUTES = [0, 5, 15, 30] as const;
+const TURN_TIME_SECONDS = [0, 10, 30, 60] as const;
 
 export const isAllowedSettings = (value: RoomSettings): boolean =>
   (BOARD_SIZES as readonly number[]).includes(value.boardSize) &&
@@ -197,7 +197,7 @@ export const isAllowedSettings = (value: RoomSettings): boolean =>
 
 export type RatingReportStatus = 'saved' | 'failed' | 'skipped' | 'unknown';
 
-export interface HelloPayload {
+interface HelloPayload {
   /** Unsanitised on purpose: the host runs it through sanitizeProfile. */
   profile: unknown;
   resume?: { memberId: string; token: string };
@@ -251,7 +251,6 @@ export type IntentType = keyof IntentPayloads;
 
 export type Intent = { [K in IntentType]: { type: K; payload: IntentPayloads[K] } }[IntentType];
 
-export type IntentEnvelope = Intent & { v: typeof PROTOCOL_VERSION };
 
 // ---------------------------------------------------------------------------
 // Host to member
@@ -309,6 +308,7 @@ export type RejectReason =
   | 'empty'
   | 'too_long'
   | 'bad_image'
+  | 'duplicate_id'
   | 'rate_limited'
   | 'no_target'
   | 'self'
@@ -347,7 +347,8 @@ export interface HostMessagePayloads {
     rev: number;
   };
   CLOCK_SYNC: { gameId: string; clocks: Clocks; rev: number };
-  REJECTED: { type: IntentType; reason: RejectReason; retryInMs?: number };
+  /** `id` names the rejected CHAT, so its sender drops that echo; older hosts leave it out. */
+  REJECTED: { type: IntentType; reason: RejectReason; retryInMs?: number; id?: string };
   EVENT: { kind: EventKind; seat?: Seat; by?: string; why?: string };
   CHAT: { message: RoomChatMessage };
   CHAT_SEEN: { memberId: string; messageId: string };
@@ -360,13 +361,13 @@ export interface HostMessagePayloads {
   SUPERSEDED: Record<string, never>;
 }
 
-export type HostMessageType = keyof HostMessagePayloads;
+type HostMessageType = keyof HostMessagePayloads;
 
 export type HostMessage = {
   [K in HostMessageType]: { type: K; payload: HostMessagePayloads[K] };
 }[HostMessageType];
 
-export type HostEnvelope = HostMessage & { v: typeof PROTOCOL_VERSION };
+type HostEnvelope = HostMessage & { v: typeof PROTOCOL_VERSION };
 
 /** Wraps a host message in the v2 envelope for sending. */
 export const envelope = (message: HostMessage): HostEnvelope => ({ v: PROTOCOL_VERSION, ...message });

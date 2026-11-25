@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { liveClocks } from './roomEngine';
 import type { Clocks, RoomState } from './roomEngine';
 
-interface TimingState { mirror: RoomState | null; receivedAt: number; hostLostSince: number | null; }
+interface TimingState { mirror: RoomState | null; receivedAt: number; fullStateAt: number; hostLostSince: number | null; }
 
 export const useRoomTiming = (state: TimingState, room: RoomState | null, hostLostSince: number | null, hostLostGiveUpMs: number) => {
   const clocksNow = useCallback((): Clocks | null => {
@@ -13,7 +13,8 @@ export const useRoomTiming = (state: TimingState, room: RoomState | null, hostLo
       ? liveClocks(game, performance.now() - state.receivedAt)
       : game.clocks;
   }, [state]);
-  const elapsed = () => performance.now() - state.receivedAt;
+  // Countdown, grace and sentAt come only with a full room state, so they age from that, not from the last move.
+  const elapsed = () => performance.now() - state.fullStateAt;
   const countdownSecondsLeft = room?.countdown ? Math.max(0, Math.ceil((room.countdown.msLeft - elapsed()) / 1000)) : null;
   const graceSecondsLeft = useCallback((memberId: string): number | null => {
     const member = state.mirror?.members.find((candidate) => candidate.id === memberId);

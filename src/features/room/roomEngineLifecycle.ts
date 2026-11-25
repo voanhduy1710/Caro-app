@@ -1,8 +1,8 @@
 import type { RoomSettings } from '../settings/types';
 import type { EventKind, IntentType, RejectReason, Seat } from './protocol';
-import { COUNTDOWN_MS, RESULTS_CEILING, RESULTS_KEPT, SEAT_LOG_CAP } from './roomEngineTypes';
+import { COUNTDOWN_MS, RESULTS_CEILING, RESULTS_KEPT, SEAT_LOG_CAP, VIEWER_GRACE_MS } from './roomEngineTypes';
 import type { Clocks, EngineEnv, EngineEvent, EngineResult, EngineState, Game, GameResult, Member, RatingOutcome, RatingState, Reply, ResultReason, SeatChange } from './roomEngineTypes';
-import { activeSeats, bankLimitMs, bothSeatedAndConnected, liveClocks, liveClocksAt, occupant, playerRef, ratingDecision, turnLimitMs } from './roomEngineHelpers';
+import { activeSeats, bankLimitMs, bothSeatedAndConnected, liveClocks, liveClocksAt, occupant, playerRef, ratingDecision, scorePairKey, turnLimitMs } from './roomEngineHelpers';
 import { toWire } from './roomEngineCore';
 
 export interface Ctx {
@@ -61,8 +61,9 @@ export const reject = (
   type: IntentType,
   reason: RejectReason,
   retryInMs?: number,
+  id?: string,
 ): void => {
-  const payload = retryInMs === undefined ? { type, reason } : { type, reason, retryInMs };
+  const payload = { type, reason, ...(retryInMs === undefined ? {} : { retryInMs }), ...(id === undefined ? {} : { id }) };
   ctx.replies.push({ to, message: { type: 'REJECTED', payload } });
 };
 
@@ -79,13 +80,13 @@ export const bankClocks = (d: EngineState, at: number): void => {
   d.host.runningSince = Math.max(since, at);
 };
 
-export const stopClocks = (d: EngineState, at: number): void => {
+const stopClocks = (d: EngineState, at: number): void => {
   bankClocks(d, at);
   if (d.room.game) d.room.game.clocks.running = false;
   d.host.runningSince = null;
 };
 
-export const fullClocks = (settings: RoomSettings): Clocks => ({
+const fullClocks = (settings: RoomSettings): Clocks => ({
   X: bankLimitMs(settings),
   O: bankLimitMs(settings),
   T: bankLimitMs(settings),
@@ -182,6 +183,14 @@ export const abortCountdown = (d: EngineState): void => {
   d.host.countdownEndsAt = null;
 };
 
+/** A coin call or rock-paper-scissors round without both players is dropped, picks and all. */
+export const abandonOpening = (d: EngineState): void => {
+  const { room } = d;
+  room.game = null;
+  room.phase = 'waiting';
+  room.autoStartArmed = true;
+};
+
 /** Stops play. A pending take-back cannot outlive a pause, so it expires with notice. */
 export const pause = (d: EngineState, ctx: Ctx, bankAt: number): void => {
   const { game } = d.room;
@@ -195,10 +204,17 @@ export const pause = (d: EngineState, ctx: Ctx, bankAt: number): void => {
   }
 };
 
-export const vacate = (d: EngineState, seat: Seat, reason: SeatChange['reason'], ctx: Ctx): void => {
+/** A disconnected member who no longer has a seat keeps only a viewer's grace. */
+export const toViewerGrace = (d: EngineState, memberId: string, now: number): void => {
+  const endsAt = d.host.graceEndsAt[memberId];
+  if (endsAt !== undefined) d.host.graceEndsAt[memberId] = Math.min(endsAt, now + VIEWER_GRACE_MS);
+};
+
+const vacate = (d: EngineState, seat: Seat, reason: SeatChange['reason'], ctx: Ctx): void => {
   const { room } = d;
   const member = occupant(d, seat);
   room.seats[seat] = null;
+  if (member) toViewerGrace(d, member.id, ctx.now);
   const { game } = room;
   if (game) {
     game.undo = null;
@@ -222,7 +238,7 @@ export const vacate = (d: EngineState, seat: Seat, reason: SeatChange['reason'],
   ctx.events.push({ kind: 'broadcast', message: { type: 'EVENT', payload: { kind: 'seat_opened', seat } }, except: [] });
 };
 
-/** Empties a seat, then does what the phase demands: pause a game, or abort a count-in. */
+/** Empties a seat, then does what the phase demands: pause a game, or abort a count-in or an opening. */
 export const vacateSeat = (d: EngineState, seat: Seat, reason: SeatChange['reason'], ctx: Ctx): void => {
   switch (d.room.phase) {
     case 'playing':
@@ -231,6 +247,10 @@ export const vacateSeat = (d: EngineState, seat: Seat, reason: SeatChange['reaso
       break;
     case 'countdown':
       abortCountdown(d);
+      vacate(d, seat, reason, ctx);
+      break;
+    case 'opening':
+      abandonOpening(d);
       vacate(d, seat, reason, ctx);
       break;
     default:
@@ -255,7 +275,7 @@ export const settleRating = (result: GameResult): void => {
  * A submitter who leaves while their result is pending may still have a
  * request in flight, so the outcome is unknown rather than failed.
  */
-export const markSubmitterGone = (d: EngineState, memberId: string): void => {
+const markSubmitterGone = (d: EngineState, memberId: string): void => {
   for (const result of d.room.results) {
     const rating = result.rating;
     if (rating.status !== 'pending') continue;
@@ -324,7 +344,7 @@ export const endGame = (
   room.phase = 'ended';
   room.countdown = null;
   d.host.countdownEndsAt = null;
-  const pair = `${x.id}|${o.id}`;
+  const pair = scorePairKey(room.seats, game.settings.playerMode);
   if (room.score.pair !== pair) room.score = { pair, X: 0, O: 0, T: 0 };
   if (winner !== 'DRAW') room.score[winner] += 1;
   const players = { X: playerRef(x), O: playerRef(o), T: playerRef(t ?? x) };
@@ -374,7 +394,7 @@ export const endGame = (
 };
 
 /** The two rules that start play on their own, checked after every mutation. */
-export const runStartChecks = (d: EngineState, ctx: Ctx): void => {
+const runStartChecks = (d: EngineState, ctx: Ctx): void => {
   const { room } = d;
   if (!bothSeatedAndConnected(d)) return;
   if (room.phase === 'paused') {
@@ -415,7 +435,7 @@ export const finalize = (before: EngineState, d: EngineState, ctx: Ctx): EngineR
           token,
           resumed,
           ...(expired ? { expired: true } : {}),
-          state: toWire(d, ctx.now),
+          state: toWire(d, ctx.now, memberId),
           chatBacklog: [...d.host.chatBacklog],
           chatSeen: { ...d.host.chatSeen },
         },

@@ -1,8 +1,17 @@
 # `vercel --prod` uploads from this folder, and uses this list instead of
-# .gitignore. .env is deliberately NOT listed: git no longer tracks it, but the
-# Vite build on Vercel still needs the VITE_ variables in it.
+# .gitignore. Secrets never go up with the source: the Vite build on Vercel
+# reads VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY from the Vercel project's
+# environment, which deploy_vercel.ps1 syncs from .env before every deploy
+# (and stops if it cannot), and /api/turn reads its Cloudflare key from there
+# too. Those two VITE_ values are the only ones src/ reads.
 .git
 node_modules
 dist
 .claude
 *.log
+.env
+.env.*
+.mcp.json
+# Tests are not routes; the leading underscore already keeps _*.js out of
+# routing, this keeps them out of the upload altogether.
+api/*.test.js

@@ -1,9 +1,10 @@
+import { DEFAULT_ELO } from '../../shared/constants';
 import type React from 'react';
 import type { UserProfile } from '../auth/AuthContext';
 import type { RoomApi } from './useRoom';
 import type { Member } from './roomEngine';
 
-export type ConfirmCopy = {
+type ConfirmCopy = {
   title: string;
   body: string;
   confirmLabel: string;
@@ -34,7 +35,7 @@ export const memberProfile = (member: Member): UserProfile => ({
   displayName: member.profile.name,
   photoURL: member.profile.avatar ?? '',
   email: '',
-  elo: member.profile.elo ?? 1200,
+  elo: member.profile.elo ?? DEFAULT_ELO,
   wins: member.profile.wins ?? 0,
   losses: member.profile.losses ?? 0,
   draws: member.profile.draws ?? 0,

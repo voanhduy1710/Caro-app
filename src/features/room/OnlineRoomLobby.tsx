@@ -4,6 +4,8 @@ import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { summariseRoomSettings } from '../settings/types';
 import { formatReconnectDuration } from '../../shared/utils/formatDuration';
 import { useT } from '../i18n/language';
+import { useIsOrca } from '../theme/uiStyle';
+import { OnlineRoomLobbyOrca } from './OnlineRoomLobby.orca';
 import type { Member, RoomState } from './roomEngine';
 import type { Seat } from './protocol';
 import type { RoomApi } from './useRoom';
@@ -16,7 +18,10 @@ export interface OnlineRoomLobbyProps {
   roster: React.ReactNode; hostLostStrip: React.ReactNode; confirmDialog: React.ReactNode; teaseToast: React.ReactNode;
 }
 
-export const OnlineRoomLobby: React.FC<OnlineRoomLobbyProps> = ({ room, s, me, isViewer, connected, occupantOf, copyState, roomLink, copyRoomLink, shareRoomLink, onOpenRules, requestExit, roster, hostLostStrip, confirmDialog, teaseToast }) => {
+export const OnlineRoomLobby: React.FC<OnlineRoomLobbyProps> = (props) =>
+  useIsOrca() ? <OnlineRoomLobbyOrca {...props} /> : <OnlineRoomLobbyDefault {...props} />;
+
+const OnlineRoomLobbyDefault: React.FC<OnlineRoomLobbyProps> = ({ room, s, me, isViewer, connected, occupantOf, copyState, roomLink, copyRoomLink, shareRoomLink, onOpenRules, requestExit, roster, hostLostStrip, confirmDialog, teaseToast }) => {
     const t = useT();
     const seatRow = (seat: Seat) => {
       const occupant = occupantOf(seat);

@@ -22,8 +22,7 @@ import { PROTOCOL_VERSION } from './protocol';
 import type { HostMessage, MemberProfile, Phase, RoomChatMessage, Seat } from './protocol';
 import type { ChatQuote } from '../webrtc/types';
 
-export type { MemberProfile, Phase, Seat } from './protocol';
-export { PROTOCOL_VERSION } from './protocol';
+export type { Seat } from './protocol';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -32,6 +31,13 @@ export { PROTOCOL_VERSION } from './protocol';
 export const MAX_MEMBERS = 8; // includes the host and members in grace
 /** A disconnected player keeps their seat for up to five hours. */
 export const GRACE_MS = 5 * 60 * 60_000;
+/**
+ * A disconnected member without a seat holds nothing worth keeping, and a
+ * long grace let throwaway joins make a public room look full for hours.
+ */
+export const VIEWER_GRACE_MS = 60_000;
+/** After a host restore every member must reconnect, and the host's peer id can take up to 90 s to come back. */
+export const VIEWER_RESTORE_GRACE_MS = 3 * 60_000;
 /** The remaining 1v1 player may claim a disconnect win after this delay. */
 export const CLAIM_DISCONNECT_WIN_MS = 2 * 60_000;
 export const COUNTDOWN_MS = 3_000;
@@ -180,7 +186,10 @@ export interface Game {
     face?: 'X' | 'O' | null;
     /** The seated player who made the visible coin selection. */
     callerMemberId?: string | null;
+    /** On the wire a pick shows only to its own player until both are in; see toWire. */
     choices?: { X: 'rock' | 'paper' | 'scissors' | null; O: 'rock' | 'paper' | 'scissors' | null };
+    /** Wire only: who has picked, while the picks themselves are still hidden. */
+    chosen?: { X: boolean; O: boolean };
   };
   /** Alternates from openingSeat; players themselves always retain X or O. */
   moves: Array<[number, number]>;
@@ -200,7 +209,7 @@ export interface Game {
   vacatedAt: { X: number | null; O: number | null; T: number | null };
   lastMove: { by: string; at: number } | null;
   undo: { from: Seat; expiresAt: number } | null;
-  rematch: { from: Seat; expiresAt?: number } | null; // only while phase = ended; legacy snapshots may have expiresAt
+  rematch: { from: Seat } | null; // only while phase = ended
   /** Optional so a host snapshot from before double downs still restores. */
   doubleDown?: DoubleDown;
 }
@@ -235,7 +244,7 @@ export interface RoomState {
 }
 
 /** Host-only bookkeeping. None of it is ever sent to a member. */
-export interface HostBook {
+interface HostBook {
   hostMemberId: string;
   tokens: Record<string, string>;
   tabIds: Record<string, string>;

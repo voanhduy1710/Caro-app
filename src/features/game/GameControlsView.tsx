@@ -3,7 +3,9 @@ import { ChevronDown, ChevronUp, Timer } from 'lucide-react';
 import type { ChatMessage } from '../webrtc/types';
 import { useDisplayPrefs } from './displayPrefs';
 import { useIsDesktop } from '../../shared/hooks/useMediaQuery';
+import { focusableIn, trapTabTarget } from '../../shared/hooks/useFocusTrap';
 import { useTheme } from '../theme/ThemeContext';
+import { pieceColor } from '../theme/types';
 import { useT } from '../i18n/language';
 import { useDisguiseMode } from './disguiseMode';
 import { EMPTY_SHEET_ACTIONS, sheetActionsStore, sheetChatStore, sheetMatchStore, updateSheetUi, useSheetUi } from './sheetBridge';
@@ -15,8 +17,11 @@ import { GameActionRail } from './GameActionRail';
 import { GameChatHeader } from './GameChatHeader';
 import { useGameChat } from './useGameChat';
 import type { GameControlsProps } from './GameControlsShared';
+import { useIsOrca } from '../theme/uiStyle';
+import { renderGameControlsOrca } from './GameControlsView.orca';
 
-export const GameControls: React.FC<GameControlsProps> = ({
+export const GameControls: React.FC<GameControlsProps> = (props) => {
+  const {
   headerNode,
   boardNode,
   playerTimers = [],
@@ -53,8 +58,9 @@ export const GameControls: React.FC<GameControlsProps> = ({
   onOfferDoubleDown,
   onAnswerDoubleDown,
   sheetMatch = null,
-}) => {
+  } = props;
   const t = useT();
+  const isOrca = useIsOrca();
   const isDesktop = useIsDesktop();
   const prefs = useDisplayPrefs();
   const { theme } = useTheme();
@@ -67,6 +73,11 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const [isPrefsOpen, setIsPrefsOpen] = useState(false);
   const gearRef = useRef<HTMLButtonElement>(null);
   const prefsRef = useRef<HTMLDivElement>(null);
+  // Orca style's phone header: the room's members in a popover. Declared in
+  // both styles, so no hook depends on the style.
+  const [isMobileRosterOpen, setIsMobileRosterOpen] = useState(false);
+  const rosterBtnRef = useRef<HTMLButtonElement>(null);
+  const rosterPopoverRef = useRef<HTMLDivElement>(null);
 
   const [isChatOpen, setIsChatOpen] = useState<boolean>(() => isDesktop && readStoredChatOpen());
   // One open/closed state serves two layouts with opposite defaults: the
@@ -129,7 +140,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
     receipt: chatReceipt,
     onAnswerDoubleDown,
   });
-  const { unreadCount, playChatSound, isBuzzCooldown, handleBuzzClick, setLightboxImage } = chat;
+  const { unreadCount, playChatSound, isBuzzCooldown, handleBuzzClick, setLightboxImage, canBuzz } = chat;
 
   const lastMessage = chatMessages[chatMessages.length - 1];
   const lastMessagePreview = useMemo(() => {
@@ -179,6 +190,26 @@ export const GameControls: React.FC<GameControlsProps> = ({
     };
   }, [isPrefsOpen]);
 
+  useEffect(() => {
+    if (!isMobileRosterOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (rosterPopoverRef.current?.contains(target) || rosterBtnRef.current?.contains(target)) return;
+      setIsMobileRosterOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setIsMobileRosterOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKey, true);
+    };
+  }, [isMobileRosterOpen]);
+
   // On a phone the sheet is modal, so opening it moves focus into it. Left on
   // the bar, focus would sit behind the scrim, and a screen reader would never
   // learn that a dialog had opened. It goes to the sheet itself, not to the
@@ -209,22 +240,13 @@ export const GameControls: React.FC<GameControlsProps> = ({
    */
   const trapSheetFocus = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     const sheet = sheetRef.current;
-    if (event.key !== 'Tab' || !sheet) return;
-    const items = Array.from(
-      sheet.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
-      )
-    );
-    if (items.length === 0) return;
-    const first = items[0];
-    const last = items[items.length - 1];
-    const active = document.activeElement;
-    if (event.shiftKey && (active === first || active === sheet)) {
+    // The emoticon bubble is portalled out of the sheet but its key presses
+    // still bubble here through React; it keeps its own Tab handling.
+    if (event.key !== 'Tab' || !sheet || !sheet.contains(document.activeElement)) return;
+    const target = trapTabTarget<Element>(focusableIn(sheet), document.activeElement, true, event.shiftKey);
+    if (target instanceof HTMLElement) {
       event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
+      target.focus();
     }
   }, []);
 
@@ -337,8 +359,6 @@ export const GameControls: React.FC<GameControlsProps> = ({
     buzzRef.current = handleBuzzClick;
   });
   const canAnswerOffers = Boolean(onAnswerDoubleDown);
-  // Same rule as the game's composer: only a seated player can buzz.
-  const canBuzz = !isAiMode && (role ?? 'player') === 'player' && Boolean(onSendBuzz);
   useEffect(() => {
     sheetChatStore.set({
       messages: chatMessages,
@@ -371,7 +391,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
   useEffect(() => () => sheetMatchStore.set(null), []);
   // One row of icons rather than a wrap of labelled buttons: every action here
   // is either rare or destructive, and none of them should out-shout the board.
-  const actionButtons = <GameActionRail {...{ exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, allowUndo, gameStatus, canUndo, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, canResign, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown }} />;
+  const actionButtons = <GameActionRail {...{ exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, undoDisabled, gameStatus, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, resignDisabled, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown }} />;
   const chatFeed = chat.feed;
   const composer = chat.composer;
   const chatHeader = <GameChatHeader open={isChatOpen} unreadCount={unreadCount} messageCount={chatMessages.length} preview={lastMessagePreview} onToggle={() => setIsChatOpen((open) => !open)} />;
@@ -387,7 +407,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
       {playerTimers.length > 0 && (
         <div className="absolute left-3 hidden items-start gap-7 xl:flex" aria-label={t('game.playerClocks')}>
           {playerTimers.map(({ piece, seconds, isTurn, moves }) => {
-            const color = piece === 'X' ? theme.xColor : piece === 'O' ? theme.oColor : '#7c3aed';
+            const color = pieceColor(theme, piece);
             return (
               <div
                 key={piece}
@@ -447,6 +467,40 @@ export const GameControls: React.FC<GameControlsProps> = ({
     : isDesktop
     ? 'desktop'
     : 'mobile';
+
+  if (isOrca) {
+    // Orca style (PR 5): its own four layouts, same root and board slot.
+    // Phones get PR 5's in-match strips in practice too, not the solo rail.
+    // The refs are only handed on to the elements that own them, never read here.
+    // oxlint-disable-next-line react/refs
+    return renderGameControlsOrca({
+      t,
+      theme,
+      layout: sheetDisguise ? 'sheet' : !isDesktop ? 'mobile' : isAiMode ? 'solo' : 'desktop',
+      props,
+      rail: { exitLabel, isAiMode, onExitMatch, simulationCount, role, openSeat, onTakeSeat, undoTitle, onProposeUndo, undoDisabled, gameStatus, undoPending, onProposeRematch, rematchDisabled, rematchPending, onResign, resignDisabled, gearRef, prefsRef, isPrefsOpen, setIsPrefsOpen, prefs, doubleDown, onOfferDoubleDown },
+      canBuzz,
+      handleBuzzClick,
+      isBuzzCooldown,
+      isChatOpen,
+      setIsChatOpen,
+      closeChatSheet,
+      chatBarRef,
+      sheetRef,
+      trapSheetFocus,
+      unreadCount,
+      lastMessagePreview,
+      chatFeed,
+      composer,
+      lightbox,
+      commentsOpen,
+      setLightboxImage,
+      isMobileRosterOpen,
+      setIsMobileRosterOpen,
+      rosterBtnRef,
+      rosterPopoverRef,
+    });
+  }
 
   const rootClassName =
     layout === 'sheet'

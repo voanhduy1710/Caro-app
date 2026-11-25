@@ -1,15 +1,27 @@
 import React from 'react';
-import { X, Sun, Moon, Monitor } from 'lucide-react';
+import { X } from 'lucide-react';
 import type { RoomSettings } from './types';
+import { BOARD_SIZES } from '../room/protocol';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
 import { useUiTheme } from '../../shared/hooks/useUiTheme';
-import type { UiTheme } from '../../shared/hooks/useUiTheme';
 import { useTheme } from '../theme/ThemeContext';
-import type { BoardTheme, PieceTheme } from '../theme/types';
-import type { StringKey } from '../i18n/strings';
+import { UI_STYLES, setUiStyle, useIsOrca, useUiStyle } from '../theme/uiStyle';
+import { BOARD_THEMES, PIECE_THEMES } from '../theme/types';
 import { LANGUAGES, setLanguage, useLanguage, useT } from '../i18n/language';
+import {
+  BOARD_THEME_NAMES,
+  COLOUR_NAMES,
+  OPPONENT_SIM_PRESETS,
+  O_PRESETS,
+  PIECE_THEME_NAMES,
+  SELF_SIM_PRESETS,
+  UI_STYLE_NAMES,
+  UI_THEMES,
+  X_PRESETS,
+} from './settingsOptions';
+import { SettingsAndThemeModalOrca } from './SettingsAndThemeModal.orca';
 
-interface SettingsAndThemeModalProps {
+export interface SettingsAndThemeModalProps {
   isOpen: boolean;
   onClose: () => void;
   settings: RoomSettings;
@@ -19,42 +31,6 @@ interface SettingsAndThemeModalProps {
   /** Which seat the player holds, so the piece-colour rows can name it. */
   myPiece?: 'X' | 'O' | 'T';
 }
-
-const BOARD_THEMES: Array<{ id: BoardTheme; nameKey: StringKey }> = [
-  { id: 'graph_paper', nameKey: 'settings.boardTheme.graphPaper' },
-  { id: 'light_wood', nameKey: 'settings.boardTheme.bamboo' },
-  { id: 'laser_futuristic', nameKey: 'settings.boardTheme.laser' },
-  { id: 'spreadsheet', nameKey: 'settings.boardTheme.spreadsheet' },
-];
-
-const PIECE_THEMES: Array<{ id: PieceTheme; nameKey: StringKey }> = [
-  { id: 'calligraphic', nameKey: 'settings.pieceTheme.brush' },
-  { id: 'classic', nameKey: 'settings.pieceTheme.marker' },
-  { id: 'laser', nameKey: 'settings.pieceTheme.neon' },
-  { id: 'gomoku_3d', nameKey: 'settings.pieceTheme.goStones' },
-];
-
-const UI_THEMES: Array<{ id: UiTheme; labelKey: StringKey; icon: typeof Sun }> = [
-  { id: 'light', labelKey: 'settings.ui.light', icon: Sun },
-  { id: 'dark', labelKey: 'settings.ui.dark', icon: Moon },
-  { id: 'system', labelKey: 'settings.ui.system', icon: Monitor },
-];
-
-/** Swatch names. A hex is neither speakable nor meaningful read aloud. */
-const COLOUR_NAMES: Record<string, StringKey> = {
-  '#006699': 'settings.colour.oceanBlue', '#2563eb': 'settings.colour.blue', '#10b981': 'settings.colour.green',
-  '#00f0ff': 'settings.colour.cyan', '#8b5cf6': 'settings.colour.purple', '#f59e0b': 'settings.colour.amber',
-  '#0f172a': 'settings.colour.nearBlack', '#e11d24': 'settings.colour.red', '#dc2626': 'settings.colour.crimson',
-  '#ef4444': 'settings.colour.coral', '#ff007f': 'settings.colour.hotPink', '#ec4899': 'settings.colour.pink',
-  '#f97316': 'settings.colour.orange', '#ffffff': 'settings.colour.white', '#64748b': 'settings.colour.slate',
-  '#475569': 'settings.colour.darkSlate', '#334155': 'settings.colour.charcoal', '#b45309': 'settings.colour.brown',
-  '#d97706': 'settings.colour.darkAmber', '#c05621': 'settings.colour.burntOrange', '#78350f': 'settings.colour.darkBrown',
-};
-
-const X_PRESETS = ['#006699', '#2563eb', '#10b981', '#00f0ff', '#8b5cf6', '#f59e0b', '#0f172a'];
-const O_PRESETS = ['#e11d24', '#dc2626', '#ef4444', '#ff007f', '#ec4899', '#f97316', '#ffffff'];
-const SELF_SIM_PRESETS = ['#64748b', '#475569', '#334155', '#2563eb', '#10b981', '#0f172a'];
-const OPPONENT_SIM_PRESETS = ['#64748b', '#b45309', '#d97706', '#c05621', '#dc2626', '#78350f'];
 
 /**
  * Every setting in this dialog is the same question: pick one of these. It is
@@ -159,7 +135,10 @@ const ColourPickerRow: React.FC<{
   );
 };
 
-export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
+export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = (props) =>
+  useIsOrca() ? <SettingsAndThemeModalOrca {...props} /> : <SettingsAndThemeModalDefault {...props} />;
+
+const SettingsAndThemeModalDefault: React.FC<SettingsAndThemeModalProps> = ({
   isOpen,
   onClose,
   settings,
@@ -170,6 +149,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
 }) => {
   const dialogProps = useModalChrome(isOpen, onClose, 'settings-modal-title');
   const { theme: uiTheme, setTheme: setUiTheme } = useUiTheme();
+  const uiStyle = useUiStyle();
   const language = useLanguage();
   const t = useT();
   const {
@@ -224,7 +204,7 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
             </div>
 
             <Group label={t('settings.boardSize')} cols={4}>
-              {[15, 19, 30, 50].map((val) => (
+              {BOARD_SIZES.map((val) => (
                 <Choice
                   key={val}
                   selected={settings.boardSize === val}
@@ -345,6 +325,14 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
               ))}
             </Group>
 
+            <Group label={t('settings.style')} cols={2}>
+              {UI_STYLES.map((id) => (
+                <Choice key={id} selected={uiStyle === id} onClick={() => setUiStyle(id)}>
+                  {t(UI_STYLE_NAMES[id])}
+                </Choice>
+              ))}
+            </Group>
+
             <Group label={t('settings.appearance')} cols={3}>
               {UI_THEMES.map((opt) => {
                 const Icon = opt.icon;
@@ -362,25 +350,17 @@ export const SettingsAndThemeModal: React.FC<SettingsAndThemeModalProps> = ({
             </Group>
 
             <Group label={t('settings.pieces')} cols={2}>
-              {PIECE_THEMES.map((pt) => (
-                <Choice
-                  key={pt.id}
-                  selected={theme.pieceTheme === pt.id}
-                  onClick={() => setPieceTheme(pt.id)}
-                >
-                  {t(pt.nameKey)}
+              {PIECE_THEMES.map((id) => (
+                <Choice key={id} selected={theme.pieceTheme === id} onClick={() => setPieceTheme(id)}>
+                  {t(PIECE_THEME_NAMES[id])}
                 </Choice>
               ))}
             </Group>
 
             <Group label={t('settings.board')} cols={2}>
-              {BOARD_THEMES.map((bt) => (
-                <Choice
-                  key={bt.id}
-                  selected={theme.boardTheme === bt.id}
-                  onClick={() => setBoardTheme(bt.id)}
-                >
-                  {t(bt.nameKey)}
+              {BOARD_THEMES.map((id) => (
+                <Choice key={id} selected={theme.boardTheme === id} onClick={() => setBoardTheme(id)}>
+                  {t(BOARD_THEME_NAMES[id])}
                 </Choice>
               ))}
             </Group>

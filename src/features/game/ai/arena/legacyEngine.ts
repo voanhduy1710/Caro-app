@@ -29,7 +29,7 @@ const DIRECTIONS: Array<[number, number]> = [
 /**
  * Gets candidate empty cells that are adjacent (within radius 2) to existing placed pieces.
  */
-export const getCandidateMoves = (board: BoardMatrix, size: number, radius = 2): Array<[number, number]> => {
+const getCandidateMoves = (board: BoardMatrix, size: number, radius = 2): Array<[number, number]> => {
   const candidates: Array<[number, number]> = [];
   const visited = Array.from({ length: size }, () => Array(size).fill(false));
   let hasPieces = false;
@@ -118,7 +118,7 @@ const evaluateDirection = (
 /**
  * Evaluates score of placing a move for player or blocking opponent.
  */
-export const evaluatePositionScore = (
+const evaluatePositionScore = (
   board: BoardMatrix,
   r: number,
   c: number,

@@ -1,14 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ListSkeleton } from '../../shared/components/ListSkeleton';
 import { X } from 'lucide-react';
-import { fetchTopLeaderboard } from './leaderboardService';
-import { finalizeDueClaims } from '../history/historyService';
 import type { UserProfile } from '../auth/AuthContext';
 import { RankBadge } from '../../shared/components/RankBadge';
-import { getRankTitle } from '../../shared/utils/eloCalculator';
+import { getRankTitle } from '../../shared/utils/rankTiers';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
 import { RankGuideModal } from './RankGuideModal';
+import { useIsOrca } from '../theme/uiStyle';
+import { LeaderboardModalOrca } from './LeaderboardModal.orca';
+import { useLeaderboard } from './useLeaderboard';
 
 interface LeaderboardModalProps {
   isOpen: boolean;
@@ -16,8 +17,11 @@ interface LeaderboardModalProps {
   onSelectPlayer?: (player: UserProfile) => void;
 }
 
-export const LeaderboardModal: React.FC<LeaderboardModalProps> = (props) =>
-  props.isOpen ? <OpenLeaderboardModal {...props} /> : null;
+export const LeaderboardModal: React.FC<LeaderboardModalProps> = (props) => {
+  const isOrca = useIsOrca();
+  if (!props.isOpen) return null;
+  return isOrca ? <LeaderboardModalOrca {...props} /> : <OpenLeaderboardModal {...props} />;
+};
 
 const OpenLeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onClose, onSelectPlayer }) => {
   const [showRankGuide, setShowRankGuide] = useState(false);
@@ -26,22 +30,7 @@ const OpenLeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onClose
     onClose();
   };
   const dialogProps = useModalChrome(isOpen && !showRankGuide, closeLeaderboard, 'leaderboard-modal-title');
-  const [players, setPlayers] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const loadLeaderboard = async () => {
-    setLoading(true);
-    await finalizeDueClaims();
-    const data = await fetchTopLeaderboard(25);
-    setPlayers(data);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      loadLeaderboard();
-    }
-  }, [isOpen]);
+  const { players, loading, reload: loadLeaderboard } = useLeaderboard(isOpen);
 
   if (showRankGuide) return <RankGuideModal isOpen onClose={() => setShowRankGuide(false)} />;
 

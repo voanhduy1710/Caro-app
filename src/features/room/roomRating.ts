@@ -2,7 +2,7 @@ import type { GameResult } from './roomEngine';
 import { otherSeat } from './roomEngine';
 import type { Seat } from './protocol';
 
-const signed = (value: number) => `${value >= 0 ? '+' : '−'}${Math.abs(value)}`;
+export const signed = (value: number) => `${value >= 0 ? '+' : '−'}${Math.abs(value)}`;
 
 /** Text shown on a result card for the room's rating outcome. */
 export const describeRating = (result: GameResult, mine: Seat | null, local: string | undefined): string | null => {
