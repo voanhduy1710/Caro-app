@@ -5,6 +5,7 @@ import { AuthModal } from '../auth/AuthModal';
 import { useAuth, type UserProfile } from '../auth/AuthContext';
 import type { StringKey } from '../i18n/strings';
 import { useT } from '../i18n/language';
+import { useIsOrca } from '../theme/uiStyle';
 import { OpponentProfileModal } from '../profile/OpponentProfileModal';
 import { ProfileModal } from '../profile/ProfileModal';
 import { OnlineRoom } from '../room/OnlineRoom';
@@ -24,7 +25,29 @@ const END_KEYS: Record<string, StringKey> = {
 };
 
 /** A centred message: connecting, an error, or the pairing's end. */
-const PairNotice: React.FC<{ busy?: boolean; text: string; hint?: string; children?: React.ReactNode }> = ({ busy, text, hint, children }) => (
+const PairNotice: React.FC<{ busy?: boolean; text: string; hint?: string; children?: React.ReactNode }> = (props) =>
+  useIsOrca() ? <PairNoticeOrca {...props} /> : <PairNoticeDefault {...props} />;
+
+/** Orca style (PR 5): a compact IDE card, buttons stacked under the text. */
+const PairNoticeOrca: React.FC<{ busy?: boolean; text: string; hint?: string; children?: React.ReactNode }> = ({ busy, text, hint, children }) => (
+  <div className="flex flex-1 items-center justify-center p-4">
+    <div
+      className="flex w-full max-w-sm flex-col items-center gap-3.5 rounded-lg border border-line-strong bg-surface p-5 text-center shadow-e2"
+      role={busy ? 'status' : 'alert'}
+    >
+      {busy ? (
+        <Loader2 size={22} strokeWidth={1.75} className="animate-spin text-accent-text" aria-hidden="true" />
+      ) : (
+        <AlertTriangle size={22} strokeWidth={1.75} className="text-warning" aria-hidden="true" />
+      )}
+      <p className="text-sm font-medium text-ink">{text}</p>
+      {hint && <p className="text-xs leading-relaxed text-muted">{hint}</p>}
+      {children && <div className="flex w-full flex-col gap-2 pt-1">{children}</div>}
+    </div>
+  </div>
+);
+
+const PairNoticeDefault: React.FC<{ busy?: boolean; text: string; hint?: string; children?: React.ReactNode }> = ({ busy, text, hint, children }) => (
   <div className="flex flex-1 items-center justify-center p-6">
     <div className="card flex w-full max-w-sm flex-col items-center gap-4 p-6 text-center" role={busy ? 'status' : 'alert'}>
       {busy
@@ -39,9 +62,10 @@ const PairNotice: React.FC<{ busy?: boolean; text: string; hint?: string; childr
 
 const BackHome: React.FC<{ onHome: () => void }> = ({ onHome }) => {
   const t = useT();
+  const isOrca = useIsOrca();
   return (
-    <button type="button" onClick={onHome} className="btn btn-primary w-full">
-      <Home size={18} strokeWidth={2.25} aria-hidden="true" />
+    <button type="button" onClick={onHome} className={isOrca ? 'btn btn-primary btn-sm w-full' : 'btn btn-primary w-full'}>
+      <Home size={isOrca ? 15 : 18} strokeWidth={isOrca ? 1.75 : 2.25} aria-hidden="true" />
       <span>{t('pair.backHome')}</span>
     </button>
   );
@@ -50,6 +74,7 @@ const BackHome: React.FC<{ onHome: () => void }> = ({ onHome }) => {
 /** The live pairing: handshake, then the desktop's game mirrored on this phone. */
 const RemoteSession: React.FC<{ offer: PairOffer; user: UserProfile; onHome: () => void }> = ({ offer, user, onHome }) => {
   const t = useT();
+  const isOrca = useIsOrca();
   const { openProfileModal } = useAuth();
   const remote = usePairRemote(offer, user);
   const { unpair, status } = remote;
@@ -88,18 +113,35 @@ const RemoteSession: React.FC<{ offer: PairOffer; user: UserProfile; onHome: () 
   if (status === 'connecting' || (!room && !practice)) return <PairNotice busy text={t('pair.connecting')} />;
 
   const phase = room?.state?.phase;
+  // Orca (PR 5): one full-height column with a slim status bar on top.
+  const Wrapper = isOrca ? 'div' : React.Fragment;
+  const wrapperProps = isOrca ? { className: 'flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden' } : {};
   return (
-    <>
-      <div className="flex items-center justify-between gap-2 border-b border-line bg-surface px-3 py-1.5 text-sm">
-        <span className="flex min-w-0 items-center gap-2 text-muted">
-          <MonitorSmartphone size={16} strokeWidth={2.25} aria-hidden="true" className="shrink-0" />
-          <span className="truncate">{t('pair.pairedWithDesktop')}</span>
-        </span>
-        <button type="button" onClick={unpairAndGoHome} className="btn btn-ghost btn-sm text-danger hover:text-danger">
-          {t('pair.unpair')}
-        </button>
-      </div>
-      <main className="flex w-full flex-1 flex-col p-0">
+    <Wrapper {...wrapperProps}>
+      {isOrca ? (
+        <div className="flex h-8 shrink-0 items-center justify-between gap-2 border-b border-line bg-sidebar px-3 text-xs">
+          <span className="inline-flex min-w-0 items-center gap-1.5 font-medium text-muted">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" aria-hidden="true" />
+            <MonitorSmartphone size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-accent-text" />
+            <span className="truncate">{t('pair.pairedWithDesktop')}</span>
+          </span>
+          <button type="button" onClick={unpairAndGoHome} className="btn btn-ghost btn-sm h-6 px-2 text-xs text-danger hover:text-danger">
+            <Home size={13} strokeWidth={1.75} aria-hidden="true" />
+            <span>{t('pair.unpair')}</span>
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-2 border-b border-line bg-surface px-3 py-1.5 text-sm">
+          <span className="flex min-w-0 items-center gap-2 text-muted">
+            <MonitorSmartphone size={16} strokeWidth={2.25} aria-hidden="true" className="shrink-0" />
+            <span className="truncate">{t('pair.pairedWithDesktop')}</span>
+          </span>
+          <button type="button" onClick={unpairAndGoHome} className="btn btn-ghost btn-sm text-danger hover:text-danger">
+            {t('pair.unpair')}
+          </button>
+        </div>
+      )}
+      <main className={isOrca ? 'flex min-h-0 w-full flex-1 flex-col overflow-hidden p-0' : 'flex w-full flex-1 flex-col p-0'}>
         {room && (
           <OnlineRoom room={room} user={user} onOpenRules={() => setRulesOpen(true)} onViewMyProfile={openProfileModal} onViewProfile={setOpponent} exitRef={exitRef} />
         )}
@@ -119,11 +161,19 @@ const RemoteSession: React.FC<{ offer: PairOffer; user: UserProfile; onHome: () 
       <OpponentProfileModal opponent={opponent} isOpen={Boolean(opponent)} onClose={() => setOpponent(null)} />
       <RoomConfirmDialog spec={rematchConfirm} onDismiss={dismissRematch} />
       {remote.notice && (
-        <div role="status" aria-live="polite" className="fixed bottom-24 left-1/2 z-[60] -translate-x-1/2 rounded-full bg-inverse px-4 py-2 text-xs font-medium text-inverse-fg shadow-lg">
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            isOrca
+              ? 'fixed bottom-16 left-1/2 z-[60] -translate-x-1/2 rounded-md border border-line-strong bg-surface px-3.5 py-1.5 text-xs font-medium text-ink shadow-e2'
+              : 'fixed bottom-24 left-1/2 z-[60] -translate-x-1/2 rounded-full bg-inverse px-4 py-2 text-xs font-medium text-inverse-fg shadow-lg'
+          }
+        >
           {t(remote.notice)}
         </div>
       )}
-    </>
+    </Wrapper>
   );
 };
 
@@ -133,6 +183,7 @@ const RemoteSession: React.FC<{ offer: PairOffer; user: UserProfile; onHome: () 
  */
 export const RemoteMatchApp: React.FC<{ offer: PairOffer | null; onHome: () => void }> = ({ offer, onHome }) => {
   const t = useT();
+  const isOrca = useIsOrca();
   const { user, loading, openAuthModal } = useAuth();
   const preError = loading ? null : pairErrorFor(offer, user);
 
@@ -159,8 +210,8 @@ export const RemoteMatchApp: React.FC<{ offer: PairOffer | null; onHome: () => v
   else if (preError === 'not_signed_in') {
     body = (
       <PairNotice text={t(pairErrorKey(preError))} hint={t('pair.signInSameAccount')}>
-        <button type="button" onClick={() => openAuthModal('signin')} className="btn btn-primary w-full">{t('pair.signInFirst')}</button>
-        <button type="button" onClick={goHome} className="btn btn-ghost w-full">{t('pair.backHome')}</button>
+        <button type="button" onClick={() => openAuthModal('signin')} className={`btn btn-primary w-full${isOrca ? ' btn-sm' : ''}`}>{t('pair.signInFirst')}</button>
+        <button type="button" onClick={goHome} className={`btn btn-ghost w-full${isOrca ? ' btn-sm' : ''}`}>{t('pair.backHome')}</button>
       </PairNotice>
     );
   } else if (preError) {
@@ -174,7 +225,13 @@ export const RemoteMatchApp: React.FC<{ offer: PairOffer | null; onHome: () => v
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-surface-2 text-ink selection:bg-accent selection:text-accent-fg">
+    <div
+      className={
+        isOrca
+          ? 'flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-bg text-ink selection:bg-accent selection:text-accent-fg'
+          : 'flex min-h-[100dvh] flex-col bg-surface-2 text-ink selection:bg-accent selection:text-accent-fg'
+      }
+    >
       {body}
       <AuthModal />
       <ProfileModal />

@@ -1,5 +1,7 @@
 import React from 'react';
 
+export const EMOTE_IMG_CLASS = 'mx-0.5 inline-block h-5 w-5 select-none object-contain align-text-bottom';
+
 /** Text shortcut that chat draws as an image, picture lives in public/emojis. */
 export interface ChatEmote {
   codes: string[];
@@ -133,7 +135,7 @@ export const renderWithEmotes = (text: string): React.ReactNode[] =>
         alt={part.code}
         title={`${part.emote.label} ${part.code}`}
         draggable={false}
-        className="mx-0.5 inline-block h-5 w-5 select-none object-contain align-text-bottom"
+        className={EMOTE_IMG_CLASS}
       />
     ),
   );

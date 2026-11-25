@@ -1,5 +1,10 @@
 export type CellValue = 'X' | 'O' | 'T' | null;
 export type BoardMatrix = CellValue[][];
+export type Piece = Exclude<CellValue, null>;
+
+/** Whose turn follows: X/O in 1v1, X/O/T in 1v1v1. */
+export const nextPiece = (piece: Piece, threePlayer: boolean): Piece =>
+  threePlayer ? (piece === 'X' ? 'O' : piece === 'O' ? 'T' : 'X') : piece === 'X' ? 'O' : 'X';
 
 export interface WinResult {
   winner: Exclude<CellValue, null>;

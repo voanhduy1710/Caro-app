@@ -75,7 +75,7 @@ export interface ChatReceipt {
   seen: boolean;
 }
 
-export interface DoubleDownView {
+interface DoubleDownView {
   /** This player still has their one offer and nothing stands in the way. */
   canOffer: boolean;
   /** This player's offer is waiting on the opponent. */

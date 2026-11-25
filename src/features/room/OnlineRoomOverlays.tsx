@@ -3,9 +3,16 @@ import { WifiOff } from 'lucide-react';
 import type { ConfirmSpec } from './OnlineRoomTypes';
 import { formatReconnectDuration } from '../../shared/utils/formatDuration';
 import { useT } from '../i18n/language';
+import { useIsOrca } from '../theme/uiStyle';
+import { HostLostStripOrca, OnlineRoomConnectingOrca, RoomConfirmDialogOrca } from './OnlineRoomOverlays.orca';
+
+type RoomConfirmDialogProps = { spec: ConfirmSpec | null; onDismiss: () => void; sheet?: boolean };
 
 /** `sheet`: the Spreadsheet disguise is up, so the dialog asks in its Sheets wording. */
-export const RoomConfirmDialog: React.FC<{ spec: ConfirmSpec | null; onDismiss: () => void; sheet?: boolean }> = ({ spec, onDismiss, sheet = false }) => {
+export const RoomConfirmDialog: React.FC<RoomConfirmDialogProps> = (props) =>
+  useIsOrca() ? <RoomConfirmDialogOrca {...props} /> : <RoomConfirmDialogDefault {...props} />;
+
+const RoomConfirmDialogDefault: React.FC<RoomConfirmDialogProps> = ({ spec, onDismiss, sheet = false }) => {
   const t = useT();
   if (!spec) return null;
   const copy = sheet ? spec.sheet : spec;
@@ -29,6 +36,8 @@ export const RoomConfirmDialog: React.FC<{ spec: ConfirmSpec | null; onDismiss: 
 
 export const HostLostStrip: React.FC<{ seconds: number | null | undefined }> = ({ seconds }) => {
   const t = useT();
+  const isOrca = useIsOrca();
+  if (isOrca) return <HostLostStripOrca seconds={seconds} />;
   return (
   <div className="flex items-center justify-between gap-3 rounded-md border border-warning bg-warning-soft p-3 text-xs font-medium text-warning">
     <span className="flex items-center gap-2"><WifiOff size={14} strokeWidth={2.25} aria-hidden="true" />{t('room.hostLost')}</span>
@@ -39,6 +48,8 @@ export const HostLostStrip: React.FC<{ seconds: number | null | undefined }> = (
 
 export const OnlineRoomConnecting: React.FC<{ status: 'opening' | 'host_lost' | string; roomId: string | null; seconds: number | null; onCancel: () => void }> = ({ status, roomId, seconds, onCancel }) => {
   const t = useT();
+  const isOrca = useIsOrca();
   const text = status === 'opening' ? t('room.connecting.opening') : status === 'host_lost' ? t('room.connecting.reconnecting', { roomId: roomId ?? '', time: seconds === null ? '' : formatReconnectDuration(seconds ?? 0) }) : t('room.connecting.joining', { roomId: roomId ?? '' });
+  if (isOrca) return <OnlineRoomConnectingOrca text={text} onCancel={onCancel} />;
   return <div className="panel w-full max-w-sm space-y-4 p-6 text-center" role="status" aria-live="polite"><p className="text-sm font-medium text-ink">{text}</p><button onClick={onCancel} className="btn btn-secondary btn-sm">{t('common.cancel')}</button></div>;
 };

@@ -1,6 +1,15 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { ratingDelta } from './elo.ts';
+import {
+  applyPairLimits,
+  isGameTooShort,
+  parseGameShape,
+  shapesDisagree,
+  storedName,
+  ticketsOnOppositeSeats,
+} from './rules.ts';
+import type { GameShape, SeatTicket } from './rules.ts';
 
 /**
  * Records a finished match and updates both players' ratings.
@@ -10,16 +19,28 @@ import { ratingDelta } from './elo.ts';
  *
  * - The caller must be one of the two players, proven by their own session,
  *   and must hold a rating of their own.
+ * - Every result needs a gameId, and both players must hold a seat ticket for
+ *   that game on opposite seats (see the seat-ticket function). Without them
+ *   nothing is recorded: a throwaway account can no longer lose to a main
+ *   account on its own say-so.
+ * - The game must look like a game: at least MIN_RATED_SECONDS since the
+ *   first ticket (server clock), and, when the client reports them, at least
+ *   MIN_RATED_MOVES moves and MIN_RATED_SECONDS of play. When both players
+ *   report the same game and their reports disagree, it is disputed.
  * - A result that does not favour the caller is recorded at once: on a
  *   decisive result that is the loser, on a draw the player whose rating does
  *   not rise. Nobody fabricates a result against themselves.
- * - A result that favours the caller is only a claim. It is accepted when both
- *   players hold a seat ticket for the game (see the seat-ticket function), and
- *   it is recorded ten minutes later unless a player disputes it. A loser can no
- *   longer dodge by closing the tab before submitting, and a result can still
- *   never be recorded against an account that did not play the game.
- * - Either player may dispute a game they hold a ticket for. A disputed game
- *   counts for nobody, unless the loser later concedes it.
+ * - A result that favours the caller is only a claim, recorded ten minutes
+ *   later unless a player disputes it. A loser can no longer dodge by closing
+ *   the tab before submitting.
+ * - Per pair of accounts and UTC day: at most PAIR_DAILY_RATED_LIMIT rated
+ *   games and at most PAIR_DAILY_GAIN_CAP Elo gained by either from the
+ *   other. Over that, the game is recorded unrated (deltas 0, no W/L/D, no
+ *   streak) and the response carries `unrated: true` and a `code`.
+ * - Either player may dispute a game they and their opponent hold opposite
+ *   tickets for. A disputed game counts for nobody, unless the loser later
+ *   concedes it.
+ * - Names on the record come from gomoku_users, never from the request.
  *
  * Claims are recorded by public.finalize_due_match_claims, which runs every
  * minute and also at the start of every call here.
@@ -36,7 +57,6 @@ import { ratingDelta } from './elo.ts';
 const DOUBLE_DOWN_BONUS = 20;
 const SAFE_UID = /^[A-Za-z0-9_-]{1,128}$/;
 const GAME_ID = /^[A-Za-z0-9_-]{8,40}$/;
-const DUPLICATE_WINDOW_MS = 5000;
 const MAX_SEAT_CHANGES = 32;
 const SEAT_CHANGE_REASONS = new Set(['stood', 'left', 'dropped', 'sat', 'removed']);
 
@@ -53,12 +73,6 @@ const json = (body: unknown, status = 200) =>
   });
 
 const isGuest = (uid: string) => uid.startsWith('guest_') || uid === 'ai_bot';
-
-const cleanName = (value: unknown, fallback: string) => {
-  if (typeof value !== 'string') return fallback;
-  const trimmed = value.trim().slice(0, 40);
-  return trimmed || fallback;
-};
 
 /**
  * Keeps whatever part of a seat log is well formed. A malformed or oversized
@@ -118,16 +132,21 @@ Deno.serve(async (req: Request) => {
   if (!Number.isInteger(boardSize) || boardSize < 5 || boardSize > 100) {
     return json({ error: 'Invalid board size' }, 400);
   }
-
-  const rawGameId = body.gameId;
-  const gameId = typeof rawGameId === 'string' && GAME_ID.test(rawGameId) ? rawGameId : null;
-  if (rawGameId !== undefined && rawGameId !== null && gameId === null) {
-    return json({ error: 'Invalid game id' }, 400);
+  if (isGuest(player1Uid) || isGuest(player2Uid)) {
+    return json({ error: 'A game with a guest is not rated', code: 'seat_tickets_missing' }, 403);
   }
-  const seatLog = body.seatLog === undefined ? null : cleanSeatLog(body.seatLog);
 
-  const player1Name = cleanName(body.player1Name, 'Player 1');
-  const player2Name = cleanName(body.player2Name, 'Player 2');
+  // No game id, no rating: without one there are no seat tickets to check.
+  const rawGameId = body.gameId;
+  if (rawGameId === undefined || rawGameId === null) {
+    return json({ error: 'A rated result needs a game id', code: 'no_game_id' }, 400);
+  }
+  const gameId = typeof rawGameId === 'string' && GAME_ID.test(rawGameId) ? rawGameId : null;
+  if (gameId === null) return json({ error: 'Invalid game id' }, 400);
+
+  const shape = parseGameShape(body);
+  if (shape === 'invalid') return json({ error: 'Invalid moveCount or durationMs' }, 400);
+  const seatLog = body.seatLog === undefined ? null : cleanSeatLog(body.seatLog);
 
   const admin = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -149,36 +168,27 @@ Deno.serve(async (req: Request) => {
   if (callerId !== player1Uid && callerId !== player2Uid) {
     return json({ error: 'Only a player in this match can record it' }, 403);
   }
+  const opponentUid = callerId === player1Uid ? player2Uid : player1Uid;
 
   // Record any claims whose window has closed before looking at this one, so a
   // quiet night without the scheduler still settles on the next game played.
   await admin.rpc('finalize_due_match_claims');
 
-  const claimRow = (winner: string) => ({
-    game_id: gameId,
-    claimant_uid: callerId,
-    mode,
-    board_size: boardSize,
-    winner_uid: winner,
-    player1_uid: player1Uid,
-    player1_name: player1Name,
-    player2_uid: player2Uid,
-    player2_name: player2Name,
-    seat_log: seatLog,
-  });
+  // At most two tickets exist per game: one per seat (unique game_id, seat).
+  const { data: ticketRows, error: ticketError } = await admin
+    .from('gomoku_game_seats')
+    .select('uid, seat, double_down, created_at')
+    .eq('game_id', gameId);
+  if (ticketError) return json({ error: 'Could not read the seat tickets' }, 500);
+  const tickets = (ticketRows ?? []) as Array<SeatTicket & { double_down: boolean; created_at: string }>;
+  const seated = ticketsOnOppositeSeats(tickets, player1Uid, player2Uid);
 
-  // A dispute. Only a player who sat in the game may raise one, and only while
-  // nothing has been recorded: the loser conceding is still honoured later.
+  // A dispute. Only a player who sat in the game, opposite the player they
+  // name, may raise one, and only while nothing has been recorded: the loser
+  // conceding is still honoured later.
   if (body.dispute === true) {
-    if (!gameId) return json({ error: 'A dispute needs a game id' }, 400);
-    const { data: ticket } = await admin
-      .from('gomoku_game_seats')
-      .select('uid')
-      .eq('game_id', gameId)
-      .eq('uid', callerId)
-      .maybeSingle();
-    if (!ticket) {
-      return json({ error: 'Only a player who sat in this game can dispute it', code: 'no_seat_ticket' }, 403);
+    if (!seated) {
+      return json({ error: 'Only the two players seated in this game can dispute it', code: 'no_seat_ticket' }, 403);
     }
     const { data: recorded } = await admin.from('gomoku_matches').select('id').eq('game_id', gameId).limit(1);
     if (recorded && recorded.length > 0) {
@@ -186,7 +196,21 @@ Deno.serve(async (req: Request) => {
     }
     const { error: disputeError } = await admin
       .from('gomoku_match_claims')
-      .upsert({ ...claimRow('DISPUTED'), status: 'disputed' }, { onConflict: 'game_id,claimant_uid' });
+      .upsert({
+        game_id: gameId,
+        claimant_uid: callerId,
+        mode,
+        board_size: boardSize,
+        winner_uid: 'DISPUTED',
+        player1_uid: player1Uid,
+        player1_name: 'Player 1',
+        player2_uid: player2Uid,
+        player2_name: 'Player 2',
+        seat_log: seatLog,
+        move_count: shape.moveCount,
+        duration_ms: shape.durationMs,
+        status: 'disputed',
+      }, { onConflict: 'game_id,claimant_uid' });
     if (disputeError) return json({ error: 'Could not record the dispute', detail: disputeError.message }, 500);
     await admin.from('gomoku_match_claims').update({ status: 'disputed' }).eq('game_id', gameId).eq('status', 'pending');
     return json({ ok: true, disputed: true });
@@ -194,51 +218,31 @@ Deno.serve(async (req: Request) => {
 
   // A repeat of a game already on record, checked before anything is computed:
   // both players may offer a draw, and a retry may follow a lost response.
-  if (gameId) {
-    const { data: existing } = await admin
-      .from('gomoku_matches')
-      .select('id')
-      .eq('game_id', gameId)
-      .limit(1);
-    if (existing && existing.length > 0) {
-      return json({ ok: true, duplicate: true, matchId: existing[0].id });
-    }
-  } else {
-    // Clients that send no game id fall back to a short same-pair window.
-    const since = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
-    const { data: recent } = await admin
-      .from('gomoku_matches')
-      .select('id')
-      .eq('player1_uid', player1Uid)
-      .eq('player2_uid', player2Uid)
-      .gte('timestamp', since)
-      .limit(1);
-    if (recent && recent.length > 0) {
-      return json({ ok: true, duplicate: true, matchId: recent[0].id });
-    }
+  const { data: existing } = await admin
+    .from('gomoku_matches')
+    .select('id')
+    .eq('game_id', gameId)
+    .limit(1);
+  if (existing && existing.length > 0) {
+    return json({ ok: true, duplicate: true, matchId: existing[0].id });
   }
 
-  // Ratings come from the store, never from the request.
-  const rated = [player1Uid, player2Uid].filter((uid) => !isGuest(uid));
-  const ratings = new Map<string, { elo: number; wins: number; losses: number; draws: number; streak: number }>();
-
-  if (rated.length > 0) {
-    const { data: rows, error } = await admin
-      .from('gomoku_users')
-      .select('uid, elo, wins, losses, draws, streak')
-      .in('uid', rated);
-
-    if (error) return json({ error: 'Could not read ratings' }, 500);
-
-    for (const row of rows ?? []) {
-      ratings.set(row.uid, {
-        elo: row.elo ?? 1200,
-        wins: row.wins ?? 0,
-        losses: row.losses ?? 0,
-        draws: row.draws ?? 0,
-        streak: row.streak ?? 0,
-      });
-    }
+  // Ratings and names come from the store, never from the request.
+  const { data: rows, error: ratingsError } = await admin
+    .from('gomoku_users')
+    .select('uid, display_name, elo, wins, losses, draws, streak')
+    .in('uid', [player1Uid, player2Uid]);
+  if (ratingsError) return json({ error: 'Could not read ratings' }, 500);
+  const ratings = new Map<string, { name: string; elo: number; wins: number; losses: number; draws: number; streak: number }>();
+  for (const row of rows ?? []) {
+    ratings.set(row.uid, {
+      name: storedName(row.display_name, row.uid === player1Uid ? 'Player 1' : 'Player 2'),
+      elo: row.elo ?? 1200,
+      wins: row.wins ?? 0,
+      losses: row.losses ?? 0,
+      draws: row.draws ?? 0,
+      streak: row.streak ?? 0,
+    });
   }
 
   // The caller has to hold a rating of their own. Without one, "the result must
@@ -247,51 +251,93 @@ Deno.serve(async (req: Request) => {
   if (!ratings.has(callerId)) {
     return json({ error: 'Only a registered player can record a rated match', code: 'caller_not_rated' }, 403);
   }
-
-  const elo1 = ratings.get(player1Uid)?.elo ?? 1200;
-  const elo2 = ratings.get(player2Uid)?.elo ?? 1200;
+  if (!ratings.has(opponentUid)) {
+    return json({ error: 'Both players need a rated account', code: 'seat_tickets_missing' }, 403);
+  }
+  const player1 = ratings.get(player1Uid)!;
+  const player2 = ratings.get(player2Uid)!;
 
   const score1 = winnerUid === 'DRAW' ? 0.5 : winnerUid === player1Uid ? 1 : 0;
   const score2 = 1 - score1;
 
   // A double down counts only when both players consented through their own
   // session (see seat-ticket), so neither side can impose it on the other.
-  let bonus = 0;
-  if (gameId && winnerUid !== 'DRAW') {
-    const { data: consents } = await admin
-      .from('gomoku_game_seats')
-      .select('uid')
-      .eq('game_id', gameId)
-      .eq('double_down', true)
-      .in('uid', [player1Uid, player2Uid]);
-    if ((consents ?? []).length === 2) bonus = DOUBLE_DOWN_BONUS;
+  const consents = tickets.filter((t) => t.double_down && (t.uid === player1Uid || t.uid === player2Uid));
+  const bonus = winnerUid !== 'DRAW' && consents.length === 2 ? DOUBLE_DOWN_BONUS : 0;
+
+  const delta1 = ratingDelta(score1, player1.elo, player2.elo) + (score1 === 1 ? bonus : -bonus);
+  const delta2 = ratingDelta(score2, player2.elo, player1.elo) + (score2 === 1 ? bonus : -bonus);
+  const callerDelta = callerId === player1Uid ? delta1 : delta2;
+
+  // Every rated result, whichever way it goes, needs both players seated in
+  // this game on opposite seats. A claim keeps its old code, which the
+  // deployed client keeps and sends again once tickets arrive.
+  if (!seated) {
+    return json(
+      {
+        error: 'Both players need a seat ticket for this game, on opposite seats',
+        code: callerDelta > 0 ? 'caller_would_gain' : 'seat_tickets_missing',
+      },
+      403,
+    );
   }
 
-  const delta1 = ratingDelta(score1, elo1, elo2) + (score1 === 1 ? bonus : -bonus);
-  const delta2 = ratingDelta(score2, elo2, elo1) + (score2 === 1 ? bonus : -bonus);
+  // The game has to look like one. The ticket clock is the server's own.
+  const ticketTimes = tickets.map((t) => Date.parse(t.created_at)).filter((ms) => Number.isFinite(ms));
+  const secondsSinceFirstTicket = ticketTimes.length ? (Date.now() - Math.min(...ticketTimes)) / 1000 : 0;
+  if (isGameTooShort(shape, secondsSinceFirstTicket)) {
+    return json({ error: 'Too short to be rated', code: 'game_too_short' }, 422);
+  }
 
-  // A result that favours the caller is only ever a claim, and only against a
-  // player who really sat in this game.
-  const callerDelta = callerId === player1Uid ? delta1 : delta2;
+  // When the other player has already reported this game, both reports have
+  // to describe the same game.
+  const { data: otherClaims } = await admin
+    .from('gomoku_match_claims')
+    .select('move_count, duration_ms')
+    .eq('game_id', gameId)
+    .neq('claimant_uid', callerId);
+  const mismatch = (otherClaims ?? []).some((c) =>
+    shapesDisagree(shape, { moveCount: c.move_count ?? null, durationMs: c.duration_ms ?? null } as GameShape));
+  if (mismatch) {
+    await admin.from('gomoku_match_claims').update({ status: 'disputed' }).eq('game_id', gameId).eq('status', 'pending');
+    return json({ error: 'The two players reported different games', code: 'shape_mismatch' }, 409);
+  }
+
+  // A result that favours the caller is only ever a claim. The finaliser
+  // applies the pair limits when it records it.
   if (callerDelta > 0) {
-    if (!gameId) {
-      return json({ error: 'Only the player this result does not favour can record it', code: 'caller_would_gain' }, 403);
-    }
-    const { data: tickets } = await admin
-      .from('gomoku_game_seats')
-      .select('uid')
-      .eq('game_id', gameId)
-      .in('uid', [player1Uid, player2Uid]);
-    if ((tickets ?? []).length < 2) {
-      return json({ error: 'Both players need a seat ticket for this game', code: 'caller_would_gain' }, 403);
-    }
     const { data: claim, error: claimError } = await admin
       .from('gomoku_match_claims')
-      .upsert(claimRow(winnerUid), { onConflict: 'game_id,claimant_uid', ignoreDuplicates: true })
+      .upsert({
+        game_id: gameId,
+        claimant_uid: callerId,
+        mode,
+        board_size: boardSize,
+        winner_uid: winnerUid,
+        player1_uid: player1Uid,
+        player1_name: player1.name,
+        player2_uid: player2Uid,
+        player2_name: player2.name,
+        seat_log: seatLog,
+        move_count: shape.moveCount,
+        duration_ms: shape.durationMs,
+      }, { onConflict: 'game_id,claimant_uid', ignoreDuplicates: true })
       .select('confirm_after');
     if (claimError) return json({ error: 'Could not record the claim', detail: claimError.message }, 500);
     return json({ ok: true, pending: true, confirmAfter: claim?.[0]?.confirm_after ?? null });
   }
+
+  // Per-pair daily limits, counted by the same SQL the claim finaliser uses.
+  const { data: statsRows, error: statsError } = await admin.rpc('gomoku_pair_day_stats', { uid_a: player1Uid, uid_b: player2Uid });
+  if (statsError) return json({ error: 'Could not read the pair limits', detail: statsError.message }, 500);
+  const stats = Array.isArray(statsRows) ? statsRows[0] : statsRows;
+  const decision = applyPairLimits(delta1, delta2, {
+    ratedGames: Number(stats?.rated_games ?? 0),
+    gained1: Number(stats?.gained_a ?? 0),
+    gained2: Number(stats?.gained_b ?? 0),
+  });
+  const final1 = decision.rated ? decision.delta1 : 0;
+  const final2 = decision.rated ? decision.delta2 : 0;
 
   const { data: inserted, error: insertError } = await admin
     .from('gomoku_matches')
@@ -300,14 +346,17 @@ Deno.serve(async (req: Request) => {
       board_size: boardSize,
       winner_uid: winnerUid,
       player1_uid: player1Uid,
-      player1_name: player1Name,
+      player1_name: player1.name,
       player2_uid: player2Uid,
-      player2_name: player2Name,
-      elo_delta_player1: ratings.has(player1Uid) ? delta1 : 0,
-      elo_delta_player2: ratings.has(player2Uid) ? delta2 : 0,
+      player2_name: player2.name,
+      elo_delta_player1: final1,
+      elo_delta_player2: final2,
       timestamp: new Date().toISOString(),
-      ...(gameId ? { game_id: gameId } : {}),
+      game_id: gameId,
       ...(seatLog ? { seat_log: seatLog } : {}),
+      ...(shape.moveCount !== null ? { moves_count: shape.moveCount } : {}),
+      ...(shape.durationMs !== null ? { duration_seconds: Math.round(shape.durationMs / 1000) } : {}),
+      ...(decision.rated ? {} : { unrated_reason: decision.code }),
     })
     .select('id')
     .single();
@@ -315,7 +364,7 @@ Deno.serve(async (req: Request) => {
   if (insertError) {
     // Two submissions of one game can both pass the check above; the unique
     // index lets exactly one of them in, and the ratings are applied only for it.
-    if (insertError.code === '23505' && gameId) {
+    if (insertError.code === '23505') {
       const { data: first } = await admin.from('gomoku_matches').select('id').eq('game_id', gameId).limit(1);
       return json({ ok: true, duplicate: true, matchId: first?.[0]?.id });
     }
@@ -323,13 +372,14 @@ Deno.serve(async (req: Request) => {
   }
 
   // The loser has conceded, so any claim still waiting on this game is settled.
-  if (gameId) {
-    await admin.from('gomoku_match_claims').update({ status: 'superseded' }).eq('game_id', gameId).eq('status', 'pending');
-  }
+  await admin.from('gomoku_match_claims').update({ status: 'superseded' }).eq('game_id', gameId).eq('status', 'pending');
 
+  // An unrated game is on record for history only: no Elo, and no W/L/D or
+  // streak either, so the limits protect the win counts as well.
   const applyStats = async (uid: string, delta: number) => {
     const current = ratings.get(uid);
     if (!current) return null;
+    if (!decision.rated) return current.elo;
 
     const won = winnerUid === uid;
     const drew = winnerUid === 'DRAW';
@@ -352,14 +402,15 @@ Deno.serve(async (req: Request) => {
   };
 
   const [newElo1, newElo2] = await Promise.all([
-    applyStats(player1Uid, delta1),
-    applyStats(player2Uid, delta2),
+    applyStats(player1Uid, final1),
+    applyStats(player2Uid, final2),
   ]);
 
   return json({
     ok: true,
     matchId: inserted?.id,
-    player1: { delta: ratings.has(player1Uid) ? delta1 : 0, elo: newElo1 },
-    player2: { delta: ratings.has(player2Uid) ? delta2 : 0, elo: newElo2 },
+    ...(decision.rated ? {} : { unrated: true, code: decision.code }),
+    player1: { delta: final1, elo: newElo1 },
+    player2: { delta: final2, elo: newElo2 },
   });
 });

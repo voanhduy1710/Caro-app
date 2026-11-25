@@ -1,9 +1,11 @@
 import React, { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import type { CellValue } from '../../shared/utils/gomokuLogic';
-import { columnLabel } from '../../shared/utils/gomokuLogic';
+import { columnLabel, nextPiece } from '../../shared/utils/gomokuLogic';
 import { forcedFourMoves } from '../../shared/utils/forcedFour';
 import { useTheme } from '../theme/ThemeContext';
+import { pieceColor, DEFAULT_SIMULATED_COLOR, type BoardTheme } from '../theme/types';
+import { useUiStyle } from '../theme/uiStyle';
 import { useT } from '../i18n/language';
 import { useDisplayPrefs } from './displayPrefs';
 import { BoardCell } from './BoardCells';
@@ -18,6 +20,9 @@ import {
   SheetColumnHeader,
   SheetRowHeader,
 } from './BoardSheetParts';
+import { ORCA_GUTTER_H, ORCA_GUTTER_W, OrcaColumnGutter, OrcaRowGutter } from './BoardOrcaParts';
+import { orcaStarPoints } from './orcaStarPoints';
+import { BoardCountdownOrca, BoardPausedOrca, BoardResultToastOrca } from './BoardOverlays.orca';
 import { SheetChrome, SheetTabs, SheetFinanceView } from './SheetChrome';
 import {
   useDisguiseMode,
@@ -30,7 +35,25 @@ import {
 import { useSheetUi, updateSheetUi, sheetUiStore } from './sheetBridge';
 import { showSheetSnackbar } from './sheet/sheetSnackbar';
 import type { BoardCorner, BoardProps, SimulatedMove } from './BoardTypes';
-export type { BoardCorner, SimulatedMove } from './BoardTypes';
+export type { BoardCorner } from './BoardTypes';
+
+// A fixed step per board size left a 15x15 grid floating inside a viewport
+// sized frame. The cell is measured from the frame instead, so a small board
+// fills it and a large one still hits a playable floor and scrolls.
+const MIN_CELL = 26;
+const MAX_CELL = 64;
+const FRAME_PADDING = 48;
+// Start two zoom steps larger than the fitted board: large boards feel like
+// a playing surface rather than a thumbnail, while the viewport still lets
+// people pan naturally around the position.
+const DEFAULT_ZOOM_OFFSET = 12;
+
+const BOARD_THEME_CLASS: Record<BoardTheme, string> = {
+  graph_paper: 'board-theme-graph-paper',
+  light_wood: 'board-theme-light-wood',
+  laser_futuristic: 'board-theme-laser-futuristic',
+  spreadsheet: 'board-theme-spreadsheet',
+};
 
 export const Board: React.FC<BoardProps> = ({
   board,
@@ -68,7 +91,13 @@ export const Board: React.FC<BoardProps> = ({
   const disguised = useDisguiseMode();
   const sheetUi = useSheetUi();
   const isSheetTheme = theme.boardTheme === 'spreadsheet';
-  const pingColors = { X: theme.xColor, O: theme.oColor, T: !isSheetTheme && theme.pieceTheme === 'laser' ? '#a855f7' : '#7c3aed' };
+  // The code grid is the Orca style's board, as in PR 5: it takes the default
+  // (graph paper) board's place. Bamboo, laser and spreadsheet look the same
+  // in both styles.
+  const uiStyle = useUiStyle();
+  const isOrcaStyle = uiStyle === 'orca';
+  const isOrcaTheme = isOrcaStyle && theme.boardTheme === 'graph_paper';
+  const pingColors = { X: theme.xColor, O: theme.oColor, T: pieceColor(theme, 'T', !isSheetTheme && theme.pieceTheme === 'laser') };
   // The disguise is only on screen when the toggle is set AND the board is the
   // Spreadsheet theme; a stale flag under any other theme hides nothing.
   const sheetDisguiseOn = isSheetTheme && disguised;
@@ -94,7 +123,7 @@ export const Board: React.FC<BoardProps> = ({
   const isLoss = gameResult?.winner === 'Defeat!';
   const playerWinnerPiece: Exclude<CellValue, null> | null = isWin ? myPiece ?? null : isLoss ? (myPiece === 'X' ? 'O' : 'X') : null;
   const winnerPiece = resultView ? resultView.winnerPiece : playerWinnerPiece;
-  const winnerColor = winnerPiece === 'X' ? theme.xColor : winnerPiece === 'T' ? '#7c3aed' : theme.oColor;
+  const winnerColor = winnerPiece ? pieceColor(theme, winnerPiece) : theme.oColor;
   const outcome = resultView
     ? { headline: resultView.headline, tone: resultView.tone }
     : isWin
@@ -110,9 +139,6 @@ export const Board: React.FC<BoardProps> = ({
   // Remember the coordinate already brought into view so those renders never
   // pull a player away from a manually scrolled part of the board.
   const lastAutoScrolledMoveRef = useRef<string | null>(null);
-  // Mirror of the board so the memoised cell callbacks stay identity-stable.
-  const boardRef = useRef(board);
-  boardRef.current = board;
   // The grid is hidden with display:none while a fake report tab shows, and a
   // hidden scroller forgets its offset. Remember it so flipping back after the
   // boss walks past lands on exactly the same part of the board.
@@ -172,16 +198,6 @@ export const Board: React.FC<BoardProps> = ({
     scrollTop: 0,
   });
 
-  // A fixed step per board size left a 15x15 grid floating inside a viewport
-  // sized frame. The cell is measured from the frame instead, so a small board
-  // fills it and a large one still hits a playable floor and scrolls.
-  const MIN_CELL = 26;
-  const MAX_CELL = 64;
-  const FRAME_PADDING = 48;
-  // Start two zoom steps larger than the fitted board: large boards feel like
-  // a playing surface rather than a thumbnail, while the viewport still lets
-  // people pan naturally around the position.
-  const DEFAULT_ZOOM_OFFSET = 12;
   /** Fitted size for this frame, and the player's offset from it. */
   const [fittedCell, setFittedCell] = useState(() =>
     Math.min(MAX_CELL, Math.max(MIN_CELL, Math.round(560 / size)))
@@ -282,12 +298,15 @@ export const Board: React.FC<BoardProps> = ({
     el.scrollTop = Math.min(Math.max(0, el.scrollHeight - el.clientHeight), Math.max(0, top));
   }, []);
 
-  // The sheet's filler only exists once the frame has been measured, and
-  // centring before then would hit the end of a too-short scroll range.
-  const sheetMeasured = isSheetTheme && frameBox.w > 0;
+  // Centre again once the frame has been measured. Before that the cell is a
+  // guess (and the sheet has no filler), so the scroll range is too short and
+  // a board larger than its frame opened pinned to its top-left corner.
+  // Switching to or from the Spreadsheet board (or the Orca code grid) renders a
+  // new frame that starts scrolled to 0,0, so it is centred again too.
+  const frameMeasured = frameBox.w > 0;
   useEffect(() => {
     centreOnBoard();
-  }, [size, centreOnBoard, sheetMeasured]);
+  }, [size, centreOnBoard, frameMeasured, isSheetTheme, isOrcaTheme]);
 
   // A board wider than its frame can put the move that just landed off screen,
   // which is how a player loses their place on a 50x50 grid. Scroll it back
@@ -307,10 +326,10 @@ export const Board: React.FC<BoardProps> = ({
     if (lastAutoScrolledMoveRef.current === moveKey) return;
     lastAutoScrolledMoveRef.current = moveKey;
 
-    // The sheet's pinned headers cover the frame's top and left edges, so the
-    // visible part of the grid starts past them.
-    const offsetX = isSheetTheme ? SHEET_ROW_HEADER_W : 0;
-    const offsetY = isSheetTheme ? SHEET_COL_HEADER_H : 0;
+    // Pinned headers (the sheet's, or the Orca gutter) cover the frame's top
+    // and left edges, so the visible part of the grid starts past them.
+    const offsetX = isSheetTheme ? SHEET_ROW_HEADER_W : isOrcaTheme ? ORCA_GUTTER_W : 0;
+    const offsetY = isSheetTheme ? SHEET_COL_HEADER_H : isOrcaTheme ? ORCA_GUTTER_H : 0;
     const x = offsetX + col * cellSize;
     const y = offsetY + row * cellSize;
     const margin = cellSize * 2;
@@ -324,7 +343,7 @@ export const Board: React.FC<BoardProps> = ({
 
     if (left === el.scrollLeft && top === el.scrollTop) return;
     el.scrollTo({ left, top, behavior: 'smooth' });
-  }, [lastMove, cellSize, isSheetTheme, sheetView]);
+  }, [lastMove, cellSize, isSheetTheme, isOrcaTheme, sheetView]);
 
   // Coming back to the game tab: put the grid back where the player left it.
   // Layout effect, so the frame never paints scrolled to the top-left first.
@@ -496,12 +515,21 @@ export const Board: React.FC<BoardProps> = ({
     }
   };
 
-  // Stable identities keep BoardCell's memoisation effective.
+  // The cell callbacks read everything through this ref, so their identities
+  // never change and BoardCell's memoisation holds. Callers pass a fresh
+  // onCellClick on every render (each clock tick), which used to re-render
+  // every cell of the grid, up to 2,500 of them.
+  const liveRef = useRef({ board, onCellClick, disabled, forcedMoveKeys, currentTurn, threePlayer, ownPing, onPing, onClearPing });
+  useLayoutEffect(() => {
+    liveRef.current = { board, onCellClick, disabled, forcedMoveKeys, currentTurn, threePlayer, ownPing, onPing, onClearPing };
+  });
+
   const handleSelectCell = useCallback((r: number, c: number, corner: BoardCorner) => {
     if (touchStartRef.current.isMoved) return;
-    if (disabled || (forcedMoveKeys && !forcedMoveKeys.has(`${r}:${c}`))) return;
-    onCellClick(r, c, corner);
-  }, [onCellClick, disabled, forcedMoveKeys]);
+    const live = liveRef.current;
+    if (live.disabled || (live.forcedMoveKeys && !live.forcedMoveKeys.has(`${r}:${c}`))) return;
+    live.onCellClick(r, c, corner);
+  }, []);
 
   const handleHoverCell = useCallback((r: number, c: number, corner: BoardCorner) => {
     setHoveredCell((prev) =>
@@ -512,44 +540,28 @@ export const Board: React.FC<BoardProps> = ({
   // Right-click to toggle a private local simulated move
   const handleCellContextMenu = useCallback((e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
-    if (ownPing?.row === r && ownPing.col === c) {
-      onClearPing?.();
+    const live = liveRef.current;
+    if (live.ownPing?.row === r && live.ownPing.col === c) {
+      live.onClearPing?.();
       return;
     }
-    if (e.ctrlKey && threePlayer) {
-      if (boardRef.current?.[r]?.[c] === null) onPing?.(r, c);
+    if (e.ctrlKey && live.threePlayer) {
+      if (live.board[r]?.[c] === null) live.onPing?.(r, c);
       return;
     }
-    if (boardRef.current?.[r]?.[c] != null) return; // never sketch over a real piece
+    if (live.board[r]?.[c] != null) return; // never sketch over a real piece
     setSimulatedMoves((prev) => {
       const existingIdx = prev.findIndex((m) => m.row === r && m.col === c);
       if (existingIdx >= 0) return prev.filter((_, idx) => idx !== existingIdx);
       const lastSim = prev[prev.length - 1];
       // Begin with the player who is actually due to move. From there the
-      // analysis line follows the match's active-player order: X/O in 1v1,
-      // X/O/T in 1v1v1.
-      const nextPiece: Exclude<CellValue, null> = !lastSim
-        ? currentTurn
-        : threePlayer
-        ? lastSim.piece === 'X'
-          ? 'O'
-          : lastSim.piece === 'O'
-          ? 'T'
-          : 'X'
-        : lastSim.piece === 'X'
-        ? 'O'
-        : 'X';
-      return [...prev, { row: r, col: c, piece: nextPiece }];
+      // analysis line follows the match's active-player order.
+      const piece = lastSim ? nextPiece(lastSim.piece, live.threePlayer) : live.currentTurn;
+      return [...prev, { row: r, col: c, piece }];
     });
-  }, [currentTurn, threePlayer, onPing, ownPing, onClearPing]);
+  }, []);
 
-  const getBoardThemeClass = () => {
-    if (theme.boardTheme === 'light_wood') return 'board-theme-light-wood';
-    if (theme.boardTheme === 'laser_futuristic') return 'board-theme-laser-futuristic';
-    if (theme.boardTheme === 'spreadsheet') return 'board-theme-spreadsheet';
-    return 'board-theme-graph-paper';
-  };
-  // The formula bar reacts to whatever cell the eye would land on: the one
+  // The formula bar and the Orca gutter react to whatever cell the eye would land on: the one
   // under the pointer, falling back to the move that just landed.
   // Memoised on the two numbers, so a pointer moving between corners of one
   // cell (LMAO mode) or a clock tick re-creating lastMove leaves the memoised
@@ -594,6 +606,18 @@ export const Board: React.FC<BoardProps> = ({
   const sheetActiveCol = sheetActiveCell && sheetActiveCell.col < size ? sheetActiveCell.col : -1;
   const sheetActiveRow = sheetActiveCell && sheetActiveCell.row < size ? sheetActiveCell.row : -1;
 
+  // Orca board: the gutter carries the coordinates, so cells stay empty apart
+  // from the star points.
+  const orcaColLabels = useMemo(
+    () => (isOrcaTheme ? Array.from({ length: size }, (_, i) => columnLabel(i)) : []),
+    [isOrcaTheme, size],
+  );
+  const orcaRowLabels = useMemo(
+    () => (isOrcaTheme ? Array.from({ length: size }, (_, i) => String(i + 1)) : []),
+    [isOrcaTheme, size],
+  );
+  const orcaStars = useMemo(() => (isOrcaTheme ? orcaStarPoints(size) : null), [isOrcaTheme, size]);
+
   const isWinningCell = (r: number, c: number) =>
     Boolean(winningLine?.some(([wr, wc]) => wr === r && wc === c));
 
@@ -634,14 +658,16 @@ export const Board: React.FC<BoardProps> = ({
           // its cells; the headers carry the coordinates instead.
           isMajorRight={!isSheetTheme && (cIdx + 1) % 5 === 0 && cIdx + 1 < size}
           isMajorBottom={!isSheetTheme && (rIdx + 1) % 5 === 0 && rIdx + 1 < size}
-          showCoords={!isSheetTheme && prefs.showCoordinates && cellSize >= 28}
+          showCoords={!isSheetTheme && !isOrcaTheme && prefs.showCoordinates && cellSize >= 28}
+          isStar={orcaStars?.has(`${rIdx}:${cIdx}`) ?? false}
+          orca={isOrcaTheme}
           simulatedPiece={simItem ? simItem.piece : null}
           simulatedNumber={simItem ? simItem.n : null}
           simulatedColor={
             simItem
               ? simItem.piece === myPiece
-                ? theme.selfSimulatedColor || '#64748b'
-                : theme.opponentSimulatedColor || '#64748b'
+                ? theme.selfSimulatedColor || DEFAULT_SIMULATED_COLOR
+                : theme.opponentSimulatedColor || DEFAULT_SIMULATED_COLOR
               : undefined
           }
           currentTurn={currentTurn}
@@ -680,6 +706,35 @@ export const Board: React.FC<BoardProps> = ({
       setHoveredCell(null);
     },
   };
+
+  const boardGrid = (
+    <div
+      className="relative grid m-auto shrink-0 board-grid-inner"
+      style={{
+        gridTemplateColumns: `repeat(${size}, ${cellSize}px)`,
+        gridTemplateRows: `repeat(${size}, ${cellSize}px)`,
+        width: 'max-content',
+        height: 'max-content',
+      }}
+    >
+      {isOrcaTheme && hoveredCell && !disabled && (
+        <>
+          <span
+            aria-hidden="true"
+            className="orca-crosshair inset-x-0"
+            style={{ top: hoveredCell.row * cellSize, height: cellSize }}
+          />
+          <span
+            aria-hidden="true"
+            className="orca-crosshair inset-y-0"
+            style={{ left: hoveredCell.col * cellSize, width: cellSize }}
+          />
+        </>
+      )}
+      {cells}
+      {threePlayer && <BoardPingOverlay pings={pings} cellSize={cellSize} colors={pingColors} />}
+    </div>
+  );
 
   if (isSheetTheme) {
     return (
@@ -812,7 +867,7 @@ export const Board: React.FC<BoardProps> = ({
       {/* Keep the viewport wide when zooming out. Coupling its width to the
           shrunken grid made the whole board collapse into a small square. */}
       <div
-        style={{ maxWidth: Math.max(fittedCell, MIN_CELL + DEFAULT_ZOOM_OFFSET) * size + 40 }}
+        style={{ maxWidth: Math.max(fittedCell, MIN_CELL + DEFAULT_ZOOM_OFFSET) * size + 40 + (isOrcaTheme ? ORCA_GUTTER_W : 0) }}
         className="flex w-full max-w-[1200px] flex-col items-center justify-center"
       >
       {/* BOARD CONTAINER. Wrapped so the count-in can cover exactly the board
@@ -821,27 +876,53 @@ export const Board: React.FC<BoardProps> = ({
         <div
           ref={containerRef}
           {...frameHandlers}
-          className={`board-scroll-container board-frame mx-auto w-full overflow-auto ${
+          // isolate: the Orca gutter is pinned above the cells, but must stay
+          // under the count-in and paused layers drawn beside this frame.
+          className={`board-scroll-container board-frame isolate mx-auto w-full overflow-auto ${
             isPanning ? 'cursor-grabbing select-none' : 'cursor-grab'
-          } ${getBoardThemeClass()}`}
+          } ${isOrcaTheme ? 'board-theme-orca-code' : BOARD_THEME_CLASS[theme.boardTheme]}`}
         >
           <div className="m-auto flex min-h-full min-w-max items-center justify-center">
-            <div
-              className="relative grid m-auto shrink-0 board-grid-inner"
-              style={{
-                gridTemplateColumns: `repeat(${size}, ${cellSize}px)`,
-                gridTemplateRows: `repeat(${size}, ${cellSize}px)`,
-                width: 'max-content',
-                height: 'max-content',
-              }}
-            >
-              {cells}
-              {threePlayer && <BoardPingOverlay pings={pings} cellSize={cellSize} colors={pingColors} />}
-            </div>
+            {isOrcaTheme ? (
+              // Same pinned-header grid as the sheet: a strip spans the whole
+              // grid on its cross axis, because a grid item is only sticky
+              // within its own grid area.
+              <div
+                className="m-auto grid shrink-0"
+                style={{
+                  gridTemplateColumns: `${ORCA_GUTTER_W}px ${size * cellSize}px`,
+                  gridTemplateRows: `${ORCA_GUTTER_H}px ${size * cellSize}px`,
+                }}
+              >
+                <div
+                  aria-hidden="true"
+                  className="orca-gutter orca-gutter--corner"
+                  style={{
+                    gridRow: '1 / 3',
+                    gridColumn: '1 / 3',
+                    alignSelf: 'start',
+                    justifySelf: 'start',
+                    width: ORCA_GUTTER_W,
+                    height: ORCA_GUTTER_H,
+                  }}
+                >
+                  {sheetActiveCol >= 0 && sheetActiveRow >= 0 ? `${columnLabel(sheetActiveCol)}${sheetActiveRow + 1}` : ''}
+                </div>
+                <OrcaColumnGutter labels={orcaColLabels} cellSize={cellSize} active={sheetActiveCol} />
+                <OrcaRowGutter labels={orcaRowLabels} cellSize={cellSize} active={sheetActiveRow} />
+                <div style={{ gridRow: 2, gridColumn: 2 }}>{boardGrid}</div>
+              </div>
+            ) : (
+              boardGrid
+            )}
           </div>
         </div>
 
-        {isResultToastVisible && (
+        {/* Orca style: PR 5's flatter toast, paused card and count-in. */}
+        {isResultToastVisible && isOrcaStyle && (
+          <BoardResultToastOrca winnerPiece={winnerPiece} headline={outcome.headline} tone={outcome.tone} resultReason={resultReason} ratingNote={ratingNote} />
+        )}
+        {isResultToastVisible && !isOrcaStyle && (
           <div role="status" aria-live="polite" className="pointer-events-none absolute left-1/2 top-4 z-20 w-[min(24rem,calc(100%-2rem))] -translate-x-1/2 rounded-lg border border-line-strong bg-surface/95 px-4 py-3 text-center shadow-e2 backdrop-blur-sm">
             <div className="flex items-center justify-center gap-2.5">
               <span className="grid h-9 w-9 place-items-center rounded-full border-2 font-display text-xl font-extrabold leading-none" style={winnerPiece ? { borderColor: winnerColor, color: winnerColor } : undefined}>
@@ -858,7 +939,8 @@ export const Board: React.FC<BoardProps> = ({
             player is reconnecting, and the clocks wait for them. */}
         {preGame && <div className="absolute inset-0 z-40">{preGame}</div>}
 
-        {paused && countdown === null && !preGame && (
+        {paused && countdown === null && !preGame && isOrcaStyle && <BoardPausedOrca paused={paused} />}
+        {paused && countdown === null && !preGame && !isOrcaStyle && (
           <div className="absolute inset-0 z-[25] flex items-center justify-center rounded-lg bg-[var(--ui-scrim)] p-4 backdrop-blur-[2px]">
             <div role="status" aria-live="polite" className="modal-panel w-[min(24rem,100%)] p-6 text-center">
               <p className="display text-2xl text-ink">{paused.title}</p>
@@ -868,7 +950,21 @@ export const Board: React.FC<BoardProps> = ({
           </div>
         )}
 
-        {countdown !== null && !preGame && (
+        {countdown !== null && !preGame && isOrcaStyle && (
+          <BoardCountdownOrca
+            countdown={countdown}
+            title={countdownTitle ?? t('game.getReady')}
+            caption={
+              countdownCaption ??
+              (isMyTurn
+                ? t('game.youMoveFirst', { piece: myPiece ?? '' })
+                : t('game.movesFirst', { name: opponent?.displayName || t('game.yourOpponent') }))
+            }
+            coinFlip={coinFlip}
+            rpsReveal={rpsReveal}
+          />
+        )}
+        {countdown !== null && !preGame && !isOrcaStyle && (
           <div
             role="status"
             aria-live="assertive"

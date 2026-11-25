@@ -1,20 +1,21 @@
 import type { DataConnection } from 'peerjs';
 import type { UserProfile } from '../auth/AuthContext';
 import type { ChatMessage } from '../webrtc/types';
-import { PROTOCOL_VERSION, parseRoomCode } from './protocol';
+import { PROTOCOL_VERSION, isRecord, parseRoomCode } from './protocol';
 import type { HostMessagePayloads, RejectReason } from './protocol';
-import { cryptoEnv } from './roomEngine';
-import type { HostSnapshot, RoomState } from './roomEngine';
+import { cryptoEnv, GRACE_MS } from './roomEngine';
+import type { HostSnapshot, RoomMode, RoomState } from './roomEngine';
 import type { LastRoom } from './useRoomTypes';
 import { t } from '../i18n/language';
+import { supabase } from '../../config/supabase';
 import type { StringKey } from '../i18n/strings';
 
 const TOKENS_KEY = 'caro_room_tokens';
 const LAST_ROOM_KEY = 'caro_last_room';
 export const HANDLED_RESULTS_KEY = 'caro_room_handled_results';
 // A player may close and reopen their tab during the five-hour reconnect grace.
-const TOKEN_TTL_MS = 5 * 60 * 60_000;
-export const LAST_ROOM_TTL_MS = 15 * 60_000;
+const TOKEN_TTL_MS = GRACE_MS;
+const LAST_ROOM_TTL_MS = 15 * 60_000;
 export const CHAT_KEEP = 200;
 const ROOM_CODE_LENGTH = 6;
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -51,18 +52,32 @@ const iceServers = (): RTCIceServer[] => {
 };
 
 /** Short-lived TURN credentials from /api/turn, refreshed well before they expire. */
-let relayed: { servers: RTCIceServer[]; at: number } | null = null;
+let relayed: { servers: RTCIceServer[]; freshUntil: number } | null = null;
+
+/** A signed-in player proves it, which earns the longer-lived credentials; a guest sends nothing. */
+const relayAuthHeaders = async (): Promise<Record<string, string>> => {
+  try {
+    const token = supabase ? (await supabase.auth.getSession()).data.session?.access_token : undefined;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+};
 let relayedRequest: Promise<void> | null = null;
-const RELAY_FRESH_MS = 60 * 60_000;
+/** Used when the server does not say how long its credentials last. */
+const RELAY_DEFAULT_TTL_MS = 30 * 60_000;
+/** Refetch this long before the credentials actually expire. */
+const RELAY_REFRESH_MARGIN_MS = 5 * 60_000;
 const RELAY_TIMEOUT_MS = 4_000;
 
 /** Resolves once relay credentials are loaded, or after a short timeout without them. */
 export const loadIceServers = (): Promise<void> => {
-  if (relayed && Date.now() - relayed.at < RELAY_FRESH_MS) return Promise.resolve();
+  if (relayed && Date.now() < relayed.freshUntil) return Promise.resolve();
   if (relayedRequest) return relayedRequest;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), RELAY_TIMEOUT_MS);
-  relayedRequest = fetch('/api/turn', { signal: controller.signal })
+  relayedRequest = relayAuthHeaders()
+    .then((headers) => fetch('/api/turn', { signal: controller.signal, headers }))
     .then(async (res) => {
       if (!res.ok) return;
       const data: unknown = await res.json();
@@ -70,7 +85,8 @@ export const loadIceServers = (): Promise<void> => {
       const servers = list.filter((s): s is RTCIceServer => isRecord(s) && (typeof s.urls === 'string' || Array.isArray(s.urls)));
       // STUN entries are already in the base list.
       const turn = servers.filter((s) => [s.urls].flat().some((url) => /^turns?:/.test(String(url))));
-      if (turn.length > 0) relayed = { servers: turn, at: Date.now() };
+      const ttlMs = isRecord(data) && typeof data.ttlSeconds === 'number' && data.ttlSeconds > 0 ? data.ttlSeconds * 1000 : RELAY_DEFAULT_TTL_MS;
+      if (turn.length > 0) relayed = { servers: turn, freshUntil: Date.now() + Math.max(60_000, ttlMs - RELAY_REFRESH_MARGIN_MS) };
     })
     .catch(() => {
       // No relay endpoint (local dev) or it is down: fall back to the defaults.
@@ -114,6 +130,9 @@ export interface SavedSession {
   isHost: boolean;
   memberId?: string;
   token?: string;
+  /** Host only, so a room whose snapshot write failed comes back as it was made. */
+  isPublic?: boolean;
+  mode?: RoomMode;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +150,7 @@ const HOST_BACKUP_KEY = 'caro_room_host_backup';
 /** A live host tab writes this every second, so a second tab does not steal the room. */
 const HOST_ALIVE_KEY = 'caro_room_host_alive';
 /** Matches the room engine's seat grace: after that there is nothing left to resume. */
-const HOST_BACKUP_TTL_MS = 5 * 60 * 60_000;
+const HOST_BACKUP_TTL_MS = GRACE_MS;
 const HOST_ALIVE_FRESH_MS = 3_000;
 
 interface HostBackup {
@@ -235,9 +254,6 @@ export const randomCode = (): string => {
   return Array.from(bytes, (b) => ROOM_CODE_ALPHABET[b % ROOM_CODE_ALPHABET.length]).join('');
 };
 
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
 export const isRoomState = (value: unknown): value is RoomState =>
   isRecord(value) &&
   value.v === PROTOCOL_VERSION &&
@@ -325,5 +341,3 @@ export const rejectionText = (payload: HostMessagePayloads['REJECTED']): string 
   const key = REJECTION_TEXT[payload.reason];
   return key ? t(key) : null;
 };
-
-export const signed = (value: number) => `${value >= 0 ? '+' : '−'}${Math.abs(value)}`;

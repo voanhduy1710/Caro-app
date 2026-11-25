@@ -1,8 +1,11 @@
 import React from 'react';
+import { useT } from '../i18n/language';
+import { useIsOrca } from '../theme/uiStyle';
+import { CoinTossModalOrca } from './CoinTossModal.orca';
 
 type CoinFace = 'X' | 'O';
 
-interface CoinTossModalProps {
+export interface CoinTossModalProps {
   chooserName: string;
   canCall: boolean;
   call: CoinFace | null;
@@ -12,16 +15,20 @@ interface CoinTossModalProps {
   onCall?: (face: CoinFace) => void;
 }
 
-export const CoinFaceArt: React.FC<{ face: CoinFace }> = ({ face }) => (
-  <img
-    src={face === 'X' ? '/assets/minigames/coin_x.png' : '/assets/minigames/coin_o.png'}
-    alt={`Coin face ${face}`}
-    className="minigame-coin__art"
-    draggable={false}
-  />
-);
+const CoinFaceArt: React.FC<{ face: CoinFace }> = ({ face }) => {
+  const t = useT();
+  return (
+    <img
+      src={face === 'X' ? '/assets/minigames/coin_x.png' : '/assets/minigames/coin_o.png'}
+      alt={t('game.minigame.coinFace', { face })}
+      className="minigame-coin__art"
+      draggable={false}
+    />
+  );
+};
 
-export const CoinTossModal: React.FC<CoinTossModalProps> = ({ chooserName, canCall, call, face, callerName, onCall }) => {
+const CoinTossModalDefault: React.FC<CoinTossModalProps> = ({ chooserName, canCall, call, face, callerName, onCall }) => {
+  const t = useT();
   const isFlipping = face !== null;
   const choseCorrectly = call !== null && face !== null && call === face;
 
@@ -32,10 +39,10 @@ export const CoinTossModal: React.FC<CoinTossModalProps> = ({ chooserName, canCa
         <h2 className="minigame-title coin-game__choice-title">
           {call ? (
             <>
-              <span>{callerName ?? chooserName} chose</span>
+              <span>{t('game.minigame.chose', { name: callerName ?? chooserName })}</span>
               <span className="coin-game__choice-icon"><CoinFaceArt face={call} /></span>
             </>
-          ) : `${chooserName} chooses a coin`}
+          ) : t('game.minigame.chooserChooses', { name: chooserName })}
         </h2>
 
         {!isFlipping ? (
@@ -51,12 +58,12 @@ export const CoinTossModal: React.FC<CoinTossModalProps> = ({ chooserName, canCa
                 <div className="coin-call__preview">
                   <CoinFaceArt face={side} />
                 </div>
-                <span>Side {side}</span>
+                <span>{t('game.minigame.side', { side })}</span>
               </button>
             ))}
           </div>
         ) : (
-          <div className="coin-game__flight" aria-label={`Coin landed on ${face}`}>
+          <div className="coin-game__flight" aria-label={t('game.minigame.coinLanded', { face })}>
               <div className={`minigame-coin minigame-coin--land-${face}`}>
                 <div className="minigame-coin__body">
                   <div className="minigame-coin__face minigame-coin__face--front">
@@ -82,3 +89,6 @@ export const CoinTossModal: React.FC<CoinTossModalProps> = ({ chooserName, canCa
     </div>
   );
 };
+
+export const CoinTossModal: React.FC<CoinTossModalProps> = (props) =>
+  useIsOrca() ? <CoinTossModalOrca {...props} /> : <CoinTossModalDefault {...props} />;

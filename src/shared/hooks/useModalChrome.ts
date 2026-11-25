@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 import { useBackdropDismiss } from './useBackdropDismiss';
+import { useFocusTrap } from './useFocusTrap';
 
 /**
  * Shared chrome for a modal: dialog semantics for assistive technology,
- * dismissal on a genuine backdrop click, and Escape to close.
+ * dismissal on a genuine backdrop click, Escape to close, and focus moved in,
+ * kept inside on Tab and handed back on close (see useFocusTrap).
  *
  * Spread the result onto the scrim element and give the heading `titleId`.
  *
@@ -12,7 +14,8 @@ import { useBackdropDismiss } from './useBackdropDismiss';
  * sign-up form is never thrown away.
  */
 export const useModalChrome = (isOpen: boolean, onClose: () => void, titleId: string) => {
-  const { backdropProps } = useBackdropDismiss(onClose);
+  const { backdropRef, backdropProps } = useBackdropDismiss(onClose);
+  useFocusTrap(isOpen, backdropRef);
 
   useEffect(() => {
     if (!isOpen) return;

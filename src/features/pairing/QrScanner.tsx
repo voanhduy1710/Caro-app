@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CameraOff, Loader2, X } from 'lucide-react';
+import { CameraOff, Loader2, QrCode, X } from 'lucide-react';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
 import { useT } from '../i18n/language';
+import { useIsOrca } from '../theme/uiStyle';
 import { pairErrorKey, type PairError } from './pairErrors';
 import { decodePairLink, encodePairLink } from './pairLink';
 
@@ -51,6 +52,7 @@ interface QrScannerProps {
 /** Full-screen camera view that reads the desktop's pairing QR and opens it. */
 export const QrScanner: React.FC<QrScannerProps> = ({ isOpen, onClose }) => {
   const t = useT();
+  const isOrca = useIsOrca();
   const dialogProps = useModalChrome(isOpen, onClose, 'qr-scanner-title');
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<PairError | null>(null);
@@ -131,6 +133,61 @@ export const QrScanner: React.FC<QrScannerProps> = ({ isOpen, onClose }) => {
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  if (isOrca) {
+    // Orca style (PR 5): a square camera window inside a dialog, not full screen.
+    return (
+      <div {...dialogProps} className="modal-scrim">
+        <div className="modal-panel flex max-h-[calc(100dvh-2rem)] max-w-sm flex-col overflow-hidden border border-line-strong bg-surface">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <QrCode size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-accent-text" />
+              <h2 id="qr-scanner-title" className="truncate text-sm font-semibold text-ink">
+                {t('pair.scanTitle')}
+              </h2>
+            </div>
+            <button type="button" onClick={onClose} className="orca-icon-btn -mr-1" aria-label={t('common.close')}>
+              <X size={15} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden bg-black">
+            <video ref={videoRef} className="h-full w-full object-cover" playsInline muted aria-hidden="true" />
+
+            {error !== 'camera_denied' && (
+              <div aria-hidden="true" className="pointer-events-none absolute inset-8 rounded-lg border border-white/25">
+                <span className="absolute -left-px -top-px h-5 w-5 rounded-tl-lg border-l border-t border-white" />
+                <span className="absolute -right-px -top-px h-5 w-5 rounded-tr-lg border-r border-t border-white" />
+                <span className="absolute -bottom-px -left-px h-5 w-5 rounded-bl-lg border-b border-l border-white" />
+                <span className="absolute -bottom-px -right-px h-5 w-5 rounded-br-lg border-b border-r border-white" />
+              </div>
+            )}
+
+            {starting && error === null && (
+              <Loader2 size={24} strokeWidth={1.75} className="absolute animate-spin text-white/80" aria-hidden="true" />
+            )}
+
+            {error === 'camera_denied' && (
+              <div
+                role="alert"
+                className="absolute inset-x-4 flex flex-col items-center gap-2.5 rounded-lg border border-line-strong bg-surface/95 p-4 text-center shadow-e2"
+              >
+                <CameraOff size={24} strokeWidth={1.75} className="text-danger" aria-hidden="true" />
+                <p className="text-xs font-medium text-ink">{t(pairErrorKey('camera_denied'))}</p>
+                <p className="text-xs leading-relaxed text-muted">{t('pair.useCameraApp')}</p>
+              </div>
+            )}
+          </div>
+
+          {error === 'invalid_qr' && (
+            <div role="status" className="border-t border-line bg-danger-soft px-4 py-2.5 text-center text-xs font-medium text-danger">
+              {t(pairErrorKey('invalid_qr'))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div {...dialogProps} className="fixed inset-0 z-[70] flex flex-col bg-black text-white">

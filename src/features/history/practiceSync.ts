@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../../config/supabase';
 import type { MatchRecord } from './types';
+import { AI_BOT_NAME, AI_BOT_UID, SAFE_UID, isGuestUid } from '../../shared/constants';
 
 /**
  * Practice games against the bot, mirrored to gomoku_practice_matches.
@@ -12,9 +13,6 @@ import type { MatchRecord } from './types';
  */
 
 export const LOCAL_HISTORY_KEY = 'caro_app_match_history';
-export const AI_BOT_UID = 'ai_bot';
-
-const SAFE_UID = /^[A-Za-z0-9_-]{1,128}$/;
 /** The table accepts board sizes in this range; anything else is a corrupt record. */
 const MIN_BOARD = 5;
 const MAX_BOARD = 30;
@@ -30,7 +28,7 @@ interface PracticeRow {
 }
 
 const canSync = (uid: string) =>
-  isSupabaseConfigured && !!supabase && SAFE_UID.test(uid) && !uid.startsWith('guest_');
+  isSupabaseConfigured && !!supabase && SAFE_UID.test(uid) && !isGuestUid(uid);
 
 const readLocalRecords = (): MatchRecord[] => {
   try {
@@ -64,30 +62,46 @@ export const localPracticeRows = (uid: string, records: MatchRecord[] = readLoca
 };
 
 const inFlight = new Map<string, Promise<void>>();
+/** Players whose local records changed while their sync was already running. */
+const runAgain = new Set<string>();
+
+const uploadOnce = async (uid: string) => {
+  const rows = localPracticeRows(uid);
+  if (!rows.length || !supabase) return;
+  // A session for another account cannot write these rows (RLS), so do not try.
+  const { data } = await supabase.auth.getSession();
+  if (data.session?.user.id !== uid) return;
+  const { error } = await supabase
+    .from('gomoku_practice_matches')
+    .upsert(rows, { onConflict: 'uid,client_id', ignoreDuplicates: true });
+  if (error) console.warn('Practice history sync failed:', error.message);
+};
 
 /**
  * Uploads this player's local practice games. Concurrent calls for one player
- * share a single request. Failures are quiet: the records stay local and the
- * next call sends them again.
+ * share a single request; a call made while one is running asks for one more
+ * pass afterwards, because the running pass read the records before the newest
+ * game was written. Failures are quiet: the records stay local and the next
+ * call sends them again.
  */
 export const syncPracticeHistory = (uid: string): Promise<void> => {
   if (!canSync(uid)) return Promise.resolve();
   const running = inFlight.get(uid);
-  if (running) return running;
+  if (running) {
+    runAgain.add(uid);
+    return running;
+  }
 
   const task = (async () => {
-    const rows = localPracticeRows(uid);
-    if (!rows.length || !supabase) return;
-    // A session for another account cannot write these rows (RLS), so do not try.
-    const { data } = await supabase.auth.getSession();
-    if (data.session?.user.id !== uid) return;
-    const { error } = await supabase
-      .from('gomoku_practice_matches')
-      .upsert(rows, { onConflict: 'uid,client_id', ignoreDuplicates: true });
-    if (error) console.warn('Practice history sync failed:', error.message);
-  })()
-    .catch((e) => console.warn('Practice history sync threw:', e))
-    .finally(() => inFlight.delete(uid));
+    do {
+      runAgain.delete(uid);
+      try {
+        await uploadOnce(uid);
+      } catch (e) {
+        console.warn('Practice history sync threw:', e);
+      }
+    } while (runAgain.has(uid));
+  })().finally(() => inFlight.delete(uid));
 
   inFlight.set(uid, task);
   return task;
@@ -116,9 +130,9 @@ export const fetchPracticeHistory = async (uid: string, limit = 20): Promise<Mat
         player1Uid: uid,
         player1Name: row.player_name,
         player2Uid: AI_BOT_UID,
-        player2Name: 'AI Bot',
+        player2Name: AI_BOT_NAME,
         winnerUid,
-        winnerName: row.result === 'draw' ? 'DRAW' : row.result === 'win' ? row.player_name : 'AI Bot',
+        winnerName: row.result === 'draw' ? 'DRAW' : row.result === 'win' ? row.player_name : AI_BOT_NAME,
         boardSize: row.board_size,
         timerConfig: row.timer_config ?? '',
         eloDeltaPlayer1: 0,

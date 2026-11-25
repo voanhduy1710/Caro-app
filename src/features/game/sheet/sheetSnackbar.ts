@@ -5,7 +5,7 @@ import { useSyncExternalStore } from 'react';
  * component state, so the toolbar, the menus, the tabs and the keyboard
  * shortcuts can all post to it without sharing a parent.
  */
-export interface SheetSnack {
+interface SheetSnack {
   id: number;
   text: string;
 }
@@ -19,7 +19,7 @@ const listeners = new Set<() => void>();
 
 const emit = () => listeners.forEach((listener) => listener());
 
-export const hideSheetSnackbar = () => {
+const hideSheetSnackbar = () => {
   if (hideTimer) clearTimeout(hideTimer);
   hideTimer = null;
   if (!snack) return;

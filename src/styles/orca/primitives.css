@@ -1,0 +1,521 @@
+/* =============================================================================
+   Orca style — base and component primitives (PR 5 src/styles/index-primitives.css)
+
+   Scoped under :root[data-ui-style='orca'] and kept in the same @layer as the
+   Default rules, so Tailwind utilities still override them as they did in
+   PR 5. Where a class exists in both styles (.btn, .card, .chip, .field-input,
+   .modal-panel …) the Orca rule also resets what only the Default rule sets
+   (extrusion shadows, press transforms, the display face), because both rules
+   match the element.
+   ========================================================================== */
+
+@layer base {
+  :root[data-ui-style='orca'] {
+    & body {
+      background-color: var(--ui-bg);
+      color: var(--ui-text);
+      caret-color: var(--ui-accent);
+      font-family: var(--font-sans);
+      font-size: 13.5px;
+      line-height: 20px;
+      letter-spacing: 0.005em;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    & body::selection,
+    & body *::selection {
+      background: color-mix(in srgb, var(--ui-accent) 28%, var(--ui-surface));
+      color: var(--ui-text);
+    }
+
+    & a {
+      text-underline-offset: 3px;
+    }
+
+    & h1,
+    & h2,
+    & h3,
+    & h4,
+    & h5,
+    & h6 {
+      font-family: var(--font-sans);
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      line-height: 1.25;
+      text-wrap: balance;
+    }
+
+    & code,
+    & kbd,
+    & pre,
+    & samp {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    & :focus-visible {
+      outline: 2px solid var(--ui-ring);
+      outline-offset: 2px;
+      border-radius: var(--radius-xs);
+    }
+
+    & button:not(:disabled) {
+      cursor: pointer;
+    }
+
+    & button:disabled {
+      cursor: not-allowed;
+    }
+  }
+}
+
+@layer components {
+  :root[data-ui-style='orca'] {
+    /* --- Orca titlebar & chrome ------------------------------------------- */
+
+    & .orca-titlebar {
+      height: 36px;
+      min-height: 36px;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      background-color: var(--ui-tab-bar);
+      border-bottom: 1px solid var(--ui-border);
+      user-select: none;
+    }
+
+    & .orca-icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: var(--radius-sm);
+      color: var(--ui-text-muted);
+      background: transparent;
+      border: 1px solid transparent;
+      transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+    }
+
+    & .orca-icon-btn:not(:disabled):hover {
+      background-color: var(--ui-surface-2);
+      color: var(--ui-text);
+    }
+
+    & .orca-icon-btn[aria-pressed='true'],
+    & .orca-icon-btn[data-active='true'] {
+      background-color: var(--ui-surface-2);
+      color: var(--ui-text);
+      border-color: var(--ui-border);
+    }
+
+    & .orca-icon-btn:disabled {
+      opacity: 0.4;
+    }
+
+    & .orca-tab {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 35px;
+      padding: 0 12px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--ui-text-muted);
+      background-color: var(--ui-tab-inactive);
+      border-right: 1px solid var(--ui-border);
+      white-space: nowrap;
+      transition: background-color 120ms ease, color 120ms ease;
+    }
+
+    & .orca-tab:hover {
+      color: var(--ui-text);
+      background-color: color-mix(in srgb, var(--ui-text) 4%, var(--ui-tab-inactive));
+    }
+
+    & .orca-tab[aria-selected='true'],
+    & .orca-tab[data-active='true'] {
+      color: var(--ui-text);
+      background-color: var(--ui-tab-active);
+    }
+
+    & .orca-tab[aria-selected='true']::after,
+    & .orca-tab[data-active='true']::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 1px;
+      background-color: var(--ui-tab-active);
+    }
+
+    & .orca-tab[aria-selected='true']::before,
+    & .orca-tab[data-active='true']::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 2px;
+      background-color: var(--ui-accent);
+    }
+
+    /* --- Flat buttons ------------------------------------------------------ */
+
+    & .btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      padding: 6px 12px;
+      min-height: 32px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: normal;
+      line-height: 18px;
+      cursor: pointer;
+      box-shadow: none;
+      transform: none;
+      transition:
+        background-color 140ms var(--ease-out-quart),
+        border-color 140ms var(--ease-out-quart),
+        color 140ms var(--ease-out-quart),
+        opacity 140ms var(--ease-out-quart);
+    }
+
+    & .btn:not(:disabled):hover,
+    & .btn:not(:disabled):active {
+      transform: none;
+      box-shadow: none;
+    }
+
+    & .btn:disabled,
+    & .btn[aria-disabled='true'] {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    & .btn-sm {
+      padding: 4px 10px;
+      min-height: 28px;
+      font-size: 12px;
+      line-height: 16px;
+      border-radius: var(--radius-sm);
+    }
+
+    & .btn-lg {
+      padding: 9px 16px;
+      min-height: 38px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: normal;
+      line-height: 20px;
+      border-radius: var(--radius-md);
+    }
+
+    & .btn-primary {
+      background-color: var(--ui-primary);
+      color: var(--ui-primary-fg);
+      border-color: var(--ui-primary);
+    }
+
+    & .btn-primary:not(:disabled):hover {
+      background-color: var(--ui-primary-hover);
+      border-color: var(--ui-primary-hover);
+    }
+
+    & .btn-primary:focus-visible,
+    & .btn-inverse:focus-visible {
+      outline-color: var(--ui-ring);
+    }
+
+    & .btn-secondary {
+      background-color: var(--ui-surface-2);
+      color: var(--ui-text);
+      border-color: var(--ui-border-strong);
+    }
+
+    & .btn-secondary:not(:disabled):hover {
+      background-color: var(--ui-surface-3);
+    }
+
+    & .btn-secondary:not(:disabled):active {
+      box-shadow: none;
+    }
+
+    & .btn-tonal {
+      background-color: var(--ui-accent-soft);
+      color: var(--ui-accent-text);
+      border-color: color-mix(in srgb, var(--ui-accent) 24%, transparent);
+    }
+
+    & .btn-tonal:not(:disabled):hover {
+      background-color: var(--ui-accent-soft-hover);
+      color: var(--ui-accent-text-hover);
+    }
+
+    & .btn-ghost {
+      background-color: transparent;
+      color: var(--ui-text-muted);
+      border-color: transparent;
+    }
+
+    & .btn-ghost:not(:disabled):hover {
+      background-color: var(--ui-surface-2);
+      color: var(--ui-text);
+    }
+
+    & .btn-ghost:not(:disabled):active {
+      transform: none;
+    }
+
+    & .btn-danger {
+      background-color: var(--ui-danger-soft);
+      color: var(--ui-danger);
+      border-color: color-mix(in srgb, var(--ui-danger) 25%, transparent);
+    }
+
+    & .btn-danger:not(:disabled):hover {
+      background-color: var(--ui-danger-soft-hover);
+      color: var(--ui-danger-text-hover);
+    }
+
+    & .btn-danger-solid {
+      background-color: var(--ui-danger-solid);
+      color: var(--ui-danger-fg);
+      border-color: var(--ui-danger-solid);
+    }
+
+    & .btn-danger-solid:not(:disabled):hover {
+      opacity: 0.9;
+    }
+
+    & .btn-inverse {
+      background-color: var(--ui-inverse);
+      color: var(--ui-inverse-fg);
+      border-color: var(--ui-inverse);
+    }
+
+    & .btn-inverse:not(:disabled):hover {
+      opacity: 0.9;
+    }
+
+    & .btn-icon {
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      min-height: 32px;
+      gap: 0;
+    }
+
+    /* The Default ranked button is a gold arcade bar. Orca has no such thing;
+       anything still using the class reads as a plain primary button. */
+    & .btn-ranked {
+      background: var(--ui-primary);
+      color: var(--ui-primary-fg);
+      border-color: var(--ui-primary);
+      padding-inline: 16px;
+      text-shadow: none;
+    }
+
+    & .btn-ranked:not(:disabled):hover {
+      background: var(--ui-primary-hover);
+    }
+
+    & .btn-ranked__swords {
+      display: none;
+    }
+
+    /* --- Surfaces ---------------------------------------------------------- */
+
+    & .panel {
+      background-color: var(--ui-surface);
+      border: 1px solid var(--ui-border);
+      border-radius: var(--radius-lg);
+      box-shadow: none;
+    }
+
+    & .card {
+      background-color: var(--ui-surface);
+      border: 1px solid var(--ui-border);
+      border-radius: var(--radius-md);
+      box-shadow: none;
+    }
+
+    & .card-inset {
+      background-color: var(--ui-surface-2);
+      border: 1px solid var(--ui-border);
+      border-radius: var(--radius-md);
+      box-shadow: none;
+    }
+
+    /* --- Chips & badges ---------------------------------------------------- */
+
+    & .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+      border-radius: var(--radius-xs);
+      border: 1px solid var(--ui-border);
+      background-color: var(--ui-surface-2);
+      color: var(--ui-text-muted);
+      padding: 2px 8px;
+      font-size: 11.5px;
+      font-weight: 500;
+      line-height: 16px;
+    }
+
+    & .chip-accent {
+      background-color: var(--ui-accent-soft);
+      color: var(--ui-accent-text);
+      border-color: color-mix(in srgb, var(--ui-accent) 25%, transparent);
+    }
+
+    & .chip-brand {
+      background-color: var(--ui-surface-3);
+      color: var(--ui-text);
+      border-color: var(--ui-border-strong);
+    }
+
+    /* --- Forms ------------------------------------------------------------- */
+
+    & .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    & .field-label {
+      font-size: 12.5px;
+      font-weight: 500;
+      line-height: 18px;
+      color: var(--ui-text);
+    }
+
+    & .field-input {
+      width: 100%;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--ui-border-strong);
+      background-color: var(--ui-surface);
+      color: var(--ui-text);
+      padding: 7px 11px;
+      font-size: 13.5px;
+      line-height: 20px;
+      transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+    }
+
+    & .field-input::placeholder {
+      color: var(--ui-text-subtle);
+    }
+
+    & .field-input:focus {
+      outline: none;
+      border-color: var(--ui-ring);
+      background-color: var(--ui-surface);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-ring) 25%, transparent);
+    }
+
+    & .field-input:disabled {
+      background-color: var(--ui-surface-2);
+      color: var(--ui-text-muted);
+      cursor: not-allowed;
+    }
+
+    & .field-hint {
+      font-size: 12px;
+      line-height: 16px;
+      color: var(--ui-text-muted);
+    }
+
+    & .field-error {
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 16px;
+      color: var(--ui-danger);
+    }
+
+    /* --- Scrollbars -------------------------------------------------------- */
+
+    & .scrollbar-orca {
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--ui-text-muted) 32%, transparent) transparent;
+    }
+
+    & .scrollbar-orca::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    & .scrollbar-orca::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    & .scrollbar-orca::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--ui-text-muted) 28%, transparent);
+      border-radius: 9999px;
+    }
+
+    & .scrollbar-orca::-webkit-scrollbar-thumb:hover {
+      background: color-mix(in srgb, var(--ui-text-muted) 48%, transparent);
+    }
+
+    /* --- Default-only layout classes ---------------------------------------
+       PR 5 dropped them. Orca markup does not use the grid ones, but a
+       Default-styled screen still on show must not keep its arcade frame. */
+
+    & .home-lobby {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* --- Modals ------------------------------------------------------------ */
+
+    & .modal-scrim {
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      animation: scrim-in 140ms var(--ease-out-quart);
+    }
+
+    & .modal-panel {
+      border: 1px solid var(--ui-border-strong);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--ui-shadow-lg);
+      animation: orca-panel-pop 160ms var(--ease-out-quart);
+    }
+
+    /* --- Skeleton ---------------------------------------------------------- */
+
+    & .skeleton {
+      background-color: var(--ui-surface-2);
+    }
+
+    & .skeleton::after {
+      background: linear-gradient(
+        90deg,
+        transparent,
+        color-mix(in srgb, var(--ui-text) 6%, transparent),
+        transparent
+      );
+    }
+  }
+}
+
+/* PR 5's scrollbar-none utility. A new name, so it is safe unscoped. */
+@utility scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}

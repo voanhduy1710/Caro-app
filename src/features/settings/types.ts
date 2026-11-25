@@ -28,8 +28,6 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
 };
 
 /** How the win condition actually behaves, in the words a player would use. */
-export const WIN_RULE_TEXT = 'Five or more of your pieces in a row wins: across, down or diagonally.';
-/** Translated at call time; prefer this over WIN_RULE_TEXT in render code. */
 export const getWinRuleText = () => t('settings.winRule');
 
 export interface RoomSettingsFact {

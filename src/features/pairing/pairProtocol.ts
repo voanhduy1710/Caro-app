@@ -7,7 +7,7 @@
  * fields only and returns null for anything else — it never throws.
  */
 
-export type PairRejectReason = 'expired' | 'used';
+type PairRejectReason = 'expired' | 'used';
 export type PairEndReason = 'replaced' | 'game_ended' | 'unpaired' | 'desktop_closed';
 export type PairSnapshotKind = 'room' | 'practice';
 

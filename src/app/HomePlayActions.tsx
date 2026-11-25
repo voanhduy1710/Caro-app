@@ -6,13 +6,15 @@ import { RankedRoomSwords } from './RankedRoomSwords';
 import { useT } from '../features/i18n/language';
 import { QrScanner } from '../features/pairing/QrScanner';
 import { useIsDesktop } from '../shared/hooks/useMediaQuery';
+import { useIsOrca } from '../features/theme/uiStyle';
+import { HomePlayActionsOrca } from './HomePlayActions.orca';
 
 export interface HomePlayActionsProps {
   isRoomPublic: boolean; setIsRoomPublic: React.Dispatch<React.SetStateAction<boolean>>; onStartBot: () => void; onCreate: (isPublic: boolean, mode?: RoomMode) => void;
   inputRoomCode: string; setInputRoomCode: React.Dispatch<React.SetStateAction<string>>; onJoin: (code: string) => void;
 }
 
-export const HomePlayActions: React.FC<HomePlayActionsProps> = ({ isRoomPublic, setIsRoomPublic, onStartBot, onCreate, inputRoomCode, setInputRoomCode, onJoin }) => {
+const HomePlayActionsDefault: React.FC<HomePlayActionsProps> = ({ isRoomPublic, setIsRoomPublic, onStartBot, onCreate, inputRoomCode, setInputRoomCode, onJoin }) => {
   const t = useT();
   const isDesktop = useIsDesktop();
   const [scanning, setScanning] = useState(false);
@@ -154,3 +156,7 @@ export const HomePlayActions: React.FC<HomePlayActionsProps> = ({ isRoomPublic, 
             </div>
   );
 };
+
+/** The lobby's play card in the app style in use (Orca: HomePlayActions.orca.tsx). */
+export const HomePlayActions: React.FC<HomePlayActionsProps> = (props) =>
+  useIsOrca() ? <HomePlayActionsOrca {...props} /> : <HomePlayActionsDefault {...props} />;

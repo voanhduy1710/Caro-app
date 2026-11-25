@@ -1,9 +1,9 @@
-import React, { memo } from 'react';
+import React, { memo, useRef } from 'react';
 import type { CellValue } from '../../shared/utils/gomokuLogic';
 import { columnLabel } from '../../shared/utils/gomokuLogic';
-import type { PieceTheme } from '../theme/types';
+import { pieceColor, type PieceTheme } from '../theme/types';
 import type { BoardCorner } from './BoardTypes';
-import { SheetGlyph, SHEET_TRIANGLE_COLOR } from './BoardSheetParts';
+import { SheetGlyph } from './BoardSheetParts';
 import { useT } from '../i18n/language';
 
 interface PieceGlyphProps {
@@ -14,6 +14,8 @@ interface PieceGlyphProps {
   isSimulated?: boolean;
   isWinning?: boolean;
   customColor?: string;
+  /** Orca style's code grid (PR 5): finer strokes, smaller glyphs. */
+  orca?: boolean;
 }
 
 /**
@@ -28,73 +30,113 @@ const PieceGlyph: React.FC<PieceGlyphProps> = ({
   isSimulated = false,
   isWinning = false,
   customColor,
+  orca = false,
 }) => {
   const isX = piece === 'X';
   const isTriangle = piece === 'T';
-  const simClass = isSimulated ? 'opacity-60 scale-95' : '';
+  const simClass = isSimulated ? (orca ? 'opacity-55 scale-95' : 'opacity-60 scale-95') : '';
   const winClass = !isSimulated && isWinning ? 'animate-winning-cell' : '';
 
   if (pieceTheme === 'calligraphic') {
-    const strokeColor = customColor || (isX ? xColor || '#006699' : isTriangle ? '#7c3aed' : oColor || '#e11d24');
+    const strokeColor = customColor || pieceColor({ xColor, oColor }, piece);
     return (
       <svg
         viewBox="0 0 24 24"
-        className={`w-[78%] h-[78%] transition-transform shrink-0 ${simClass} ${winClass}`}
+        className={`${orca ? 'h-[70%] w-[70%]' : 'w-[78%] h-[78%]'} transition-transform shrink-0 ${simClass} ${winClass}`}
         fill="none"
         stroke={strokeColor}
-        strokeWidth="4.2"
+        strokeWidth={orca ? '3.1' : '4.2'}
         strokeLinecap="round"
+        strokeLinejoin={orca ? 'round' : undefined}
       >
-        {isTriangle ? <path d="M12 4 20 19H4Z" /> : isX ? (
+        {isTriangle ? <path d={orca ? 'M12 4.2 19.8 18.8H4.2Z' : 'M12 4 20 19H4Z'} /> : isX ? (
           <>
             <line x1="5" y1="5" x2="19" y2="19" />
             <line x1="19" y1="5" x2="5" y2="19" />
           </>
         ) : (
-          <circle cx="12" cy="12" r="7.5" />
+          <circle cx="12" cy="12" r={orca ? '7.4' : '7.5'} />
         )}
       </svg>
     );
   }
 
   if (pieceTheme === 'laser') {
-    const laserColor = customColor || (isX ? xColor || '#00f0ff' : isTriangle ? '#a855f7' : oColor || '#ff007f');
+    const laserColor = customColor || pieceColor({ xColor, oColor }, piece, true);
     return (
       <svg
         viewBox="0 0 24 24"
-        className={`w-[82%] h-[82%] transition-transform shrink-0 ${simClass} ${winClass}`}
-        style={{ filter: `drop-shadow(0 0 4px ${laserColor}) drop-shadow(0 0 10px ${laserColor})` }}
+        className={`${orca ? 'h-[74%] w-[74%]' : 'w-[82%] h-[82%]'} transition-transform shrink-0 ${simClass} ${winClass}`}
+        style={{ filter: orca ? `drop-shadow(0 0 2px ${laserColor}88)` : `drop-shadow(0 0 4px ${laserColor}) drop-shadow(0 0 10px ${laserColor})` }}
         fill="none"
         stroke={laserColor}
-        strokeWidth="3.8"
+        strokeWidth={orca ? '2.8' : '3.8'}
         strokeLinecap="round"
+        strokeLinejoin={orca ? 'round' : undefined}
       >
-        {isTriangle ? <path d="M12 4 20 19H4Z" /> : isX ? (
-          <>
-            <line x1="5" y1="5" x2="19" y2="19" />
-            <line x1="19" y1="5" x2="5" y2="19" />
-          </>
+        {isTriangle ? <path d={orca ? 'M12 4.2 19.8 18.8H4.2Z' : 'M12 4 20 19H4Z'} /> : isX ? (
+          orca ? (
+            <>
+              <line x1="5.2" y1="5.2" x2="18.8" y2="18.8" />
+              <line x1="18.8" y1="5.2" x2="5.2" y2="18.8" />
+            </>
+          ) : (
+            <>
+              <line x1="5" y1="5" x2="19" y2="19" />
+              <line x1="19" y1="5" x2="5" y2="19" />
+            </>
+          )
         ) : (
-          <circle cx="12" cy="12" r="7.5" />
+          <circle cx="12" cy="12" r={orca ? '7.4' : '7.5'} />
         )}
       </svg>
     );
   }
 
   if (pieceTheme === 'gomoku_3d') {
-    const activeColor = customColor || (isX ? xColor : isTriangle ? '#7c3aed' : oColor);
+    const activeColor = customColor || pieceColor({ xColor, oColor }, piece);
     const stoneBg = activeColor ? `radial-gradient(circle at 35% 35%, ${activeColor}, #0f172a)` : undefined;
     return (
       <div
         className={`${isX ? 'stone-black' : 'stone-white'} ${simClass} ${
-          !isSimulated && isWinning ? 'animate-winning-cell ring-4 ring-warning' : ''
+          !isSimulated && isWinning ? `animate-winning-cell ${orca ? 'ring-2' : 'ring-4'} ring-warning` : ''
         }`}
         style={stoneBg ? { background: stoneBg } : undefined}
-      />
+      >
+        {orca && isTriangle && (
+          <svg viewBox="0 0 24 24" className="h-[56%] w-[56%] stroke-white/90" fill="none" strokeWidth="2.2" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 5 19 18H5Z" />
+          </svg>
+        )}
+      </div>
     );
   }
 
-  const color = customColor || (isX ? xColor || '#2563eb' : isTriangle ? '#7c3aed' : oColor || '#dc2626');
+  const color = customColor || pieceColor({ xColor, oColor }, piece);
+  if (orca) {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={`h-[62%] w-[62%] shrink-0 transition-transform ${simClass} ${winClass}`}
+        fill="none"
+        stroke={color}
+        strokeWidth="2.05"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {isTriangle ? (
+          <path d="M12 4.8 19.3 18.4H4.7Z" />
+        ) : isX ? (
+          <>
+            <line x1="5.8" y1="5.8" x2="18.2" y2="18.2" />
+            <line x1="18.2" y1="5.8" x2="5.8" y2="18.2" />
+          </>
+        ) : (
+          <circle cx="12" cy="12" r="7" />
+        )}
+      </svg>
+    );
+  }
   return (
     <span
       className={`select-none font-black text-xl sm:text-2xl transition-transform ${simClass} ${
@@ -123,6 +165,10 @@ interface BoardCellProps {
   isMajorBottom: boolean;
   /** Row/column numbers, drawn only in empty cells so pieces stay legible. */
   showCoords: boolean;
+  /** Orca board: a star point, drawn only while the cell is empty. */
+  isStar: boolean;
+  /** Orca code grid (PR 5): its pieces, last-move brackets, win and hint looks. */
+  orca?: boolean;
   simulatedPiece: Exclude<CellValue, null> | null;
   simulatedColor?: string;
   /** Position of this sketch among its piece's sketches, drawn as a subscript. */
@@ -158,6 +204,8 @@ export const BoardCell = memo<BoardCellProps>(({
   isMajorRight,
   isMajorBottom,
   showCoords,
+  isStar,
+  orca = false,
   simulatedPiece,
   simulatedColor,
   simulatedNumber,
@@ -214,10 +262,31 @@ export const BoardCell = memo<BoardCellProps>(({
       {simulatedNumber}
     </span>
   ) : null;
+  // A cell keeps focus after a mouse click, so a later stray Space/Enter would
+  // place a stone there. Keyboard activation (a click with detail 0) is only
+  // honoured when the cell was reached with the keyboard. :focus-visible is
+  // read on focus, because a key press can turn it on for a mouse-focused cell.
+  const coord = `${columnLabel(col)}${row + 1}`;
+  const cellLabel = cell ? t('game.coordinate', { coord, cell }) : t('game.coordinateEmpty', { coord });
+  const keyboardFocusRef = useRef(false);
+  const keyboardFocusProps = {
+    onFocus: (event: React.FocusEvent<HTMLButtonElement>) => {
+      keyboardFocusRef.current = event.currentTarget.matches(':focus-visible');
+    },
+    onBlur: () => {
+      keyboardFocusRef.current = false;
+    },
+    onPointerDown: () => {
+      keyboardFocusRef.current = false;
+    },
+  };
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    // Space/Enter on a focused cell fires a click with detail 0; only
-    // pointer clicks may place a move.
-    if (event.detail === 0) return;
+    if (event.detail === 0) {
+      // LMAO needs a pointer position to pick one of the eight slots.
+      if (lmaoMode || !keyboardFocusRef.current) return;
+      onSelect(row, col, 'center');
+      return;
+    }
     const corner = clickCorner(event);
     // LMAO has eight peripheral slots; the centre is deliberately blank.
     if (lmaoMode && corner === 'center') return;
@@ -225,25 +294,24 @@ export const BoardCell = memo<BoardCellProps>(({
   };
 
   if (sheet) {
-    const pieceColor = (piece: Exclude<CellValue, null>) =>
-      piece === 'X' ? xColor : piece === 'T' ? SHEET_TRIANGLE_COLOR : oColor;
     // A corner slot is a little over half the cell, so its text shrinks with it.
     const fontSize = Math.max(8, Math.round(cellSize * (lmaoMode ? 0.4 : 0.5)));
     return (
       <button
         type="button"
         onClick={handleClick}
+        {...keyboardFocusProps}
         onContextMenu={(event) => onContextMenu(event, row, col)}
         onMouseEnter={(event) => onHover(row, col, clickCorner(event))}
         onMouseMove={(event) => onHover(row, col, clickCorner(event))}
-        aria-label={`Coordinate ${columnLabel(col)}${row + 1}${cell ? `, ${cell}` : ', empty'}`}
+        aria-label={cellLabel}
         // The move that just landed wears a collaborator's cursor in the colour
         // of whoever played it, the way Sheets shows another editor's cell, so
         // it reads as a colleague typing rather than a game marking a move.
         style={{
           width: `${cellSize}px`,
           height: `${cellSize}px`,
-          boxShadow: isLast && cell ? `inset 0 0 0 2px ${pieceColor(cell)}` : undefined,
+          boxShadow: isLast && cell ? `inset 0 0 0 2px ${pieceColor({ xColor, oColor }, cell)}` : undefined,
         }}
         data-forced-move={isForced || undefined}
         title={isForced ? t('game.forcedMove') : undefined}
@@ -253,13 +321,13 @@ export const BoardCell = memo<BoardCellProps>(({
       >
         {cell ? (
           <span className={placementClass}>
-            <SheetGlyph piece={cell} color={pieceColor(cell)} fontSize={fontSize} />
+            <SheetGlyph piece={cell} color={pieceColor({ xColor, oColor }, cell)} fontSize={fontSize} />
           </span>
         ) : simulatedPiece ? (
           <>
             <SheetGlyph
               piece={simulatedPiece}
-              color={simulatedColor || pieceColor(simulatedPiece)}
+              color={simulatedColor || pieceColor({ xColor, oColor }, simulatedPiece)}
               fontSize={fontSize}
               opacity={0.6}
             />
@@ -267,8 +335,78 @@ export const BoardCell = memo<BoardCellProps>(({
           </>
         ) : isHovered && !boardDisabled ? (
           <div className={`opacity-35 ${placementClass}`}>
-            <SheetGlyph piece={currentTurn} color={pieceColor(currentTurn)} fontSize={fontSize} />
+            <SheetGlyph piece={currentTurn} color={pieceColor({ xColor, oColor }, currentTurn)} fontSize={fontSize} />
           </div>
+        ) : null}
+      </button>
+    );
+  }
+
+  if (orca) {
+    // PR 5's code grid cell: a faint tint and corner brackets for the last
+    // move, a flat ring for the winning line, a dashed target for the bot hint.
+    const glyph = (piece: Exclude<CellValue, null>, extra: Partial<PieceGlyphProps> = {}) => (
+      <PieceGlyph piece={piece} pieceTheme={pieceTheme} xColor={xColor} oColor={oColor} orca {...extra} />
+    );
+    return (
+      <button
+        type="button"
+        onClick={handleClick}
+        {...keyboardFocusProps}
+        onContextMenu={(event) => onContextMenu(event, row, col)}
+        onMouseEnter={(event) => onHover(row, col, clickCorner(event))}
+        onMouseMove={(event) => onHover(row, col, clickCorner(event))}
+        aria-label={cellLabel}
+        style={{ width: `${cellSize}px`, height: `${cellSize}px` }}
+        data-forced-move={isForced || undefined}
+        data-bot-hint={isBotHint || undefined}
+        title={isForced ? t('game.forcedMove') : isBotHint ? t('game.botHint') : undefined}
+        className={`board-cell ${isForced ? 'board-cell--forced' : ''} relative flex shrink-0 aspect-square items-center justify-center ${
+          cell ? 'board-cell--filled' : ''
+        } ${isMajorRight ? 'board-cell--gx' : ''} ${isMajorBottom ? 'board-cell--gy' : ''} ${
+          isLast && !isWinning ? 'z-10 bg-ink/[0.045]' : ''
+        } ${isWinning ? 'z-20 bg-surface-3/80 ring-[1.5px] ring-inset ring-line-strong' : ''}`}
+      >
+        {isLast && !isWinning && (
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-[1.5px] z-[11] h-[calc(100%-3px)] w-[calc(100%-3px)]"
+            fill="none"
+            stroke="var(--ui-text-subtle)"
+            strokeWidth="1.75"
+            strokeLinecap="square"
+          >
+            <path d="M2 7V2h5M17 2h5v5M22 17v5h-5M7 22H2v-5" />
+          </svg>
+        )}
+        {isBotHint && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-[2px] z-[23] flex items-center justify-center rounded-[3px] border-[1.5px] border-dashed border-success bg-success-soft animate-pulse"
+          >
+            {!cell && !simulatedPiece && !isHovered && <span className="h-1.5 w-1.5 rotate-45 rounded-[1px] bg-success" />}
+          </span>
+        )}
+        {cell ? (
+          isLast ? (
+            <span className={`animate-piece-drop ${placementClass}`}>{glyph(cell, { isWinning })}</span>
+          ) : (
+            <span className={placementClass}>{glyph(cell, { isWinning })}</span>
+          )
+        ) : simulatedPiece ? (
+          <>
+            {glyph(simulatedPiece, { isSimulated: true, customColor: simulatedColor })}
+            {simulatedLabel}
+          </>
+        ) : isHovered && !boardDisabled ? (
+          <div className={`opacity-35 ${placementClass}`}>{glyph(currentTurn, { isSimulated: true })}</div>
+        ) : isStar ? (
+          <span aria-hidden="true" className="orca-star" />
+        ) : showCoords ? (
+          <span className="pointer-events-none select-none font-mono text-[9px] tabular-nums leading-none text-subtle opacity-75">
+            {columnLabel(col)}{row + 1}
+          </span>
         ) : null}
       </button>
     );
@@ -278,10 +416,11 @@ export const BoardCell = memo<BoardCellProps>(({
   <button
     type="button"
     onClick={handleClick}
+    {...keyboardFocusProps}
     onContextMenu={(event) => onContextMenu(event, row, col)}
     onMouseEnter={(event) => onHover(row, col, clickCorner(event))}
     onMouseMove={(event) => onHover(row, col, clickCorner(event))}
-    aria-label={cell ? t('game.coordinate', { coord: `${columnLabel(col)}${row + 1}`, cell }) : t('game.coordinateEmpty', { coord: `${columnLabel(col)}${row + 1}` })}
+    aria-label={cellLabel}
     style={{ width: `${cellSize}px`, height: `${cellSize}px` }}
     data-forced-move={isForced || undefined}
     title={isForced ? t('game.forcedMove') : undefined}
@@ -320,6 +459,8 @@ export const BoardCell = memo<BoardCellProps>(({
       <div className={`opacity-35 ${placementClass}`}>
         <PieceGlyph piece={currentTurn} pieceTheme={pieceTheme} xColor={xColor} oColor={oColor} isSimulated />
       </div>
+    ) : isStar ? (
+      <span aria-hidden="true" className="orca-star" />
     ) : showCoords ? (
       <span className="pointer-events-none select-none font-mono text-[9px] leading-none text-subtle opacity-70">
         {columnLabel(col)}{row + 1}

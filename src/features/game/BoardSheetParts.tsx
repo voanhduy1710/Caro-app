@@ -6,7 +6,6 @@ import type { CellValue } from '../../shared/utils/gomokuLogic';
    scroll maths in Board has to know them because both stay pinned over the grid. */
 export const SHEET_ROW_HEADER_W = 46;
 export const SHEET_COL_HEADER_H = 24;
-export const SHEET_TRIANGLE_COLOR = '#7c3aed';
 const SHEET_CELL_FONT = 'Arial, Helvetica, sans-serif';
 
 /* A generic green page with a white grid for the browser tab. Deliberately

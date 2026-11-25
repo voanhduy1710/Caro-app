@@ -2,6 +2,8 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CHAT_EMOTES, emoteSrc } from './chatEmotes';
 import { useT } from '../i18n/language';
+import { useFocusTrap } from '../../shared/hooks/useFocusTrap';
+import { useIsOrca } from '../theme/uiStyle';
 
 interface BubblePlacement { left: number; bottom: number; width: number; arrowLeft: number; columns: number }
 
@@ -13,6 +15,8 @@ const CELL = 36;
 const CELL_GAP = 4;
 const PAD_X = 16 + 2;
 const PAD_Y = 24 + 2;
+/** The Orca style's bubble (PR 5) has 8px top and bottom padding. */
+const PAD_Y_ORCA = 16 + 2;
 const MIN_COLUMNS = 8;
 
 /**
@@ -26,6 +30,8 @@ export const GameReactionPicker: React.FC<{
   onPick: (code: string) => void; onClose: () => void;
 }> = ({ open, isAiMode, anchorRef, onPick, onClose }) => {
   const t = useT();
+  const isOrca = useIsOrca();
+  const padY = isOrca ? PAD_Y_ORCA : PAD_Y;
   const visible = open && !isAiMode;
   const bubbleRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<BubblePlacement | null>(null);
@@ -42,7 +48,7 @@ export const GameReactionPicker: React.FC<{
       const widthFor = (columns: number) => columns * CELL + (columns - 1) * CELL_GAP + PAD_X;
       const heightFor = (columns: number) => {
         const rows = Math.ceil(CHAT_EMOTES.length / columns);
-        return rows * CELL + (rows - 1) * CELL_GAP + PAD_Y;
+        return rows * CELL + (rows - 1) * CELL_GAP + padY;
       };
       const maxColumns = Math.max(MIN_COLUMNS, Math.floor((window.innerWidth - MARGIN * 2 - PAD_X + CELL_GAP) / (CELL + CELL_GAP)));
       let columns = MIN_COLUMNS;
@@ -64,7 +70,16 @@ export const GameReactionPicker: React.FC<{
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
-  }, [visible, anchorRef]);
+  }, [visible, anchorRef, padY]);
+
+  // Opened from the smiley button, focus moves onto the first emoticon, Tab
+  // stays in the bubble and closing hands focus back to the button. Focus in
+  // the chat box is left alone (a pick types into it), and so is Tab from there.
+  useFocusTrap(visible && placement !== null, bubbleRef, {
+    initialFocus: 'first',
+    moveFocusIf: (focused) => focused !== null && focused === anchorRef.current,
+    onlyWhileInside: true,
+  });
 
   useEffect(() => {
     if (!visible) return;
@@ -95,7 +110,7 @@ export const GameReactionPicker: React.FC<{
       role="dialog"
       aria-label={t('game.emoticons')}
       style={{ left: placement.left, bottom: placement.bottom, width: placement.width }}
-      className="fixed z-[70] rounded-sm border border-line-strong bg-surface px-2 py-3 shadow-e2 animate-pop-in"
+      className={`fixed z-[70] border border-line-strong bg-surface shadow-e2 animate-pop-in ${isOrca ? 'rounded-lg p-2' : 'rounded-sm px-2 py-3'}`}
     >
       <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${placement.columns}, minmax(0, 1fr))` }}>
         {CHAT_EMOTES.map((emote) => (
@@ -107,7 +122,9 @@ export const GameReactionPicker: React.FC<{
             onClick={() => onPick(emote.codes[0])}
             title={`${emote.label}  ${emote.codes.join('  ')}`}
             aria-label={t('game.emoteAria', { label: emote.label, codes: emote.codes.join(t('game.orJoin')) })}
-            className="flex items-center justify-center rounded-sm p-1 transition-transform hover:scale-110 hover:bg-surface-2 active:scale-95"
+            className={isOrca
+              ? 'flex cursor-pointer items-center justify-center rounded-md p-1 transition-colors hover:bg-surface-2 active:bg-surface-3'
+              : 'flex items-center justify-center rounded-sm p-1 transition-transform hover:scale-110 hover:bg-surface-2 active:scale-95'}
           >
             <img src={emoteSrc(emote)} alt="" draggable={false} className="h-7 w-7 object-contain" />
           </button>

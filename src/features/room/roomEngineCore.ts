@@ -1,10 +1,10 @@
 import type { RoomSettings } from '../settings/types';
 import { PROTOCOL_VERSION, isAllowedSettings, sanitizeProfile } from './protocol';
 import type { HostMessage, Intent } from './protocol';
-import { GRACE_MS, LOST_AFTER_MS, MALFORMED_KICK_COUNT, MALFORMED_WINDOW_MS, STALE_MOVER_MS } from './roomEngineTypes';
+import { GRACE_MS, LOST_AFTER_MS, MALFORMED_KICK_COUNT, MALFORMED_WINDOW_MS, STALE_MOVER_MS, VIEWER_GRACE_MS, VIEWER_RESTORE_GRACE_MS } from './roomEngineTypes';
 import type { EngineEnv, EngineResult, EngineState, RoomMode, RoomState } from './roomEngineTypes';
 import { bothSeatedAndConnected, findMember, liveClocksAt, nextSeat, occupant, otherSeat, seatOf } from './roomEngineHelpers';
-import { abortCountdown, bankClocks, cloneState, endGame, expiredClock, finalize, newCtx, pause, reject, removeMember, sendEvent, vacateSeat } from './roomEngineLifecycle';
+import { abandonOpening, abortCountdown, bankClocks, cloneState, endGame, expiredClock, finalize, newCtx, pause, reject, removeMember, sendEvent, vacateSeat } from './roomEngineLifecycle';
 import { handleBoardPingClear, handleBoardPing, handleBuzz, handleChat, handleChatSeen, handleClaimDisconnectWin, handleClearSeat, handleCoinCall, handleDiscard, handleDoubleDownAnswer, handleDoubleDownOffer, handleFirstMoveChoice, handleHello, handleKickMember, handleLeaveRoom, handleMove, handleRatingReport, handleRematchAnswer, handleRematchOffer, handleResign, handleTakeSeat, handleTease, handleUndoAnswer, handleUndoRequest, handleUpdateSettings, refundedBankAt } from './roomEngineHandlers';
 export * from './roomEngineTypes';
 export * from './roomEngineHelpers';
@@ -51,9 +51,29 @@ export const createRoom = (opts: CreateRoomOptions, now: number, env: EngineEnv 
   };
 };
 
-export const toWire = (state: EngineState, now: number): RoomState => {
+/** A rock-paper-scissors round where one pick is in and the other is not yet: that pick must not leak. */
+export const hasHiddenPick = (state: EngineState): boolean => {
+  const choices = state.room.game?.firstMove.choices;
+  return choices !== undefined && (choices.X === null) !== (choices.O === null);
+};
+
+/**
+ * The room as members see it. `viewerId` is the member it is for: while only
+ * one rock-paper-scissors pick is in, it reaches only the member who made it,
+ * or the other player could read it and pick the winning hand. Without a
+ * viewer every pending pick is hidden.
+ */
+export const toWire = (state: EngineState, now: number, viewerId?: string): RoomState => {
   const room = structuredClone(state.room);
   room.sentAt = now;
+  const firstMove = room.game?.firstMove;
+  if (firstMove?.choices && hasHiddenPick(state)) {
+    const { choices } = firstMove;
+    firstMove.chosen = { X: choices.X !== null, O: choices.O !== null };
+    for (const seat of ['X', 'O'] as const) {
+      if (room.seats[seat] !== viewerId) choices[seat] = null;
+    }
+  }
   for (const member of room.members) {
     const endsAt = state.host.graceEndsAt[member.id];
     member.graceMsLeft = member.connected || endsAt === undefined ? null : Math.max(0, endsAt - now);
@@ -101,9 +121,10 @@ export const restore = (snap: HostSnapshot, now: number): EngineState => {
   room.rev += 1;
   for (const member of room.members) {
     if (member.isHost) { member.connected = true; member.graceMsLeft = null; continue; }
+    const graceMs = seatOf(d, member.id) ? GRACE_MS : VIEWER_RESTORE_GRACE_MS;
     member.connected = false;
-    member.graceMsLeft = GRACE_MS;
-    host.graceEndsAt[member.id] = now + GRACE_MS;
+    member.graceMsLeft = graceMs;
+    host.graceEndsAt[member.id] = now + graceMs;
   }
   host.lastSeenAt = {}; host.lastChatAt = {}; host.lastBuzzAt = {}; host.malformedAt = {};
   host.lastImageAt = null;
@@ -124,17 +145,18 @@ export const restore = (snap: HostSnapshot, now: number): EngineState => {
 const loseConnection = (d: EngineState, memberId: string, ctx: ReturnType<typeof newCtx>): void => {
   const m = findMember(d, memberId);
   if (!m || m.isHost || !m.connected) return;
-  m.connected = false;
-  m.graceMsLeft = GRACE_MS;
-  d.host.graceEndsAt[m.id] = ctx.now + GRACE_MS;
   const seat = seatOf(d, m.id);
+  const graceMs = seat ? GRACE_MS : VIEWER_GRACE_MS;
+  m.connected = false;
+  m.graceMsLeft = graceMs;
+  d.host.graceEndsAt[m.id] = ctx.now + graceMs;
   if (!seat) return;
   const { room } = d;
   if (room.phase === 'playing' && room.game) {
     const bankAt = room.game.turn === seat ? refundedBankAt(d, d.host.lastSeenAt[m.id] ?? ctx.now, ctx.now) : ctx.now;
     pause(d, ctx, bankAt);
   } else if (room.phase === 'countdown') abortCountdown(d);
-  else if (room.phase === 'opening') { room.game = null; room.phase = 'waiting'; room.autoStartArmed = true; }
+  else if (room.phase === 'opening') abandonOpening(d);
 };
 
 const expireGrace = (d: EngineState, memberId: string, ctx: ReturnType<typeof newCtx>): void => {
@@ -206,7 +228,7 @@ export const applyIntent = (state: EngineState, intent: Intent, fromMemberId: st
     case 'BUZZ': handleBuzz(d, m, ctx); break;
     case 'TEASE': handleTease(d, m, intent.payload, ctx); break;
     case 'RATING_REPORT': handleRatingReport(d, m, intent.payload, ctx); break;
-    case 'STATE_REQUEST': ctx.replies.push({ to: m.id, message: { type: 'ROOM_STATE', payload: { state: toWire(d, now) } } }); break;
+    case 'STATE_REQUEST': ctx.replies.push({ to: m.id, message: { type: 'ROOM_STATE', payload: { state: toWire(d, now, m.id) } } }); break;
     case 'PONG': break;
     case 'LEAVE_ROOM': handleLeaveRoom(d, m, ctx); break;
   }
@@ -217,13 +239,6 @@ export const onConnectionLost = (state: EngineState, memberId: string, now: numb
   const d = cloneState(state);
   const ctx = newCtx(now, env);
   loseConnection(d, memberId, ctx);
-  return finalize(state, d, ctx);
-};
-
-export const onGraceExpired = (state: EngineState, memberId: string, now: number, env: EngineEnv = cryptoEnv): EngineResult => {
-  const d = cloneState(state);
-  const ctx = newCtx(now, env);
-  expireGrace(d, memberId, ctx);
   return finalize(state, d, ctx);
 };
 
@@ -274,4 +289,16 @@ export const noteMalformed = (state: EngineState, memberId: string, now: number)
   recent.push(now);
   d.host.malformedAt[memberId] = recent;
   return { state: d, kick: recent.length >= MALFORMED_KICK_COUNT };
+};
+
+/**
+ * Removes a member who kept sending malformed messages, token and all: only
+ * dropping the connection let it straight back in with its resume token.
+ */
+export const kickForMalformed = (state: EngineState, memberId: string, now: number, env: EngineEnv = cryptoEnv): EngineResult => {
+  const d = cloneState(state);
+  const ctx = newCtx(now, env);
+  const hostMember = findMember(d, d.host.hostMemberId);
+  if (hostMember && findMember(d, memberId)) handleKickMember(d, hostMember, memberId, ctx);
+  return finalize(state, d, ctx);
 };

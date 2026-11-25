@@ -16,7 +16,7 @@ import Peer from 'peerjs';
 import type { UserProfile } from '../auth/AuthContext';
 import type { ChatMessage } from '../webrtc/types';
 import type { DataConnection } from 'peerjs';
-import { PROTOCOL_VERSION, TEASE_PHRASE } from './protocol';
+import { PROTOCOL_VERSION, TEASE_PHRASE, isRecord } from './protocol';
 import { t } from '../i18n/language';
 import type { StringKey } from '../i18n/strings';
 import type {
@@ -32,8 +32,10 @@ import {
   cryptoEnv,
   DOUBLE_DOWN_ANSWER_MOVES,
   DOUBLE_DOWN_BONUS,
+  GRACE_MS,
   liveClocks,
   pieceAt,
+  PING_INTERVAL_MS,
   seatOf,
   snapshot,
 } from './roomEngine';
@@ -51,7 +53,6 @@ import {
   clearLastRoom,
   closeConn,
   isRoomState,
-  isRecord,
   mergeChat,
   profileClaim,
   readHandled,
@@ -66,9 +67,9 @@ import {
 // Public types
 // ---------------------------------------------------------------------------
 
-export type { ClosedReason, CreateRoomInput, LastRoom, RoomHandlers, RoomStatus, SeatOpenedNotice, TeaseNotice } from './useRoomTypes';
+export type { ClosedReason, LastRoom, RoomHandlers, RoomStatus, SeatOpenedNotice, TeaseNotice } from './useRoomTypes';
 import type { ClosedReason, RoomHandlers, RoomStatus, SeatOpenedNotice, TeaseNotice } from './useRoomTypes';
-export { LAST_ROOM_TTL_MS, clearLastRoom, readLastRoom } from './useRoomUtilities';
+export { clearLastRoom, readLastRoom } from './useRoomUtilities';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -86,10 +87,11 @@ const HELLO_TIMEOUT_MS = 5_000;
 /** After a refresh the old peer id lingers on the signalling server for a while. */
 const ID_RETRY_MS = 2_000;
 const ID_RETRY_WINDOW_MS = 90_000;
-/** The host pings every 2 s, so this much silence means it is gone. */
-const HOST_SILENT_MS = 8_000;
+/** Four missed host pings in a row mean the host is gone. */
+const HOST_SILENT_MS = 4 * PING_INTERVAL_MS;
 const HOST_RETRY_MS = 2_000;
-const HOST_LOST_GIVE_UP_MS = 5 * 60 * 60_000;
+/** A lost host is waited for as long as it would hold a dropped player's seat. */
+const HOST_LOST_GIVE_UP_MS = GRACE_MS;
 const PEER_RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000];
 /** A first join that has not been welcomed retries this often, then gives up. */
 const JOIN_RETRY_MS = 8_000;
@@ -144,6 +146,8 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       terminal: false,
       mirror: null as RoomState | null,
       receivedAt: 0,
+      /** When the last full room state arrived: sentAt, graceMsLeft and countdown date from it, not from a later move or clock sync. */
+      fullStateAt: 0,
       lastHeard: 0,
       hostLostSince: null as number | null,
       lastRetryAt: 0,
@@ -191,8 +195,8 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       else if (next.phase === 'playing' || next.phase === 'paused') systemLine(t('room.n.ddRejected', { name }));
     };
 
-    /** Replaces the mirror, noting what the ending game's clocks looked like here. */
-    const setMirror = (next: RoomState) => {
+    /** Replaces the mirror, noting what the ending game's clocks looked like here. `full` is false for a move or clock patch. */
+    const setMirror = (next: RoomState, full = true) => {
       const prev = r.mirror;
       if (prev?.game) {
         const prevGame = prev.game;
@@ -220,6 +224,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       }
       r.mirror = next;
       r.receivedAt = performance.now();
+      if (full) r.fullStateAt = r.receivedAt;
       setState(next);
     };
 
@@ -390,7 +395,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           pings: p.pings ?? game.pings,
           lastMove: { by, at: Date.now() },
         },
-      });
+      }, false);
     };
 
     // ------------------------------------------------------------- messages
@@ -440,15 +445,16 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
         case 'CLOCK_SYNC': {
           const cur = r.mirror;
           if (hostSide || !cur?.game || cur.game.id !== message.payload.gameId) return;
-          setMirror({ ...cur, game: { ...cur.game, clocks: message.payload.clocks } });
+          setMirror({ ...cur, game: { ...cur.game, clocks: message.payload.clocks } }, false);
           return;
         }
         case 'REJECTED': {
           const p = message.payload;
           r.lastRejected = p;
           if (p.type === 'MOVE') setPendingMove(null);
-          if (p.type === 'CHAT' && r.lastChatEcho) {
-            const echo = r.lastChatEcho;
+          // Older hosts leave out the id; then the latest echo is the best guess.
+          const echo = p.type === 'CHAT' ? (p.id ?? r.lastChatEcho) : null;
+          if (echo) {
             setChatMessages((prev) => prev.filter((m) => m.id !== echo));
           }
           const text = rejectionText(p);
@@ -537,6 +543,7 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
       peerReconnectDelaysMs: PEER_RECONNECT_DELAYS_MS,
       joinNotFoundGraceMs: JOIN_NOT_FOUND_GRACE_MS,
       joinRetryMs: JOIN_RETRY_MS,
+      hostTickMs: TICK_MS,
       hostLoop,
       memberLoop,
       connectToHost,

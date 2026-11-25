@@ -10,7 +10,7 @@ import type { ClosedReason, CreateRoomInput } from './useRoomTypes';
 import { beatHostAlive, closeConn, endHostAlive, HOST_ALIVE_STALE_WAIT_MS, forgetHostBackup, forgetToken, hostLiveElsewhere, loadIceServers, peerOptions, profileClaim, randomCode, readHostBackup, readJson, readToken, removeKey, send, setUrlRoom, TAB_ID, writeJson, writeLastRoom } from './useRoomUtilities';
 import type { SavedSession } from './useRoomUtilities';
 
-export interface RoomLifecycleState {
+interface RoomLifecycleState {
   role: 'host' | 'member' | null; peer: Peer | null; roomId: string | null; engine: EngineState | null;
   conns: Map<string, DataConnection>; connMember: Map<DataConnection, string>; pending: Map<DataConnection, number>;
   hostConn: DataConnection | null; memberId: string | null; token: string | null; welcomed: boolean; terminal: boolean;
@@ -23,6 +23,8 @@ interface Options {
   peerPrefix: string; idRetryMs: number; idRetryWindowMs: number; peerReconnectDelaysMs: readonly number[];
   /** How long a fresh join keeps knocking on a room that is not there yet, e.g. while its host reloads. */
   joinNotFoundGraceMs: number; joinRetryMs: number;
+  /** How often the host runs the engine's tick: the watchdog's resolution. */
+  hostTickMs: number;
   hostLoop: () => void; memberLoop: () => void; connectToHost: () => void; startHostLost: () => void;
   acceptConnection: (connection: DataConnection) => void; announce: () => void; publishHost: (now: number, force?: boolean) => void; saveSnapshot: (now: number) => void;
   setStatus: (value: any) => void; setRoomId: (value: string | null) => void; setIsHost: (value: boolean) => void; setMemberId: (value: string | null) => void;
@@ -107,7 +109,7 @@ export const createRoomLifecycle = (options: Options) => {
     peer.on('open', () => {
       if (state.peer !== peer) return;
       opened.add(peer); state.peerAttempt = 0; options.setStatus('connected');
-      if (!state.loop) startLoop(hostTick, 250);
+      if (!state.loop) startLoop(hostTick, options.hostTickMs);
       options.announce();
     });
     peer.on('connection', (connection) => { if (state.peer === peer) options.acceptConnection(connection); });
@@ -150,7 +152,7 @@ export const createRoomLifecycle = (options: Options) => {
     const fresh = () => createEngineRoom({ roomId: code, isPublic: input.isPublic, mode: input.mode, settings: input.settings, hostProfile: profileClaim(userRef.current), hostTabId: TAB_ID }, now);
     let engine: EngineState; let restored = false;
     try { engine = stored ? restore(stored, now) : fresh(); restored = Boolean(stored); } catch { engine = fresh(); }
-    state.engine = engine; state.memberId = engine.host.hostMemberId; state.idRetryUntil = restored ? now + idRetryWindowMs : 0; writeJson(sessionStorage, sessionKey, { roomId: code, isHost: true, memberId: state.memberId });
+    state.engine = engine; state.memberId = engine.host.hostMemberId; state.idRetryUntil = restored ? now + idRetryWindowMs : 0; writeJson(sessionStorage, sessionKey, { roomId: code, isHost: true, memberId: state.memberId, isPublic: engine.room.isPublic, mode: engine.room.mode });
     setUrlRoom(code); options.setRoomId(code); options.setIsHost(true); options.setMemberId(state.memberId); options.setError(null); options.setClosedReason(null); options.setHostLostSince(null); options.setChatMessages(restored ? [...engine.host.chatBacklog] : []); options.setChatSeen(restored ? { ...engine.host.chatSeen } : {}); options.setStatus('opening'); options.publishHost(now, true);
     // A duplicated tab copies sessionStorage and would fight the live tab for the room id.
     if (input.code && hostLiveElsewhere(code)) { finish('id_taken', 'This room is already open in another tab.'); return code; }
@@ -247,8 +249,7 @@ export const createRoomLifecycle = (options: Options) => {
   const reset = () => { teardown(true); options.setError(null); options.setClosedReason(null); };
   const resumeFromUrl = (settings: RoomSettings): boolean => {
     let code: string | null = null; try { code = parseRoomCode(new URLSearchParams(window.location.search).get('room') ?? ''); } catch { /* no URL */ }
-    const old = readJson<{ roomId?: string; isHost?: boolean }>(sessionStorage, 'caro_active_session'); const oldHost = old?.isHost && old.roomId === code; removeKey(sessionStorage, 'caro_active_session'); removeKey(sessionStorage, 'caro_game_snapshot');
-    if (!code) return false; const saved = readJson<SavedSession>(sessionStorage, sessionKey); if ((saved?.isHost && saved.roomId === code) || oldHost) createRoom({ code, isPublic: true, settings }); else joinRoom(code); return true;
+    if (!code) return false; const saved = readJson<SavedSession>(sessionStorage, sessionKey); if (saved?.isHost && saved.roomId === code) createRoom({ code, isPublic: saved.isPublic ?? true, mode: saved.mode, settings }); else joinRoom(code); return true;
   };
   return { teardown, finish, stopAfterLocalClaim, createRoom, joinRoom, leaveRoom, reset, resumeFromUrl, usableMemberPeer, nudge, dispose: () => { if (state.role) teardown(false); }, onPageHide: () => { if (state.role === 'host') { options.saveSnapshot(Date.now()); if (state.roomId) endHostAlive(state.roomId); } } };
 };

@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { DEFAULT_THEME_SETTINGS } from './types';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { BOARD_THEMES, DEFAULT_THEME_SETTINGS, PIECE_THEMES } from './types';
 import type { ThemeSettings, BoardTheme, PieceTheme } from './types';
 
 interface ThemeContextType {
@@ -17,17 +17,15 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_KEY = 'caro_app_theme_settings';
 
-const VALID_BOARD_THEMES: BoardTheme[] = ['graph_paper', 'light_wood', 'laser_futuristic', 'spreadsheet'];
-
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<ThemeSettings>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (saved) {
+        // A style saved by an older or newer build may no longer exist.
         const parsed = JSON.parse(saved);
-        if (!VALID_BOARD_THEMES.includes(parsed.boardTheme)) {
-          parsed.boardTheme = 'graph_paper';
-        }
+        if (!BOARD_THEMES.includes(parsed.boardTheme)) parsed.boardTheme = DEFAULT_THEME_SETTINGS.boardTheme;
+        if (!PIECE_THEMES.includes(parsed.pieceTheme)) parsed.pieceTheme = DEFAULT_THEME_SETTINGS.pieceTheme;
         return { ...DEFAULT_THEME_SETTINGS, ...parsed };
       }
       return DEFAULT_THEME_SETTINGS;
@@ -44,50 +42,49 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [theme]);
 
-  const setBoardTheme = (boardTheme: BoardTheme) => {
+  const setBoardTheme = useCallback((boardTheme: BoardTheme) => {
     setTheme((prev) => ({ ...prev, boardTheme }));
-  };
+  }, []);
 
-  const setPieceTheme = (pieceTheme: PieceTheme) => {
+  const setPieceTheme = useCallback((pieceTheme: PieceTheme) => {
     setTheme((prev) => ({ ...prev, pieceTheme }));
-  };
+  }, []);
 
-  const setXColor = (xColor: string) => {
+  const setXColor = useCallback((xColor: string) => {
     setTheme((prev) => ({ ...prev, xColor }));
-  };
+  }, []);
 
-  const setOColor = (oColor: string) => {
+  const setOColor = useCallback((oColor: string) => {
     setTheme((prev) => ({ ...prev, oColor }));
-  };
+  }, []);
 
-  const setSelfSimulatedColor = (selfSimulatedColor: string) => {
+  const setSelfSimulatedColor = useCallback((selfSimulatedColor: string) => {
     setTheme((prev) => ({ ...prev, selfSimulatedColor }));
-  };
+  }, []);
 
-  const setOpponentSimulatedColor = (opponentSimulatedColor: string) => {
+  const setOpponentSimulatedColor = useCallback((opponentSimulatedColor: string) => {
     setTheme((prev) => ({ ...prev, opponentSimulatedColor }));
-  };
+  }, []);
 
-  const updateTheme = (newTheme: Partial<ThemeSettings>) => {
+  const updateTheme = useCallback((newTheme: Partial<ThemeSettings>) => {
     setTheme((prev) => ({ ...prev, ...newTheme }));
-  };
+  }, []);
 
-  return (
-    <ThemeContext.Provider
-      value={{
-        theme,
-        setBoardTheme,
-        setPieceTheme,
-        setXColor,
-        setOColor,
-        setSelfSimulatedColor,
-        setOpponentSimulatedColor,
-        updateTheme,
-      }}
-    >
-      {children}
-    </ThemeContext.Provider>
+  const value = useMemo(
+    () => ({
+      theme,
+      setBoardTheme,
+      setPieceTheme,
+      setXColor,
+      setOColor,
+      setSelfSimulatedColor,
+      setOpponentSimulatedColor,
+      updateTheme,
+    }),
+    [theme, setBoardTheme, setPieceTheme, setXColor, setOColor, setSelfSimulatedColor, setOpponentSimulatedColor, updateTheme],
   );
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };
 
 export const useTheme = () => {

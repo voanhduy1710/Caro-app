@@ -3,12 +3,18 @@ import { X, Check, AlertTriangle, Lock } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
 import { RankBadge } from '../../shared/components/RankBadge';
-import { getRankTitle } from '../../shared/utils/eloCalculator';
+import { getRankTitle } from '../../shared/utils/rankTiers';
 import { AVATAR_ITEMS, getAvatarPublicUrl, getChampionId, isRagnarokAvatar, listRagnarokAvatars } from '../avatar/avatarService';
 import type { AvatarItem } from '../avatar/avatarService';
+import { PASSWORD_MIN_LENGTH } from '../auth/authRules';
+import { useT } from '../i18n/language';
+import { useIsOrca } from '../theme/uiStyle';
+import { ProfileModalOrcaView } from './ProfileModal.orca';
 
 export const ProfileModal: React.FC = () => {
-  const { user, showProfileModal, setShowProfileModal, updateUserProfile, changePassword } = useAuth();
+  const { user, showProfileModal, setShowProfileModal, updateUserProfile, changePassword, openAuthModal } = useAuth();
+  const t = useT();
+  const isOrca = useIsOrca();
   // While a save is in flight the dialog stays open. Closed early, a failure
   // had nowhere to be shown, and the navbar quietly rolled back on its own.
   const savingRef = useRef(false);
@@ -117,8 +123,12 @@ export const ProfileModal: React.FC = () => {
     setPasswordError(null);
     setPasswordSuccess(null);
 
+    if (newPassword.length < PASSWORD_MIN_LENGTH) {
+      setPasswordError(t('profile.password.tooShort', { n: PASSWORD_MIN_LENGTH }));
+      return;
+    }
     if (newPassword !== confirmPassword) {
-      setPasswordError('Passwords do not match.');
+      setPasswordError(t('profile.password.mismatch'));
       return;
     }
 
@@ -127,24 +137,60 @@ export const ProfileModal: React.FC = () => {
     setIsChangingPassword(false);
 
     if (res.success) {
-      setPasswordSuccess(res.message || 'Password updated successfully!');
+      setPasswordSuccess(t('profile.password.updated'));
       setNewPassword('');
       setConfirmPassword('');
       setTimeout(() => setPasswordSuccess(null), 3000);
     } else {
-      setPasswordError(res.message || 'Failed to update password.');
+      setPasswordError(res.message || t('profile.password.failed'));
     }
   };
 
-  const handlePasswordReset = async () => {
-    setPasswordError(null);
-    setPasswordSuccess(null);
-    setIsChangingPassword(true);
-    const res = await changePassword('123456');
-    setIsChangingPassword(false);
-    if (res.success) setPasswordSuccess('Password reset to 123456. Change it again when you are ready.');
-    else setPasswordError(res.message || 'Failed to reset password.');
-  };
+  if (isOrca) {
+    return (
+      <ProfileModalOrcaView
+        m={{
+          dialogProps,
+          user,
+          rank,
+          winRate,
+          closeProfile,
+          // PR 5's guest call-out: swap this dialog for the sign-in one.
+          onOpenAuth: (tab) => {
+            if (savingRef.current) return;
+            setShowProfileModal(false);
+            openAuthModal(tab);
+          },
+          displayName,
+          setDisplayName,
+          activeAvatarPreviewUrl,
+          hoveredAvatarFilename,
+          setHoveredAvatarFilename,
+          avatarSource,
+          setAvatarSource,
+          isLoadingRagnarok,
+          filteredAvatars,
+          selectedPhotoURL,
+          setSelectedPhotoURL,
+          selectedChampion,
+          handleSave: (e) => void handleSave(e),
+          isSaving,
+          isSavedSuccess,
+          saveError,
+          newPassword,
+          setNewPassword,
+          confirmPassword,
+          setConfirmPassword,
+          showPassword,
+          setShowPassword,
+          passwordError,
+          passwordSuccess,
+          isChangingPassword,
+          handlePasswordSubmit: (e) => void handlePasswordSubmit(e),
+        }}
+      />
+    );
+  }
 
   return (
     <div
@@ -339,13 +385,13 @@ export const ProfileModal: React.FC = () => {
               <div className="flex items-center justify-between">
                 <h4 className="flex items-center gap-1.5 text-xs font-semibold text-ink">
                   <Lock size={13} strokeWidth={2.25} aria-hidden="true" />
-                  Change password
+                  {t('profile.password.title')}
                 </h4>
-                <span className="text-[10px] text-subtle font-mono">Min 6 characters</span>
+                <span className="text-[10px] text-subtle font-mono">{t('profile.password.minLength', { n: PASSWORD_MIN_LENGTH })}</span>
               </div>
 
               {passwordError && (
-                <div className="bg-danger-soft border border-danger p-2 rounded-md text-danger text-xs font-medium">
+                <div role="alert" className="bg-danger-soft border border-danger p-2 rounded-md text-danger text-xs font-medium">
                   <AlertTriangle size={13} strokeWidth={2.25} className="inline shrink-0 mr-1.5 -mt-0.5" aria-hidden="true" />{passwordError}
                 </div>
               )}
@@ -359,31 +405,35 @@ export const ProfileModal: React.FC = () => {
               <form onSubmit={handlePasswordSubmit} className="space-y-2">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-medium text-ink mb-0.5">
-                      New Password
+                    <label htmlFor="profile-new-password" className="block text-[10px] font-medium text-ink mb-0.5">
+                      {t('profile.password.new')}
                     </label>
                     <input
+                      id="profile-new-password"
                       type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="New password..."
+                      placeholder={t('profile.password.newPlaceholder')}
                       required
-                      minLength={6}
+                      minLength={PASSWORD_MIN_LENGTH}
                       className="w-full bg-surface-2 border border-line-strong rounded-md px-2.5 py-1.5 text-xs font-medium text-ink focus:outline-none focus:border-accent"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-medium text-ink mb-0.5">
-                      Confirm New Password
+                    <label htmlFor="profile-confirm-password" className="block text-[10px] font-medium text-ink mb-0.5">
+                      {t('profile.password.confirm')}
                     </label>
                     <input
+                      id="profile-confirm-password"
                       type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Confirm password..."
+                      placeholder={t('profile.password.confirmPlaceholder')}
                       required
-                      minLength={6}
+                      minLength={PASSWORD_MIN_LENGTH}
                       className="w-full bg-surface-2 border border-line-strong rounded-md px-2.5 py-1.5 text-xs font-medium text-ink focus:outline-none focus:border-accent"
                     />
                   </div>
@@ -397,24 +447,16 @@ export const ProfileModal: React.FC = () => {
                       onChange={(e) => setShowPassword(e.target.checked)}
                       className="rounded-sm text-accent-text focus:ring-accent"
                     />
-                    <span>Show Password</span>
+                    <span>{t('profile.password.show')}</span>
                   </label>
 
                   <div className="ml-auto flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={handlePasswordReset}
-                      disabled={isChangingPassword}
-                      className="btn btn-secondary btn-sm whitespace-nowrap"
-                    >
-                      Reset to 123456
-                    </button>
                     <button
                       type="submit"
                       disabled={isChangingPassword || !newPassword || !confirmPassword}
                       className="btn btn-inverse btn-sm whitespace-nowrap"
                     >
-                      {isChangingPassword ? 'Updating...' : 'Update Password'}
+                      {isChangingPassword ? t('profile.password.updating') : t('profile.password.update')}
                     </button>
                   </div>
                 </div>

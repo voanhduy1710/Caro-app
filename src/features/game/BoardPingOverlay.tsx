@@ -1,8 +1,10 @@
 import type { BoardPings, Seat } from '../room/protocol';
 import { columnLabel } from '../../shared/utils/gomokuLogic';
+import { useT } from '../i18n/language';
 
 /** Positioned inside the grid so markers follow every theme's zoom and scrolling. */
 export function BoardPingOverlay({ pings, cellSize, colors }: { pings?: BoardPings; cellSize: number; colors: Record<Seat, string> }) {
+  const t = useT();
   return (
     <div className="board-pings pointer-events-none absolute inset-0 z-[21]" aria-live="polite">
       {Object.entries(pings ?? {}).map(([seat, { row, col }]) => (
@@ -10,7 +12,7 @@ export function BoardPingOverlay({ pings, cellSize, colors }: { pings?: BoardPin
           key={`${seat}:${row}:${col}`}
           className="board-ping"
           role="img"
-          aria-label={`${seat} ping: ${columnLabel(col)}${row + 1}`}
+          aria-label={t('game.pingLabel', { seat, cell: `${columnLabel(col)}${row + 1}` })}
           data-ping-seat={seat}
           data-ping-row={row}
           data-ping-col={col}

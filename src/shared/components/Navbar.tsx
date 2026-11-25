@@ -2,7 +2,8 @@ import React from 'react';
 import { Trophy, History, Settings, LogIn, LogOut, UserPlus } from 'lucide-react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { RankBadge } from './RankBadge';
-import { getRankTitle } from '../utils/eloCalculator';
+import { getRankTitle } from '../utils/rankTiers';
+import { DEFAULT_ELO } from '../constants';
 import { getAvatarPublicUrl } from '../../features/avatar/avatarService';
 import { useTheme } from '../../features/theme/ThemeContext';
 import { useDisguiseMode } from '../../features/game/disguiseMode';
@@ -38,7 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const t = useT();
   const { user, openAuthModal, openProfileModal, signOut } = useAuth();
-  const rank = user ? getRankTitle(user.elo) : getRankTitle(1200);
+  const rank = user ? getRankTitle(user.elo) : getRankTitle(DEFAULT_ELO);
   const isSignedIn = Boolean(user && !user.isGuest);
 
   // The boss-key disguise hides this bar too: "Caro League" at the top would

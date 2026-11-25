@@ -3,16 +3,22 @@ import { X, Flame } from 'lucide-react';
 import type { UserProfile } from '../auth/AuthContext';
 import { useModalChrome } from '../../shared/hooks/useModalChrome';
 import { RankBadge } from '../../shared/components/RankBadge';
-import { getRankTitle } from '../../shared/utils/eloCalculator';
+import { getRankTitle } from '../../shared/utils/rankTiers';
+import { DEFAULT_ELO } from '../../shared/constants';
 import { getAvatarPublicUrl } from '../avatar/avatarService';
+import { useIsOrca } from '../theme/uiStyle';
+import { OpponentProfileModalOrca } from './OpponentProfileModal.orca';
 
-interface OpponentProfileModalProps {
+export interface OpponentProfileModalProps {
   opponent: UserProfile | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export const OpponentProfileModal: React.FC<OpponentProfileModalProps> = ({
+export const OpponentProfileModal: React.FC<OpponentProfileModalProps> = (props) =>
+  useIsOrca() ? <OpponentProfileModalOrca {...props} /> : <OpponentProfileModalDefault {...props} />;
+
+const OpponentProfileModalDefault: React.FC<OpponentProfileModalProps> = ({
   opponent,
   isOpen,
   onClose,
@@ -21,7 +27,7 @@ export const OpponentProfileModal: React.FC<OpponentProfileModalProps> = ({
 
   if (!isOpen || !opponent) return null;
 
-  const rank = getRankTitle(opponent.elo || 1200);
+  const rank = getRankTitle(opponent.elo || DEFAULT_ELO);
   const wins = opponent.wins || 0;
   const losses = opponent.losses || 0;
   const draws = opponent.draws || 0;
@@ -66,7 +72,7 @@ export const OpponentProfileModal: React.FC<OpponentProfileModalProps> = ({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="text-lg font-semibold text-ink truncate">{opponent.displayName}</h3>
-              <RankBadge elo={opponent.elo || 1200} size={32} />
+              <RankBadge elo={opponent.elo || DEFAULT_ELO} size={32} />
               <span className={`text-[10px] font-mono font-medium px-2 py-0.5 rounded-sm border bg-surface ${rank.color}`}>
                 {rank.title}
               </span>
@@ -76,7 +82,7 @@ export const OpponentProfileModal: React.FC<OpponentProfileModalProps> = ({
                 @{usernameHandle}
               </span>
               <span className="text-xs font-mono font-medium text-accent-text">
-                · {opponent.elo || 1200} ELO
+                · {opponent.elo || DEFAULT_ELO} ELO
               </span>
             </div>
           </div>

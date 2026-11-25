@@ -1,7 +1,5 @@
 import React, { useLayoutEffect, useRef } from 'react';
-import { emoteSrc, splitEmotes, type EmotePart } from './chatEmotes';
-
-const EMOTE_IMG_CLASS = 'mx-0.5 inline-block h-5 w-5 select-none object-contain align-text-bottom';
+import { EMOTE_IMG_CLASS, emoteSrc, splitEmotes, type EmotePart } from './chatEmotes';
 
 /** Browsers without "plaintext-only" fall back to plain editing; the serialiser copes with its extra markup. */
 const EDIT_MODE: 'plaintext-only' | true = (() => {

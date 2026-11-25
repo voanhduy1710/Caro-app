@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { decideTicket } from './rules.ts';
 
 /**
  * Records that the calling player sits in a game: a seat ticket.
@@ -8,6 +9,13 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
  * that game, so no result can ever be recorded against an account that did not
  * play it. The ticket is written through the player's own session, which is
  * the whole proof: nobody can write one on someone else's behalf.
+ *
+ * One ticket per seat per game, first writer wins (see rules.ts): the same
+ * player asking again gets their existing ticket, anyone else asking for a
+ * held seat is refused with 409 `seat_taken`, and a player asking for the
+ * other seat than the one they hold gets 409 `seat_mismatch`. So a game has at
+ * most two tickets, on opposite seats, and a spectator who asks after both
+ * players cannot hold one.
  *
  * With `doubleDown: true` the ticket also records that this player agreed to
  * the game's double down. submit-match applies the bonus only when both
@@ -62,17 +70,44 @@ Deno.serve(async (req: Request) => {
   const { data: profile } = await admin.from('gomoku_users').select('uid').eq('uid', callerId).maybeSingle();
   if (!profile) return json({ error: 'Only a registered player holds a seat ticket', code: 'caller_not_rated' }, 403);
 
+  const readTickets = async () => {
+    const { data, error } = await admin.from('gomoku_game_seats').select('uid, seat').eq('game_id', gameId);
+    return error ? null : (data ?? []);
+  };
+  const refuse = (code: 'seat_taken' | 'seat_mismatch') =>
+    json({ error: code === 'seat_taken' ? 'Another player holds this seat' : 'You hold the other seat in this game', code }, 409);
+
+  let existing = await readTickets();
+  if (!existing) return json({ error: 'Could not read the seats' }, 500);
+  let decision = decideTicket(existing, callerId, seat);
+  if (decision.action === 'refuse') return refuse(decision.code);
+
+  if (decision.action === 'insert') {
+    const { error } = await admin
+      .from('gomoku_game_seats')
+      .insert({ game_id: gameId, uid: callerId, seat, room_id: roomId });
+    if (error) {
+      // 23505: someone took a ticket for this game at the same moment. Decide
+      // again on what is there now.
+      if (error.code !== '23505') return json({ error: 'Could not record the seat', detail: error.message }, 500);
+      existing = await readTickets();
+      if (!existing) return json({ error: 'Could not read the seats' }, 500);
+      decision = decideTicket(existing, callerId, seat);
+      if (decision.action === 'refuse') return refuse(decision.code);
+      if (decision.action === 'insert') return json({ error: 'Could not record the seat' }, 500);
+    }
+  }
+
   // A double down is consent to risk this player's own rating, so it can only
   // ever be switched on through their own session, and never back off.
-  const doubleDown = body.doubleDown === true;
-  const { error } = doubleDown
-    ? await admin
-        .from('gomoku_game_seats')
-        .upsert({ game_id: gameId, uid: callerId, seat, room_id: roomId, double_down: true }, { onConflict: 'game_id,uid' })
-    : await admin
-        .from('gomoku_game_seats')
-        .upsert({ game_id: gameId, uid: callerId, seat, room_id: roomId }, { onConflict: 'game_id,uid', ignoreDuplicates: true });
-  if (error) return json({ error: 'Could not record the seat', detail: error.message }, 500);
+  if (body.doubleDown === true) {
+    const { error } = await admin
+      .from('gomoku_game_seats')
+      .update({ double_down: true })
+      .eq('game_id', gameId)
+      .eq('uid', callerId);
+    if (error) return json({ error: 'Could not record the double down', detail: error.message }, 500);
+  }
 
-  return json({ ok: true });
+  return json({ ok: true, ...(decision.action === 'exists' ? { existing: true } : {}) });
 });
