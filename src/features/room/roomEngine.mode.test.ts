@@ -72,4 +72,19 @@ describe('room modes', () => {
     const buzzed = applyIntent(watched.state, { type: 'BUZZ', payload: {} }, viewerId, 3);
     expect(buzzed.events.some((e) => e.kind === 'broadcast' && e.message.type === 'BUZZ')).toBe(false);
   });
+
+  it('lets a chatter with an unknown resume token back in without the away notice', () => {
+    const created = createRoom({ roomId: 'ABCDE', isPublic: false, mode: 'chat', settings: DEFAULT_ROOM_SETTINGS, hostProfile: host }, 0);
+    const back = applyIntent(created, { type: 'HELLO', payload: { profile: friend, tabId: 'friend', resume: { memberId: 'gone', token: 'stale' } } }, null, 1);
+    const welcome = back.replies.find((reply) => reply.message.type === 'WELCOME');
+    expect(welcome?.message.payload).not.toHaveProperty('expired');
+    expect(back.state.room.members).toHaveLength(2);
+  });
+
+  it('still tells a returning game player their seat was given up', () => {
+    const created = createRoom({ roomId: 'ABCDE', isPublic: true, mode: 'casual', settings: DEFAULT_ROOM_SETTINGS, hostProfile: host }, 0);
+    const back = applyIntent(created, { type: 'HELLO', payload: { profile: friend, tabId: 'friend', resume: { memberId: 'gone', token: 'stale' } } }, null, 1);
+    const welcome = back.replies.find((reply) => reply.message.type === 'WELCOME');
+    expect(welcome?.message.payload).toMatchObject({ expired: true });
+  });
 });

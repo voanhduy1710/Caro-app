@@ -152,7 +152,9 @@ export const handleHello = (d: EngineState, p: IntentPayloads['HELLO'], from: st
     if (taken) room.seats[taken] = id;
   }
   ctx.events.push({ kind: 'bind', memberId: id, supersede: false });
-  ctx.welcome = { memberId: id, token, resumed: false, expired: p.resume !== undefined };
+  // A stale resume token means the member's old seat is gone. A chat room has
+  // no seats, so the chatter simply rejoins without an "away too long" notice.
+  ctx.welcome = { memberId: id, token, resumed: false, expired: p.resume !== undefined && room.mode !== 'chat' };
 };
 
 export const handleTakeSeat = (d: EngineState, m: Member, seat: Seat, ctx: Ctx): void => {

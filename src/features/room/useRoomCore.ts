@@ -419,7 +419,8 @@ export const useRoom = (user: UserProfile | null, handlers: RoomHandlers = {}) =
           setChatSeen(isRecord(p.chatSeen) ? (p.chatSeen as Record<string, string>) : {});
           r.lastSeenSent = null;
           setStatus('connected');
-          if (p.expired) notice(t('room.n.awayTooLong'));
+          // Chat rooms have no seat to give up; older hosts still flag it.
+          if (p.expired && p.state.mode !== 'chat') notice(t('room.n.awayTooLong'));
           return;
         }
         case 'ROOM_STATE': {
