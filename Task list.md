@@ -1,5 +1,8 @@
 # Task list
 
+## 2026-11-25 — Just Chatting idle kick
+- ✅ 1. Remove the "away too long" idle kick from Just Chatting: chat rooms no longer flag a stale resume as "seat given up" (engine + client); game rooms unchanged; 5-hour disconnect cleanup kept. Tests 329 passed, lint/build ok. PR open, not merged / not deployed
+
 ## 2026-11-13 — push to GitHub, pull PR 5
 - ⚠️ 1. Push project to GH: `main` already equals `origin/main` (voanhduy1710/Caro-app), nothing to push. Local-only branches (feat/mobile-pairing, feat/mobile-pairing-core, pr-3, pr-4) and untracked AGENTS.md / CLAUDE.md / Task list.md not pushed; waiting for user
 - ❌ 2. Pull PR https://github.com/cnttatino-spec/Caro-app/pull/5 to local: blocked, repo "not found" for both gh accounts (voanhduy1710, cntt-atino). Not pulled
