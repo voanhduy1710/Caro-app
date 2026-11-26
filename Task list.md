@@ -1,5 +1,8 @@
 # Task list
 
+## 2026-11-26 — was test account @zzverify_ui_1126 deleted?
+- ✅ 1. Check prod for @zzverify_ui_1126 and other zzverify/test leftovers; delete if left: already deleted by the security-apply run (uid c1224416…, browser-check account; its cleanup removed seats, gomoku_users and auth user). Checked on prod by SQL: 0 rows in auth.users, auth.identities, gomoku_users, gomoku_matches, gomoku_practice_matches, gomoku_game_seats, gomoku_match_claims, storage.objects; no zzverify* anywhere; remaining 5 auth users are all real (created 2026-09-16 to 11-17); counts 5 users / 94 matches / 346 seats as before. Nothing deleted now, no real ratings touched
+
 ## 2026-11-26 — apply Supabase security changes to production
 - ✅ 1. Check which migrations prod has; apply only missing 20261118000100-400: prod had everything up to pair_channel_rls, none of the 4; applied all 4 (one transaction each, recorded in schema_migrations). Applied to Supabase. ⚠️ Old drift left as is: prod records practice_matches as 20261016080327 and pair_channel_rls as 20261111033153 while the files are 20261016090000 / 20261111000000, so `supabase db push` would wrongly list those two as pending; do not db push until the files are renamed
 - ✅ 2. Dry-run first; note current state for rollback: all 4 migrations + 10 role tests run in one transaction forced to roll back on prod (all passed, nothing left behind). Before-state of grants/policies/constraints/functions saved; rollback SQL is in each migration header; old edge function bundles (seat-ticket v2, submit-match v7) downloaded; code rollback = deploy the functions from 5d621ea
