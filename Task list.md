@@ -1,7 +1,7 @@
 # Task list
 
 ## 2026-11-25 — merge chore/review-fixes-orca-style into main
-- ⏳ 1. Merge branch `chore/review-fixes-orca-style` into main (real merge, keep PR #1): only conflict `Task list.md` (both lists kept, newest first); PR #1 chat-room fix kept; vitest 409 passed, lint 0 errors, build OK. Client works with the unapplied migrations/edge functions (old responses handled, no new columns read). ⚠️ Supabase migrations 20261118000100-400 + edge functions seat-ticket/submit-match still NOT applied/deployed; security fixes not live server-side until then
+- ✅ 1. Merge branch `chore/review-fixes-orca-style` into main (real merge, keep PR #1): PR #2 merged as 49314dd (merge 20d91d5), pushed to origin; Vercel prod auto-deploy Ready, league-of-caro.vercel.app serves it; only conflict `Task list.md` (both lists kept, newest first); PR #1 chat-room fix kept; vitest 409 passed, lint 0 errors, build OK. Client works with the unapplied migrations/edge functions (old responses handled, no new columns read). ⚠️ Supabase migrations 20261118000100-400 + edge functions seat-ticket/submit-match still NOT applied/deployed; security fixes not live server-side until then
 
 ## 2026-11-25 — Just Chatting idle kick
 - ✅ 1. Remove the "away too long" idle kick from Just Chatting: chat rooms no longer flag a stale resume as "seat given up" (engine + client); game rooms unchanged; 5-hour disconnect cleanup kept. Tests 329 passed, lint/build ok. PR open, not merged / not deployed
