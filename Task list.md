@@ -1,5 +1,13 @@
 # Task list
 
+## 2026-11-26 — apply Supabase security changes to production
+- ✅ 1. Check which migrations prod has; apply only missing 20261118000100-400: prod had everything up to pair_channel_rls, none of the 4; applied all 4 (one transaction each, recorded in schema_migrations). Applied to Supabase. ⚠️ Old drift left as is: prod records practice_matches as 20261016080327 and pair_channel_rls as 20261111033153 while the files are 20261016090000 / 20261111000000, so `supabase db push` would wrongly list those two as pending; do not db push until the files are renamed
+- ✅ 2. Dry-run first; note current state for rollback: all 4 migrations + 10 role tests run in one transaction forced to roll back on prod (all passed, nothing left behind). Before-state of grants/policies/constraints/functions saved; rollback SQL is in each migration header; old edge function bundles (seat-ticket v2, submit-match v7) downloaded; code rollback = deploy the functions from 5d621ea
+- ✅ 3. Verify hide-emails does not break sign-in / profile save: client upserts use ignoreDuplicates (INSERT ... ON CONFLICT DO NOTHING) and INSERT on email stays granted, so no client change needed; checked in dry-run, by API and in the browser (signup upsert 201, profile PATCH 200)
+- ✅ 4. Apply migrations, deploy edge functions: seat-ticket v3 + submit-match v8 deployed (verify_jwt off as before; only built-in secrets needed)
+- ✅ 5. Verify on prod: API e2e with 2 throwaway accounts (sign-up/in, email hidden from anon (401), profile save, bad photo_url refused, email update refused, seat tickets + seat_mismatch, game_too_short 422, claim pending, loser submit recorded ±16, duplicate); browser: sign-up + sign-in, profile save, Just Chatting room join (2/8) + message host↔guest, /api/turn 200 (signed-in + guest); function logs show only the test calls, no errors. All test accounts and rows deleted (5 users / 94 matches / 346 seats as before). Not tried: a real two-browser rated game, seat_taken with a third account
+- ✅ 6. Commit without attribution, push to main, remove worktree
+
 ## 2026-11-25 — merge chore/review-fixes-orca-style into main
 - ✅ 1. Merge branch `chore/review-fixes-orca-style` into main (real merge, keep PR #1): PR #2 merged as 49314dd (merge 20d91d5), pushed to origin; Vercel prod auto-deploy Ready, league-of-caro.vercel.app serves it; only conflict `Task list.md` (both lists kept, newest first); PR #1 chat-room fix kept; vitest 409 passed, lint 0 errors, build OK. Client works with the unapplied migrations/edge functions (old responses handled, no new columns read). ⚠️ Supabase migrations 20261118000100-400 + edge functions seat-ticket/submit-match still NOT applied/deployed; security fixes not live server-side until then
 
